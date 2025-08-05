@@ -70,7 +70,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "http"
-version = "2.14.2"
+version = "2.14.3"
 dependencies = [
 	{org = "ballerina", name = "auth"},
 	{org = "ballerina", name = "cache"},
@@ -239,7 +239,7 @@ dependencies = [
 [[package]]
 org = "ballerina"
 name = "oauth2"
-version = "2.14.0"
+version = "2.14.1"
 dependencies = [
 	{org = "ballerina", name = "cache"},
 	{org = "ballerina", name = "crypto"},
@@ -421,6 +421,18 @@ modules = [
 
 [[package]]
 org = "wso2"
+name = "icp_common"
+version = "0.1.0"
+dependencies = [
+	{org = "ballerina", name = "time"},
+	{org = "ballerina", name = "uuid"}
+]
+modules = [
+	{org = "wso2", packageName = "icp_common", moduleName = "icp_common"}
+]
+
+[[package]]
+org = "wso2"
 name = "icp_server"
 version = "0.1.0"
 dependencies = [
@@ -432,11 +444,11 @@ dependencies = [
 	{org = "ballerinax", name = "mysql"},
 	{org = "ballerinax", name = "mysql.driver"},
 	{org = "ballerinax", name = "postgresql"},
-	{org = "ballerinax", name = "postgresql.driver"}
+	{org = "ballerinax", name = "postgresql.driver"},
+	{org = "wso2", name = "icp_common"}
 ]
 modules = [
 	{org = "wso2", packageName = "icp_server", moduleName = "icp_server"},
-	{org = "wso2", packageName = "icp_server", moduleName = "icp_server.storage"},
-	{org = "wso2", packageName = "icp_server", moduleName = "icp_server.types"}
+	{org = "wso2", packageName = "icp_server", moduleName = "icp_server.storage"}
 ]
 
