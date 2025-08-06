@@ -111,9 +111,15 @@ public type RuntimeRegistrationRequest record {
     Artifacts artifacts;
 };
 
+// Heartbeat that includes all runtime information for registration/updates
 public type Heartbeat record {
     string runtimeId;
+    RuntimeType runtimeType;
     RuntimeStatus status;
+    string environment?;
+    string deploymentType?;
+    string version?;
+    Node nodeInfo;
     Artifacts artifacts;
     time:Utc timestamp;
 };
@@ -221,4 +227,3 @@ public type ApiResponse record {
 public type AccessTokenResponse record {|
     string AccessToken;
 |};
-

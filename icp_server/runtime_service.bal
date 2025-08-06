@@ -26,38 +26,10 @@ listener http:Listener httpListener = new (serverPort, config = {host: serverHos
 // Runtime management service
 service /icp on httpListener {
 
-    // Register a new runtime
-    isolated resource function post register(types:BallerinaRuntime runtime) returns types:RuntimeRegistrationResponse|error? {
-        do {
-            // Register runtime using the repository
-
-            types:BallerinaRuntime savedRuntime = check storage:registerRuntime(runtime);
-
-            // Return success response
-            types:RuntimeRegistrationResponse successResponse = {
-                success: true,
-                message: string `Runtime ${savedRuntime.runtimeId} registered successfully`
-            };
-
-            return successResponse;
-
-        } on fail error e {
-            // Return error response
-            log:printError("Failed to register runtime", e);
-            types:RuntimeRegistrationResponse errorResponse = {
-                success: false,
-                message: "Failed to register runtime",
-                errors: [e.message()]
-            };
-
-            return errorResponse;
-        }
-    }
-
-    // Process heartbeat from runtime
+    // Process heartbeat from runtime - now handles both registration and updates
     isolated resource function post heartbeat(types:Heartbeat heartbeat) returns types:HeartbeatResponse|error? {
         do {
-            // Process heartbeat using the repository
+            // Process heartbeat using the repository (handles both registration and updates)
             types:HeartbeatResponse heartbeatResponse = check storage:processHeartbeat(heartbeat);
 
             return heartbeatResponse;
