@@ -22,7 +22,7 @@ import ballerina/sql;
 import ballerina/time;
 
 final DatabaseConnectionManager dbManager = check new (dbType);
-final sql:Client dbClient = dbManager.getClient();
+public final sql:Client dbClient = dbManager.getClient();
 
 // Cache for storing runtime hash values
 final cache:Cache hashCache = new (capacity = 1000, evictionFactor = 0.2);

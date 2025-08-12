@@ -60,7 +60,7 @@ public type ListenerDetail record {
     *Artifact;
     string protocol?;
     string package;
-    ArtifactState state?;
+    ArtifactState state = ENABLED;
 };
 
 public type ServiceDetail record {
@@ -69,7 +69,7 @@ public type ServiceDetail record {
     string package;
     Artifact[] listeners;
     Resource[] resources;
-    ArtifactState state?;
+    ArtifactState state = ENABLED;
 };
 
 public type ArtifactDetail ServiceDetail|ListenerDetail;
@@ -236,3 +236,74 @@ public type ApiResponse record {
 public type AccessTokenResponse record {|
     string AccessToken;
 |};
+
+// Database record types for mapping query results
+public type RuntimeRecord record {
+    string runtime_id;
+    string runtime_type;
+    string status;
+    string? environment;
+    string? deployment_type;
+    string? version;
+    string? platform_name;
+    string? platform_version;
+    string? platform_home;
+    string? os_name;
+    string? os_version;
+    time:Utc? registration_time;
+    time:Utc? last_heartbeat;
+};
+
+public type ServiceRecord record {
+    string service_name;
+    string service_package;
+    string? base_path;
+    string state;
+};
+
+public type ListenerRecord record {
+    string listener_name;
+    string listener_package;
+    string protocol;
+    string state;
+};
+
+public type ResourceRecord record {
+    string resource_url;
+    string methods; // JSON string of array
+};
+
+// GraphQL response types
+public type Runtime record {
+    string runtimeId;
+    string runtimeType;
+    string status;
+    string? environment;
+    string? deploymentType;
+    string? version;
+    string? platformName;
+    string? platformVersion;
+    string? platformHome;
+    string? osName;
+    string? osVersion;
+    string? registrationTime;
+    string? lastHeartbeat;
+    Service[] services;
+    Listener[] listeners;
+};
+
+public type Service record {
+    string name;
+    string package;
+    string? basePath;
+    string state;
+    Resource[] resources;
+};
+
+public type Listener record {
+    string name;
+    string package;
+    string protocol;
+    string state;
+};
+
