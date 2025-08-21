@@ -87,16 +87,6 @@ public type Node record {
     string osVersion?;
 };
 
-// === Runtime Communication Types ===
-
-public type RuntimeRegistrationRequest record {
-    string runtimeId;
-    RuntimeType runtimeType = BI;
-    RuntimeStatus status = RUNNING;
-    Node nodeInfo;
-    Artifacts artifacts;
-};
-
 // Heartbeat that includes all runtime information for registration/updates
 public type Heartbeat record {|
     string runtimeId;

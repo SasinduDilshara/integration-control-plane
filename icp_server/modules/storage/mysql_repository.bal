@@ -27,6 +27,38 @@ public final sql:Client dbClient = dbManager.getClient();
 // Cache for storing runtime hash values
 final cache:Cache hashCache = new (capacity = 1000, evictionFactor = 0.2);
 
+// Heartbeat timeout in seconds from main module config
+configurable int heartbeatTimeoutSeconds = 300;
+
+// Helper function to convert time:Utc to MySQL datetime format
+isolated function utcToMySQLDateTime(time:Utc utcTime) returns string|error {
+    time:Civil civilTime = time:utcToCivil(utcTime);
+    // Format: YYYY-MM-DD HH:MM:SS
+    string formattedTime = string `${civilTime.year}-${civilTime.month.toString().padStart(2, "0")}-${civilTime.day.toString().padStart(2, "0")} ${civilTime.hour.toString().padStart(2, "0")}:${civilTime.minute.toString().padStart(2, "0")}:${(<int>civilTime.second).toString().padStart(2, "0")}`;
+    return formattedTime;
+}
+
+// Periodically mark runtimes as OFFLINE if heartbeat is too old
+public isolated function markOfflineRuntimes() returns error? {
+    log:printDebug("Marking offline runtimes");
+    time:Utc now = time:utcNow();
+    // Calculate the threshold timestamp
+    time:Utc threshold = time:utcAddSeconds(now, -<decimal>heartbeatTimeoutSeconds);
+    
+    // Convert threshold to MySQL datetime format
+    string thresholdStr = check utcToMySQLDateTime(threshold);
+    
+    // Update all runtimes whose last_heartbeat is too old and not already OFFLINE
+    sql:ParameterizedQuery updateQuery = `
+        UPDATE runtimes
+        SET status = 'OFFLINE'
+        WHERE status != 'OFFLINE'
+        AND last_heartbeat IS NOT NULL
+        AND last_heartbeat < ${thresholdStr}
+    `;
+    sql:ExecutionResult _ = check dbClient->execute(updateQuery);
+}
+
 // Process delta heartbeat with hash validation
 public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbeat) returns types:HeartbeatResponse|error {
     // Validate delta heartbeat data
@@ -35,6 +67,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
     }
 
     time:Utc currentTime = time:utcNow();
+    string currentTimeStr = check utcToMySQLDateTime(currentTime);
     types:ControlCommand[] pendingCommands = [];
     boolean hashMatches = false;
 
@@ -52,7 +85,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
         transaction {
             sql:ExecutionResult _ = check dbClient->execute(`
                 UPDATE runtimes 
-                SET last_heartbeat = ${currentTime}
+                SET last_heartbeat = ${currentTimeStr}
                 WHERE runtime_id = ${deltaHeartbeat.runtimeId}
             `);
 
@@ -74,7 +107,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
         // Update only the heartbeat timestamp
         sql:ExecutionResult _ = check dbClient->execute(`
             UPDATE runtimes 
-            SET last_heartbeat = ${currentTime}
+            SET last_heartbeat = ${currentTimeStr}
             WHERE runtime_id = ${deltaHeartbeat.runtimeId}
         `);
 
@@ -110,7 +143,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
             ) VALUES (
                 ${deltaHeartbeat.runtimeId}, 'DELTA_HEARTBEAT', 
                 ${string `Delta heartbeat processed with hash ${deltaHeartbeat.runtimeHash}`},
-                ${currentTime}
+                ${currentTimeStr}
             )
         `);
 
@@ -138,6 +171,7 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
     }
 
     time:Utc currentTime = time:utcNow();
+    string currentTimeStr = check utcToMySQLDateTime(currentTime);
     boolean isNewRegistration = false;
     types:ControlCommand[] pendingCommands = [];
 
@@ -167,8 +201,8 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                     ${heartbeat.deploymentType}, ${heartbeat.version},
                     ${heartbeat.nodeInfo.platformName}, ${heartbeat.nodeInfo.platformVersion},
                     ${heartbeat.nodeInfo.ballerinaHome}, ${heartbeat.nodeInfo.osName},
-                    ${heartbeat.nodeInfo.osVersion}, ${currentTime},
-                    ${currentTime}
+                    ${heartbeat.nodeInfo.osVersion}, ${currentTimeStr},
+                    ${currentTimeStr}
                 )
             `);
 
@@ -193,7 +227,7 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                     platform_home = ${heartbeat.nodeInfo.ballerinaHome},
                     os_name = ${heartbeat.nodeInfo.osName},
                     os_version = ${heartbeat.nodeInfo.osVersion},
-                    last_heartbeat = ${currentTime}
+                    last_heartbeat = ${currentTimeStr}
                 WHERE runtime_id = ${heartbeat.runtimeId}
             `);
 
@@ -291,7 +325,7 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
             ) VALUES (
                 ${heartbeat.runtimeId}, ${action}, 
                 ${string `Runtime ${action.toLowerAscii()} processed with ${heartbeat.artifacts.services.length()} services and ${heartbeat.artifacts.listeners.length()} listeners`},
-                ${currentTime}
+                ${currentTimeStr}
             )
         `);
         check commit;

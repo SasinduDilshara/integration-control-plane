@@ -41,15 +41,6 @@ listener http:Listener httpListener = new (serverPort,
             jwtValidatorConfig: {
                 issuer: jwtIssuer,
                 audience: jwtAudience,
-                // signatureConfig: {
-                //     trustStoreConfig: {
-                //         trustStore: {
-                //             path: publicCertFile,
-                //             password: "ballerina"
-                //         },
-                //         certAlias: "ballerina"
-                //     }
-                // },
                 clockSkew: jwtClockSkewSeconds
             }
         }

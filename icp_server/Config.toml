@@ -4,7 +4,6 @@
 # =============================================================================
 # SERVER CONFIGURATION
 # =============================================================================
-
 # HTTP server settings
 serverPort = 9445
 serverHost = "0.0.0.0"
@@ -38,5 +37,7 @@ dbPassword = "my-secret-pw"
 dbType = "mysql"  # Options: mysql, postgresql
 
 
+[ballerina.log]
+level = "DEBUG"
 
 
