@@ -522,3 +522,11 @@ public isolated function insertEnvironmentsToDB(string[] environments) returns e
     return ();
 }
 
+public isolated function addEnvironments(string[] environments) returns boolean|error {
+    var result = insertEnvironmentsToDB(environments);
+    if result is error {
+        return result;
+    }
+    return true;
+}
+

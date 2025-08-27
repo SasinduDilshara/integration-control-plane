@@ -26,6 +26,7 @@ configurable string keystorePassword = "ballerina";
 configurable string truststorePath = check file:joinPath(os:getEnv("BALLERINA_HOME"), "bre", "security", "ballerinaTruststore.p12");
 configurable string truststorePassword = "ballerina";
 configurable string[] environments = ["dev", "test", "prod"];
+configurable string deploymentType = "VM";
 
 configurable int heartbeatTimeoutSeconds = 300;
 configurable int schedulerIntervalSeconds = 300;
