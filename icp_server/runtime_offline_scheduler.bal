@@ -16,27 +16,35 @@
 
 import icp_server.storage;
 
-import ballerina/lang.runtime as runtime;
 import ballerina/log;
+import ballerina/task;
 
 // Start the offline runtime scheduler
 function init() returns error? {
 
-    // Insert initial environments into the database
-    check storage:insertEnvironmentsToDB(environments);
-
     // Start a worker to periodically mark runtimes as OFFLINE if they haven't sent a heartbeat within the timeout
     worker offlineRuntimeSchedulerWorker {
-        while true {
-            do {
-                check storage:markOfflineRuntimes();
-                log:printDebug("Updated offline runtimes successfully");
-            } on fail error e {
-                log:printError("Failed to update offline runtimes", e);
-            }
-
-            // Sleep for the configured interval
-            runtime:sleep(<decimal>schedulerIntervalSeconds);
+        task:JobId|error id = task:scheduleJobRecurByFrequency(new Job(), <decimal>schedulerIntervalSeconds);
+        if (id is error) {
+            log:printError("Failed to schedule offline runtime job", id);
         }
     }
+}
+
+// Creates a job to be executed by the scheduler.
+class Job {
+
+    *task:Job;
+
+    // Executes this function when the scheduled trigger fires.
+    public function execute() {
+        do {
+            check storage:markOfflineRuntimes();
+            log:printDebug("Updated offline runtimes successfully");
+        } on fail error e {
+            log:printError("Failed to update offline runtimes", e);
+        }
+
+    }
+
 }

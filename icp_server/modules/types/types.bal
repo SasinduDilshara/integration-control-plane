@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/sql;
 import ballerina/time;
 
 // === Enums ===
@@ -90,11 +91,6 @@ public type Node record {
     string ballerinaHome?;
     string osName?;
     string osVersion?;
-};
-
-public type Component record {
-    string name;
-    time:Utc createdDate;
 };
 
 // Heartbeat that includes all runtime information for registration/updates
@@ -219,6 +215,61 @@ public type RuntimeDBRecord record {
     time:Utc last_heartbeat?;
 };
 
+// GraphQL response types
+public type Runtime record {
+    @sql:Column {
+        name: "runtime_id"
+    }
+    string runtimeId;
+
+    @sql:Column {
+        name: "runtime_type"
+    }
+    string runtimeType;
+
+    string status;
+    string environment;
+    string version?;
+
+    @sql:Column {
+        name: "platform_name"
+    }
+    string platformName?;
+
+    @sql:Column {
+        name: "platform_version"
+    }
+    string platformVersion?;
+
+    @sql:Column {
+        name: "platform_home"
+    }
+    string platformHome?;
+
+    @sql:Column {
+        name: "os_name"
+    }
+    string osName?;
+
+    @sql:Column {
+        name: "os_version"
+    }
+    string osVersion?;
+
+    @sql:Column {
+        name: "registration_time"
+    }
+    string registrationTime?;
+
+    @sql:Column {
+        name: "last_heartbeat"
+    }
+    string lastHeartbeat?;
+
+    Service[] services = [];
+    Listener[] listeners = [];
+};
+
 public type ServiceRecordInDB record {
     string service_name;
     string service_package;
@@ -238,24 +289,6 @@ public type ResourceRecord record {
     string methods; // JSON string of array
 };
 
-// GraphQL response types
-public type Runtime record {
-    string runtimeId;
-    string runtimeType;
-    string status;
-    string environment;
-    string version?;
-    string platformName?;
-    string platformVersion?;
-    string platformHome?;
-    string osName?;
-    string osVersion?;
-    string registrationTime?;
-    string lastHeartbeat?;
-    Service[] services = [];
-    Listener[] listeners = [];
-};
-
 public type Service record {
     string name;
     string package;
@@ -271,3 +304,65 @@ public type Listener record {
     ArtifactState state = ENABLED;
 };
 
+// === Project & Component Types ===
+
+public type Project record {
+    string projectId;
+    string name;
+    string description?;
+    string createdBy?;
+    string createdAt?;
+};
+
+public type ProjectInput record {
+    string name;
+    string description?;
+};
+
+public type Component record {
+    @sql:Column {
+        name: "component_id"
+    }
+    string componentId;
+    Project project;
+    string name;
+    string description?;
+    @sql:Column {
+        name: "created_by"
+    }
+    string createdBy?;
+    @sql:Column {
+        name: "created_at"
+    }
+    string createdAt?;
+};
+
+public type ComponentInput record {
+    string projectId;
+    string name;
+    string description?;
+};
+
+public type Environment record {
+    @sql:Column {
+        name: "environment_id"
+    }
+    string environmentId;
+    string name;
+    string description?;
+
+    @sql:Column {
+        name: "created_at"
+    }
+    string createdAt?;
+
+    @sql:Column {
+        name: "updated_at"
+    }
+    string updatedAt?;
+};
+
+public type EnvironmentInput record {
+    string name;
+    string description?;
+};

@@ -57,7 +57,6 @@ service /icp on httpListener {
     isolated resource function post heartbeat(types:Heartbeat heartbeat) returns types:HeartbeatResponse|error? {
         do {
             // Process heartbeat using the repository (handles both registration and updates)
-            check validateHeartbeatData(heartbeat);
             types:HeartbeatResponse heartbeatResponse = check storage:processHeartbeat(heartbeat);
             log:printInfo(string `Heartbeat processed successfully for ${heartbeat.runtimeId}`);
             return heartbeatResponse;
@@ -100,21 +99,3 @@ service /icp on httpListener {
 
 }
 
-// Validation function for heartbeat data
-isolated function validateHeartbeatData(types:Heartbeat heartbeat) returns error? {
-    // Validate required fields
-    if heartbeat.runtimeId.trim().length() == 0 {
-        return error("Runtime ID cannot be empty");
-    }
-
-    if heartbeat.runtimeId.length() > 100 {
-        return error("Runtime ID cannot exceed 100 characters");
-    }
-
-    if environments.indexOf(heartbeat.environment) == () {
-        return error(string `Invalid environment configuration detected: ${heartbeat.environment}. 
-        Environment must be one of: ${environments.toString()}`);
-    }
-
-    return ();
-}

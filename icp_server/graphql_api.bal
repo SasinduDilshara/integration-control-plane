@@ -31,7 +31,7 @@ listener graphql:Listener graphqlListener = new (graphqlPort,
 
 // GraphQL service for runtime details
 service /graphql on graphqlListener {
-
+    // ----------- Runtime Resources
     // Get all runtimes with optional filtering
     isolated resource function get runtimes(string? status, string? runtimeType, string? environment) returns types:Runtime[]|error {
         return check storage:getRuntimes(status, runtimeType, environment);
@@ -52,10 +52,50 @@ service /graphql on graphqlListener {
         return check storage:getListenersForRuntime(runtimeId);
     }
 
-    // Mutation: Add environments to DB
-    isolated remote function addEnvironments(string[] environments) returns boolean|error {
+    // ----------- Environment Resources
+    // Create a new environment
+    isolated remote function createEnvironment(types:EnvironmentInput environment) returns boolean|error {
         // Call storage layer to insert environments
-        check storage:insertEnvironmentsToDB(environments);
+        check storage:insertEnvironmentToDB(environment);
         return true;
+    }
+
+    // Get all environments
+    isolated resource function get environments() returns types:Environment[]|error {
+        return check storage:getEnvironments();
+    }
+
+    //------------- Project Resources
+    // Create a new project
+    isolated remote function createProject(types:ProjectInput project) returns boolean|error {
+        check storage:createProject(project);
+        return true;
+    }
+
+    // Get all projects
+    isolated resource function get projects() returns types:Project[]|error {
+        return check storage:getProjects();
+    }
+
+    // Get a specific project by ID
+    isolated resource function get project(string projectId) returns types:Project?|error {
+        return check storage:getProjectById(projectId);
+    }
+
+    // ----------- Component Resources
+    // Create a new component
+    isolated remote function createComponent(types:ComponentInput component) returns boolean|error {
+        check storage:createComponent(component);
+        return true;
+    }
+
+    // Get all components with optional project filter
+    isolated resource function get components(string? projectId) returns types:Component[]|error {
+        return check storage:getComponents(projectId);
+    }
+
+    // Get a specific component by ID
+    isolated resource function get component(string componentId) returns types:Component?|error {
+        return check storage:getComponentById(componentId);
     }
 }

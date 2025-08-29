@@ -14,7 +14,7 @@ graphqlPort = 9090
 # =============================================================================
 # Runtime management settings
 heartbeatTimeoutSeconds = 300  # 5 minutes
-schedulerIntervalSeconds = 60  # 1 minute
+schedulerIntervalSeconds = 600  # 1 minute
 
 # =============================================================================
 # LOGGING CONFIGURATION
