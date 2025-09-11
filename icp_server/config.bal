@@ -23,7 +23,7 @@ import ballerina/os;
 configurable int serverPort = 9445;
 configurable string serverHost = "0.0.0.0";
 configurable string organization = "WSO2 Inc.";
-configurable int graphqlPort = 9090;
+configurable int graphqlPort = 9446;
 configurable string keystorePath = check file:joinPath(os:getEnv("BALLERINA_HOME"), "bre", "security", "ballerinaKeystore.p12");
 configurable string keystorePassword = "ballerina";
 configurable string truststorePath = check file:joinPath(os:getEnv("BALLERINA_HOME"), "bre", "security", "ballerinaTruststore.p12");

@@ -5,9 +5,9 @@
 # SERVER CONFIGURATION
 # =============================================================================
 # HTTP server settings
-serverPort = 9445
-serverHost = "0.0.0.0"
-graphqlPort = 9090
+# serverPort = 9445
+# serverHost = "0.0.0.0"
+# graphqlPort = 9090
 
 # =============================================================================
 # OPERATIONAL CONFIGURATION

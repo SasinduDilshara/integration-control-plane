@@ -88,7 +88,7 @@ public isolated function createEnvironment(types:EnvironmentInput environment) r
 
 // Update environment name and/or description
 public isolated function updateEnvironment(string environmentId, string? name, string? description) returns error? {
-    sql:ParameterizedQuery whereClause = ` WHERE env_id = ${environmentId} `;
+    sql:ParameterizedQuery whereClause = ` WHERE environment_id = ${environmentId} `;
     sql:ParameterizedQuery updateFields = ` SET updated_at = CURRENT_TIMESTAMP `;
 
     if name is string {
@@ -497,6 +497,169 @@ isolated function validateHeartbeatData(types:Heartbeat heartbeat) returns error
     }
     heartbeat.component = componentId;
 
+    // Validate that all runtimes in the same component have consistent services and listeners
+    check validateComponentRuntimeConsistency(componentId, heartbeat.artifacts);
+}
+
+// Validation function to ensure all runtimes in the same component have the same services and listeners
+isolated function validateComponentRuntimeConsistency(string componentId, types:Artifacts newArtifacts) returns error? {
+    // Get all existing runtimes for this component
+    stream<record {|string runtime_id;|}, sql:Error?> runtimeStream = dbClient->query(`
+        SELECT runtime_id FROM runtimes WHERE component_id = ${componentId}
+    `);
+
+    record {|string runtime_id;|}[] existingRuntimes = check from record {|string runtime_id;|} runtime in runtimeStream
+        select runtime;
+
+    // If no existing runtimes, this is the first one, so it's valid
+    if existingRuntimes.length() == 0 {
+        return;
+    }
+
+    // Get services and listeners from the first existing runtime as the reference
+    string referenceRuntimeId = existingRuntimes[0].runtime_id;
+    types:Service[] referenceServices = check getServicesForRuntime(referenceRuntimeId);
+    types:Listener[] referenceListeners = check getListenersForRuntime(referenceRuntimeId);
+
+    // Compare new artifacts with reference
+    error? servicesValidation = validateServicesConsistency(referenceServices, newArtifacts.services);
+    if servicesValidation is error {
+        return error(string `Service inconsistency detected in component ${componentId}: ${servicesValidation.message()}`);
+    }
+
+    error? listenersValidation = validateListenersConsistency(referenceListeners, newArtifacts.listeners);
+    if listenersValidation is error {
+        return error(string `Listener inconsistency detected in component ${componentId}: ${listenersValidation.message()}`);
+    }
+
+}
+
+// Helper function to validate services consistency
+isolated function validateServicesConsistency(types:Service[] referenceServices, types:Service[] newServices) returns error? {
+    // Check if the number of services matches
+    if referenceServices.length() != newServices.length() {
+        return error(string `Expected ${referenceServices.length()} services, but got ${newServices.length()}`);
+    }
+
+    // Create maps for easier comparison
+    map<types:Service> referenceServiceMap = {};
+    foreach types:Service svc in referenceServices {
+        referenceServiceMap[svc.name] = svc;
+    }
+
+    // Validate each new service
+    foreach types:Service newService in newServices {
+        if !referenceServiceMap.hasKey(newService.name) {
+            return error(string `Service '${newService.name}' not found in reference runtime`);
+        }
+
+        types:Service? refServiceOpt = referenceServiceMap[newService.name];
+        if refServiceOpt is () {
+            return error(string `Service '${newService.name}' not found in reference runtime`);
+        }
+        types:Service refService = refServiceOpt;
+
+        // Validate package
+        if refService.package != newService.package {
+            return error(string `Service '${newService.name}' package mismatch. Expected: ${refService.package}, Got: ${newService.package}`);
+        }
+
+        // Validate base path
+        if refService.basePath != newService.basePath {
+            return error(string `Service '${newService.name}' base path mismatch. Expected: ${refService.basePath}, Got: ${newService.basePath}`);
+        }
+
+        // Validate resources
+        error? resourceValidation = validateResourcesConsistency(refService.resources, newService.resources);
+        if resourceValidation is error {
+            return error(string `Service '${newService.name}' resource mismatch: ${resourceValidation.message()}`);
+        }
+    }
+
+}
+
+// Helper function to validate listeners consistency
+isolated function validateListenersConsistency(types:Listener[] referenceListeners, types:Listener[] newListeners) returns error? {
+    // Check if the number of listeners matches
+    if referenceListeners.length() != newListeners.length() {
+        return error(string `Expected ${referenceListeners.length()} listeners, but got ${newListeners.length()}`);
+    }
+
+    // Create maps for easier comparison
+    map<types:Listener> referenceListenerMap = {};
+    foreach types:Listener listenerItem in referenceListeners {
+        referenceListenerMap[listenerItem.name] = listenerItem;
+    }
+
+    // Validate each new listener
+    foreach types:Listener newListener in newListeners {
+        if !referenceListenerMap.hasKey(newListener.name) {
+            return error(string `Listener '${newListener.name}' not found in reference runtime`);
+        }
+
+        types:Listener? refListenerOpt = referenceListenerMap[newListener.name];
+        if refListenerOpt is () {
+            return error(string `Listener '${newListener.name}' not found in reference runtime`);
+        }
+        types:Listener refListener = refListenerOpt;
+
+        // Validate package
+        if refListener.package != newListener.package {
+            return error(string `Listener '${newListener.name}' package mismatch. Expected: ${refListener.package}, Got: ${newListener.package}`);
+        }
+
+        // Validate protocol
+        if refListener.protocol != newListener.protocol {
+            return error(string `Listener '${newListener.name}' protocol mismatch. Expected: ${refListener.protocol}, Got: ${newListener.protocol}`);
+        }
+    }
+
+}
+
+// Helper function to validate resources consistency
+isolated function validateResourcesConsistency(types:Resource[] referenceResources, types:Resource[] newResources) returns error? {
+    // Check if the number of resources matches
+    if referenceResources.length() != newResources.length() {
+        return error(string `Expected ${referenceResources.length()} resources, but got ${newResources.length()}`);
+    }
+
+    // Create maps for easier comparison
+    map<types:Resource> referenceResourceMap = {};
+    foreach types:Resource resourceItem in referenceResources {
+        referenceResourceMap[resourceItem.url] = resourceItem;
+    }
+
+    // Validate each new resource
+    foreach types:Resource newResource in newResources {
+        if !referenceResourceMap.hasKey(newResource.url) {
+            return error(string `Resource with URL '${newResource.url}' not found in reference runtime`);
+        }
+
+        types:Resource? refResourceOpt = referenceResourceMap[newResource.url];
+        if refResourceOpt is () {
+            return error(string `Resource with URL '${newResource.url}' not found in reference runtime`);
+        }
+        types:Resource refResource = refResourceOpt;
+
+        // Validate methods (order doesn't matter, but content should match)
+        if refResource.methods.length() != newResource.methods.length() {
+            return error(string `Resource '${newResource.url}' methods count mismatch. Expected: ${refResource.methods.length()}, Got: ${newResource.methods.length()}`);
+        }
+
+        // Convert to sets for comparison (order-independent)
+        map<boolean> refMethodsSet = {};
+        foreach string method in refResource.methods {
+            refMethodsSet[method] = true;
+        }
+
+        foreach string method in newResource.methods {
+            if !refMethodsSet.hasKey(method) {
+                return error(string `Resource '${newResource.url}' has unexpected method '${method}'`);
+            }
+        }
+    }
+
+    return ();
 }
 
 // Heartbeat processing that handles both registration and updates
@@ -620,6 +783,14 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                     ${listenerDetail.state}
                 )
             `);
+        }
+
+        // Validate runtime consistency within component (only for new registrations)
+        if isNewRegistration {
+            error? validationResult = validateComponentRuntimeConsistency(heartbeat.component, heartbeat.artifacts);
+            if validationResult is error {
+                log:printWarn(string `Component consistency validation failed for runtime ${heartbeat.runtimeId}`, validationResult);
+            }
         }
 
         // Retrieve pending control commands for this runtime

@@ -66,7 +66,8 @@ service /icp on httpListener {
             log:printError("Failed to process heartbeat", e);
             types:HeartbeatResponse errorResponse = {
                 acknowledged: false,
-                commands: []
+                commands: [],
+                errors: [e.message()]
             };
             return errorResponse;
         }

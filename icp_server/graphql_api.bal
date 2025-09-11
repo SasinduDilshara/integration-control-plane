@@ -20,16 +20,23 @@ import icp_server.types;
 import ballerina/graphql;
 
 // GraphQL listener configuration
-listener graphql:Listener graphqlListener = new (graphqlPort,
-    secureSocket = {
-        key: {
-            path: keystorePath,
-            password: keystorePassword
-        }
-    }
+listener graphql:Listener graphqlListener = new (graphqlPort
+// ,
+//     secureSocket = {
+//         key: {
+//             path: keystorePath,
+//             password: keystorePassword
+//         }
+//     }
 );
 
 // GraphQL service for runtime details
+
+@graphql:ServiceConfig {
+    cors: {
+        allowOrigins: ["*"]
+    }
+}
 service /graphql on graphqlListener {
     // ----------- Runtime Resources
     // Get all runtimes with optional filtering

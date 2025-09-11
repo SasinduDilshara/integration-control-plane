@@ -1,0 +1,1 @@
+export { IComponentComponent } from './IComponentComponent';

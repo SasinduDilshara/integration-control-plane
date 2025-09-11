@@ -116,6 +116,7 @@ public type HeartbeatResponse record {
     boolean acknowledged;
     boolean fullHeartbeatRequired?;
     ControlCommand[] commands?;
+    string[] errors?;
 };
 
 public type RuntimeRegistrationResponse record {
