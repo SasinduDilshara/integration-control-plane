@@ -1,0 +1,1 @@
+export { IComponentFetchComponent } from './IComponentFetchComponent';
