@@ -498,7 +498,7 @@ isolated function validateHeartbeatData(types:Heartbeat heartbeat) returns error
     heartbeat.component = componentId;
 
     // Validate that all runtimes in the same component have consistent services and listeners
-    check validateComponentRuntimeConsistency(componentId, heartbeat.artifacts);
+    // check validateComponentRuntimeConsistency(componentId, heartbeat.artifacts);
 }
 
 // Validation function to ensure all runtimes in the same component have the same services and listeners
