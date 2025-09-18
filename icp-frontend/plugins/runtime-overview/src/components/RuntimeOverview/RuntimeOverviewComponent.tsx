@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Typography, Grid, FormControl, InputLabel, Select, MenuItem, Box, Button } from '@material-ui/core';
 import { makeStyles } from '@material-ui/core/styles';
 import RefreshIcon from '@material-ui/icons/Refresh';
+import { useSearchParams } from 'react-router-dom';
 import {
   Header,
   Page,
@@ -47,6 +48,7 @@ export const RuntimeOverviewComponent = () => {
   const classes = useStyles();
   const environmentsApi = useApi(environmentsApiRef);
   const runtimesApi = useApi(runtimesApiRef);
+  const [searchParams] = useSearchParams();
 
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
   const [environments, setEnvironments] = useState<Environment[]>([]);
@@ -61,6 +63,13 @@ export const RuntimeOverviewComponent = () => {
       try {
         const envs = await environmentsApi.getEnvironments();
         setEnvironments(envs);
+
+        // Check if environment parameter is provided in URL
+        const environmentParam = searchParams.get('environment');
+        if (environmentParam && envs.some(env => env.environmentId === environmentParam)) {
+          setSelectedEnvironment(environmentParam);
+        }
+
         setError(null);
       } catch (err) {
         setError(err as Error);
@@ -70,7 +79,7 @@ export const RuntimeOverviewComponent = () => {
     };
 
     loadEnvironments();
-  }, [environmentsApi]);
+  }, [environmentsApi, searchParams]);
 
   // Load runtimes when environment changes
   useEffect(() => {

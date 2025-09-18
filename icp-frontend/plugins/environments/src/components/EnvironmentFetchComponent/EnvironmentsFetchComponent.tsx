@@ -12,13 +12,15 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  IconButton
+  IconButton,
+  Typography
 } from '@material-ui/core';
 import EditIcon from '@material-ui/icons/Edit';
 import DeleteIcon from '@material-ui/icons/Delete';
 import { Snackbar, Alert } from '@mui/material';
 import { useApi } from '@backstage/core-plugin-api';
 import useAsync from 'react-use/lib/useAsync';
+import { useNavigate } from 'react-router-dom';
 
 import {
   environmentsApiRef,
@@ -29,6 +31,7 @@ import {
 
 export const EnvironmentFetchComponent = () => {
   const environmentsApi = useApi(environmentsApiRef);
+  const navigate = useNavigate();
 
   // State management
   const [refreshIndex, setRefreshIndex] = useState(0);
@@ -81,6 +84,19 @@ export const EnvironmentFetchComponent = () => {
     setName('');
     setDescription('');
   }, []);
+
+  // Row click handler for navigation to runtime-overview
+  const handleRowClick = useCallback((event: any, rowData: any) => {
+    // Prevent navigation if clicking on action buttons
+    if (event.target.closest('button') || event.target.closest('[role="button"]')) {
+      return;
+    }
+
+    const environmentId = rowData.environmentId;
+    if (environmentId) {
+      navigate(`/runtime-overview?environment=${encodeURIComponent(environmentId)}`);
+    }
+  }, [navigate]);
 
   // Create environment handlers
   const handleCreateOpen = useCallback(() => {
@@ -386,6 +402,11 @@ export const EnvironmentFetchComponent = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Information text */}
+      <Typography variant="body2" color="textSecondary" style={{ marginBottom: 16 }}>
+        Click on any row to view runtime overview for that environment.
+      </Typography>
+
       {/* Environments Table */}
       <Table
         title=""
@@ -394,12 +415,16 @@ export const EnvironmentFetchComponent = () => {
           paging: true,
           pageSize: 10,
           emptyRowsWhenPaging: false,
+          rowStyle: {
+            cursor: 'pointer',
+          },
         }}
         columns={columns}
         data={(environments || []).map(env => ({
           ...env,
           id: env.environmentId, // Add unique ID for table rows
         }))}
+        onRowClick={handleRowClick}
       />
 
       {/* Success/Error Snackbar */}
