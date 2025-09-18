@@ -16,8 +16,8 @@ import {
   RuntimesApiService,
 } from './api/RuntimesApiService';
 
-export const runtimeOverviewPlugin = createPlugin({
-  id: 'runtime-overview',
+export const environmentOverviewPlugin = createPlugin({
+  id: 'environment-overview',
   routes: {
     root: rootRouteRef,
   },
@@ -43,11 +43,11 @@ export const runtimeOverviewPlugin = createPlugin({
   ],
 });
 
-export const RuntimeOverviewPage = runtimeOverviewPlugin.provide(
+export const EnvironmentOverviewPage = environmentOverviewPlugin.provide(
   createRoutableExtension({
-    name: 'RuntimeOverviewPage',
+    name: 'EnvironmentOverviewPage',
     component: () =>
-      import('./components/RuntimeOverview').then(m => m.RuntimeOverviewComponent),
+      import('./components/EnvironmentOverview').then(m => m.EnvironmentOverviewComponent),
     mountPoint: rootRouteRef,
   }),
 );

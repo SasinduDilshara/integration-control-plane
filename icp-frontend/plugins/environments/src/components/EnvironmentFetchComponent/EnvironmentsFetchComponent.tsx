@@ -85,7 +85,7 @@ export const EnvironmentFetchComponent = () => {
     setDescription('');
   }, []);
 
-  // Row click handler for navigation to runtime-overview
+  // Row click handler for navigation to environment-overview
   const handleRowClick = useCallback((event: any, rowData: any) => {
     // Prevent navigation if clicking on action buttons
     if (event.target.closest('button') || event.target.closest('[role="button"]')) {
@@ -94,7 +94,7 @@ export const EnvironmentFetchComponent = () => {
 
     const environmentId = rowData.environmentId;
     if (environmentId) {
-      navigate(`/runtime-overview?environment=${encodeURIComponent(environmentId)}`);
+      navigate(`/environment-overview?environment=${encodeURIComponent(environmentId)}`);
     }
   }, [navigate]);
 
@@ -404,7 +404,7 @@ export const EnvironmentFetchComponent = () => {
 
       {/* Information text */}
       <Typography variant="body2" color="textSecondary" style={{ marginBottom: 16 }}>
-        Click on any row to view runtime overview for that environment.
+        Click on any row to view environment overview for that environment.
       </Typography>
 
       {/* Environments Table */}

@@ -44,7 +44,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-export const RuntimeOverviewComponent = () => {
+export const EnvironmentOverviewComponent = () => {
   const classes = useStyles();
   const environmentsApi = useApi(environmentsApiRef);
   const runtimesApi = useApi(runtimesApiRef);
@@ -145,7 +145,7 @@ export const RuntimeOverviewComponent = () => {
 
   return (
     <Page themeId="tool">
-      <Header title="Runtime Overview">
+      <Header title="Environment Overview">
         <HeaderLabel label="Owner" value="Platform Team" />
         <HeaderLabel label="Lifecycle" value="Alpha" />
       </Header>
@@ -187,10 +187,7 @@ export const RuntimeOverviewComponent = () => {
               {selectedEnvironment && (
                 <Box mt={1}>
                   <Typography variant="body2" color="textSecondary">
-                    Selected: {environments.find(env => env.environmentId === selectedEnvironment)?.name}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    Runtimes found: {runtimes.length}
+                    <b>Runtimes found:</b> {runtimes.length}
                   </Typography>
                 </Box>
               )}

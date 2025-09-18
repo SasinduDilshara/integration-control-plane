@@ -1,5 +1,5 @@
 {
-  "name": "@internal/plugin-runtime-overview",
+  "name": "@internal/plugin-environment-overview",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -12,7 +12,7 @@
   },
   "backstage": {
     "role": "frontend-plugin",
-    "pluginId": "runtime-overview"
+    "pluginId": "environment-overview"
   },
   "sideEffects": false,
   "scripts": {

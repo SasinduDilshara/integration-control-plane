@@ -1,12 +1,12 @@
-# runtime-overview
+# environment-overview
 
-Welcome to the runtime-overview plugin!
+Welcome to the environment-overview plugin!
 
 _This plugin was created through the Backstage CLI_
 
 ## Getting started
 
-Your plugin has been added to the example app in this repository, meaning you'll be able to access it by running `yarn start` in the root directory, and then navigating to [/runtime-overview](http://localhost:3000/runtime-overview).
+Your plugin has been added to the example app in this repository, meaning you'll be able to access it by running `yarn start` in the root directory, and then navigating to [/environment-overview](http://localhost:3000/environment-overview).
 
 You can also serve the plugin in isolation by running `yarn start` in the plugin directory.
 This method of serving the plugin provides quicker iteration speed and a faster startup and hot reloads.
