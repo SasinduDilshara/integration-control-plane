@@ -59,6 +59,12 @@ service /graphql on graphqlListener {
         return check storage:getListenersForRuntime(runtimeId);
     }
 
+    // Delete a runtime by ID
+    isolated remote function deleteRuntime(string runtimeId) returns boolean|error {
+        check storage:deleteRuntime(runtimeId);
+        return true;
+    }
+
     // ----------- Environment Resources
     // Create a new environment
     isolated remote function createEnvironment(types:EnvironmentInput environment) returns types:Environment|error? {

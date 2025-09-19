@@ -88,6 +88,7 @@ export interface RuntimesApi {
     getProjects(): Promise<Project[]>;
     getEnvironments(): Promise<Environment[]>;
     getComponents(projectId: string): Promise<Component[]>;
+    deleteRuntime(runtimeId: string): Promise<void>;
 }
 
 export const runtimesApiRef = createApiRef<RuntimesApi>({
@@ -161,5 +162,12 @@ export class RuntimesApiService implements RuntimesApi {
     async getComponents(projectId: string): Promise<Component[]> {
         const endpoint = projectId ? `/components?projectId=${encodeURIComponent(projectId)}` : '/components';
         return this.restRequest<Component[]>(endpoint);
+    }
+
+    async deleteRuntime(runtimeId: string): Promise<void> {
+        // Use REST endpoint that calls the backend ICPApiService delete method
+        return this.restRequest<void>(`/runtimes/${encodeURIComponent(runtimeId)}`, {
+            method: 'DELETE',
+        });
     }
 }

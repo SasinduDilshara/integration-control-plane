@@ -220,6 +220,17 @@ public isolated function getRuntimeById(string runtimeId) returns types:Runtime?
     return check mapToRuntime(runtimeRecords[0]);
 }
 
+// Delete a runtime by ID
+public isolated function deleteRuntime(string runtimeId) returns error? {
+    sql:ParameterizedQuery deleteQuery = `DELETE FROM runtimes WHERE runtime_id = ${runtimeId}`;
+    var result = dbClient->execute(deleteQuery);
+    if result is sql:Error {
+        log:printError(string `Failed to delete runtime ${runtimeId}`, result);
+        return result;
+    }
+    log:printInfo(string `Successfully deleted runtime ${runtimeId}`);
+}
+
 // Get services for a specific runtime
 public isolated function getServicesForRuntime(string runtimeId) returns types:Service[]|error {
     types:Service[] serviceList = [];

@@ -193,5 +193,12 @@ export async function createRouter({
     res.json(await icpApiService.getRuntime(req.params.id));
   });
 
+  router.delete('/runtimes/:id', async (req, res) => {
+    await icpApiService.deleteRuntime(req.params.id, {
+      credentials: await httpAuth.credentials(req, { allow: ['user'] }),
+    });
+    res.status(204).send();
+  });
+
   return router;
 }

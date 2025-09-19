@@ -190,4 +190,10 @@ export interface ICPApiService {
   // Runtime operations
   getRuntimes(filters?: RuntimeFilters): Promise<Runtime[]>;
   getRuntime(runtimeId: string): Promise<Runtime>;
+  deleteRuntime(
+    runtimeId: string,
+    options: {
+      credentials: BackstageCredentials<BackstageUserPrincipal>;
+    },
+  ): Promise<void>;
 }

@@ -35,6 +35,7 @@ import {
 } from '@backstage/plugin-org';
 import { EntityTechdocsContent } from '@backstage/plugin-techdocs';
 import { EmptyState } from '@backstage/core-components';
+import { ICPRuntimesCard, ICPEnvironmentCard } from './ICPCards';
 import {
   Direction,
   EntityCatalogGraphCard,
@@ -139,6 +140,14 @@ const overviewContent = (
     </Grid>
     <Grid item md={8} xs={12}>
       <EntityHasSubcomponentsCard variant="gridItem" />
+    </Grid>
+
+    {/* ICP Integration Cards */}
+    <Grid item md={6} xs={12}>
+      <ICPRuntimesCard />
+    </Grid>
+    <Grid item md={6} xs={12}>
+      <ICPEnvironmentCard />
     </Grid>
   </Grid>
 );

@@ -32,6 +32,8 @@ export const icpbackendPlugin = createBackendPlugin({
             icpApiService,
           }),
         );
+
+        logger.info('ICP Backend plugin initialized');
       },
     });
   },

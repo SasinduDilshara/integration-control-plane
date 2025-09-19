@@ -61,9 +61,10 @@ export async function createICPApiService({
           status: response.status,
           statusText: response.statusText,
           errorText,
-          requestBody
+          requestBody,
+          url: graphqlUrl
         });
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
       }
 
       const json = await response.json();
@@ -330,7 +331,7 @@ export async function createICPApiService({
 
     async createComponent(requestData, _options): Promise<Component> {
       const query = `
-        mutation CreateComponent($component: CreateComponentInput!) {
+        mutation CreateComponent($component: ComponentInput!) {
           createComponent(component: $component) {
             componentId
             name
@@ -353,7 +354,11 @@ export async function createICPApiService({
       `;
 
       const data = await request<{ createComponent: Component }>(query, {
-        component: requestData,
+        component: {
+          projectId: requestData.projectId,
+          name: requestData.name,
+          description: requestData.description,
+        },
       });
 
       logger.info('Created new component via GraphQL', {
@@ -562,6 +567,18 @@ export async function createICPApiService({
       }
 
       return data.runtime;
+    },
+
+    async deleteRuntime(runtimeId, _options): Promise<void> {
+      const query = `
+        mutation DeleteRuntime($runtimeId: String!) {
+          deleteRuntime(runtimeId: $runtimeId)
+        }
+      `;
+
+      await request<{ deleteRuntime: boolean }>(query, { runtimeId });
+
+      logger.info('Deleted runtime via GraphQL', { runtimeId });
     },
   };
 }

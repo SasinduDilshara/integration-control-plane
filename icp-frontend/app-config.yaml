@@ -103,6 +103,12 @@ catalog:
     - type: file
       target: ../../examples/entities.yaml
 
+    # ICP Entities - your integration platform entities
+    - type: file
+      target: ../../catalog-entities/icp-entities.yaml
+      rules:
+        - allow: [Component, System, Resource]
+
     # Local example template
     - type: file
       target: ../../examples/template/template.yaml

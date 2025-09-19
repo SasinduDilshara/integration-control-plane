@@ -21,10 +21,13 @@ import {
   Chip,
   Grid,
   Divider,
+  IconButton,
+  TextField,
 } from '@material-ui/core';
 import { useApi } from '@backstage/core-plugin-api';
 import useAsync from 'react-use/lib/useAsync';
 import RefreshIcon from '@material-ui/icons/Refresh';
+import DeleteIcon from '@material-ui/icons/Delete';
 import {
   runtimesApiRef,
   Runtime
@@ -88,6 +91,12 @@ export const RuntimesFetchComponent = () => {
   // State for dialog
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedRuntime, setSelectedRuntime] = useState<Runtime | null>(null);
+
+  // State for delete confirmation dialog
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [runtimeToDelete, setRuntimeToDelete] = useState<Runtime | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
   // State for dropdown data
   const [projects, setProjects] = useState<Project[]>([]);
@@ -210,6 +219,44 @@ export const RuntimesFetchComponent = () => {
     setSelectedRuntime(null);
   }, []);
 
+  // Delete handlers
+  const handleDeleteClick = useCallback((runtime: Runtime, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent row click
+    setRuntimeToDelete(runtime);
+    setDeleteConfirmationText(''); // Clear previous input
+    setDeleteDialogOpen(true);
+  }, []);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!runtimeToDelete) return;
+
+    // Check if the typed runtime ID matches the actual runtime ID
+    if (deleteConfirmationText !== runtimeToDelete.runtimeId) {
+      return; // Don't proceed if IDs don't match
+    }
+
+    setDeleting(true);
+    try {
+      await runtimesApi.deleteRuntime(runtimeToDelete.runtimeId);
+      setDeleteDialogOpen(false);
+      setRuntimeToDelete(null);
+      setDeleteConfirmationText(''); // Clear the input
+      // Refresh the data after successful deletion
+      setRefreshIndex(prev => prev + 1);
+    } catch (error) {
+      console.error('Failed to delete runtime:', error);
+      // You might want to show a snackbar or error message here
+    } finally {
+      setDeleting(false);
+    }
+  }, [runtimeToDelete, runtimesApi, deleteConfirmationText]);
+
+  const handleDeleteCancel = useCallback(() => {
+    setDeleteDialogOpen(false);
+    setRuntimeToDelete(null);
+    setDeleteConfirmationText(''); // Clear the input
+  }, []);
+
   // Loading and error states
   if (loading) {
     return <Progress />;
@@ -287,6 +334,24 @@ export const RuntimesFetchComponent = () => {
       render: (data) => {
         const row = data as Runtime;
         return row.artifacts?.listeners?.length || 0;
+      },
+    },
+    {
+      title: 'Actions',
+      field: 'actions',
+      sorting: false,
+      render: (data) => {
+        const row = data as Runtime;
+        return (
+          <IconButton
+            color="secondary"
+            onClick={(event) => handleDeleteClick(row, event)}
+            size="small"
+            title="Delete Runtime"
+          >
+            <DeleteIcon />
+          </IconButton>
+        );
       },
     },
   ];
@@ -640,6 +705,54 @@ export const RuntimesFetchComponent = () => {
         <DialogActions>
           <Button onClick={handleDialogClose} color="primary">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" gutterBottom>
+            Are you sure you want to delete the runtime <strong>{runtimeToDelete?.runtimeId}</strong>?
+          </Typography>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            This action cannot be undone.
+          </Typography>
+          <Typography variant="body2" style={{ marginTop: 16, marginBottom: 8 }}>
+            To confirm, type the runtime ID: <strong>{runtimeToDelete?.runtimeId}</strong>
+          </Typography>
+          <TextField
+            fullWidth
+            variant="outlined"
+            size="small"
+            placeholder="Type runtime ID here"
+            value={deleteConfirmationText}
+            onChange={(e) => setDeleteConfirmationText(e.target.value)}
+            error={deleteConfirmationText !== '' && deleteConfirmationText !== runtimeToDelete?.runtimeId}
+            helperText={
+              deleteConfirmationText !== '' && deleteConfirmationText !== runtimeToDelete?.runtimeId
+                ? 'Runtime ID does not match'
+                : ''
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleDeleteCancel} color="primary">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            color="secondary"
+            variant="contained"
+            disabled={deleting || deleteConfirmationText !== runtimeToDelete?.runtimeId}
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
