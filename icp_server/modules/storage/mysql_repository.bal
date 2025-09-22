@@ -155,7 +155,7 @@ public isolated function getProjectIdByName(string projectName) returns string|e
 
 // Delete an environment by ID
 public isolated function deleteEnvironment(string environmentId) returns error? {
-    sql:ParameterizedQuery deleteQuery = `DELETE FROM environments WHERE env_id = ${environmentId}`;
+    sql:ParameterizedQuery deleteQuery = `DELETE FROM environments WHERE environment_id = ${environmentId}`;
     var result = dbClient->execute(deleteQuery);
     if result is sql:Error {
         log:printError(string `Failed to delete environment ${environmentId}`, result);

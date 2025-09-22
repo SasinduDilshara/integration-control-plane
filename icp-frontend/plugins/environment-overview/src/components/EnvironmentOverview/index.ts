@@ -1,1 +1,0 @@
-export { EnvironmentOverviewComponent } from './EnvironmentOverviewComponent';

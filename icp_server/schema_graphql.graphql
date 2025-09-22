@@ -1,0 +1,121 @@
+type Query {
+  runtimes(status: String, runtimeType: String, environmentId: String, projectId: String, componentId: String): [Runtime!]!
+  runtime(runtimeId: String!): Runtime
+  services(runtimeId: String!): [Service!]!
+  listeners(runtimeId: String!): [Listener!]!
+  environments: [Environment!]
+  projects: [Project!]!
+  project(projectId: String!): Project
+  components(projectId: String): [Component!]!
+  component(componentId: String!): Component
+}
+
+type Runtime {
+  runtimeId: String!
+  runtimeType: String!
+  status: String!
+  version: String
+  component: Component!
+  environment: Environment!
+  platformName: String
+  platformVersion: String
+  platformHome: String
+  osName: String
+  osVersion: String
+  registrationTime: String
+  lastHeartbeat: String
+  artifacts: Artifacts
+}
+
+type Component {
+  componentId: String!
+  project: Project!
+  name: String!
+  description: String
+  createdBy: String
+  createdAt: String
+  updatedAt: String
+  updatedBy: String
+}
+
+type Project {
+  projectId: String!
+  name: String!
+  description: String
+  createdBy: String
+  createdAt: String
+  updatedAt: String
+  updatedBy: String
+}
+
+type Environment {
+  environmentId: String!
+  name: String!
+  description: String
+  createdAt: String
+  updatedAt: String
+  updatedBy: String
+  createdBy: String
+}
+
+type Artifacts {
+  listeners: [Listener!]!
+  services: [Service!]!
+}
+
+type Listener {
+  name: String!
+  package: String!
+  protocol: String!
+  state: ArtifactState!
+}
+
+enum ArtifactState {
+  FAILED
+  STOPPING
+  STARTING
+  DISABLED
+  ENABLED
+}
+
+type Service {
+  name: String!
+  package: String!
+  basePath: String!
+  state: ArtifactState!
+  resources: [Resource!]!
+}
+
+type Resource {
+  methods: [String!]!
+  url: String!
+}
+
+type Mutation {
+  deleteRuntime(runtimeId: String!): Boolean!
+  createEnvironment(environment: EnvironmentInput!): Environment
+  deleteEnvironment(environmentId: String!): Boolean!
+  updateEnvironment(environmentId: String!, name: String, description: String): Environment
+  createProject(project: ProjectInput!): Project
+  deleteProject(projectId: String!): Boolean!
+  updateProject(projectId: String!, name: String, description: String): Project
+  createComponent(component: ComponentInput!): Component
+  deleteComponent(componentId: String!): Boolean!
+  updateComponent(componentId: String!, name: String, description: String): Component!
+}
+
+input EnvironmentInput {
+  name: String!
+  description: String
+}
+
+input ProjectInput {
+  name: String!
+  description: String
+}
+
+input ComponentInput {
+  projectId: String!
+  name: String!
+  description: String
+}
