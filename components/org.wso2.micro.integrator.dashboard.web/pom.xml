@@ -42,6 +42,21 @@
                         <executable>npm</executable>
                         <arguments>
                             <argument>install</argument>
+                            <argument>--legacy-peer-deps</argument>
+                        </arguments>
+                    </configuration>
+                    <goals>
+                        <goal>exec</goal>
+                    </goals>
+                </execution>
+                <execution>
+                    <id>create-target-dir</id>
+                    <phase>generate-sources</phase>
+                    <configuration>
+                        <executable>mkdir</executable>
+                        <arguments>
+                            <argument>-p</argument>
+                            <argument>${project.basedir}/target</argument>
                         </arguments>
                     </configuration>
                     <goals>
