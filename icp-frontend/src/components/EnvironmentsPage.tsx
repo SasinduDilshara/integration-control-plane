@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -36,6 +37,8 @@ import {
 } from '../types';
 
 const EnvironmentsPage: React.FC = () => {
+    const navigate = useNavigate();
+
     // Data hooks
     const { loading, error, value: environments, retry } = useEnvironments();
 
@@ -243,6 +246,11 @@ const EnvironmentsPage: React.FC = () => {
         }
     };
 
+    const handleRowClick = (environment: Environment) => {
+        // Navigate to environment overview with the selected environment
+        navigate(`/environment-overview?environmentId=${environment.environmentId}`);
+    };
+
     // Material React Table configuration
     const tableConfig = {
         columns,
@@ -290,6 +298,15 @@ const EnvironmentsPage: React.FC = () => {
         state: {
             isLoading: loading,
         },
+        muiTableBodyRowProps: ({ row }: { row: MRT_Row<Environment> }) => ({
+            onClick: () => handleRowClick(row.original),
+            sx: {
+                cursor: 'pointer',
+                '&:hover': {
+                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                },
+            },
+        }),
     };
 
     if (error) {

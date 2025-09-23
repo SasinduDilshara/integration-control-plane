@@ -18,6 +18,7 @@ import {
     Extension as ComponentsIcon,
     Folder as ProjectsIcon,
     Home as HomeIcon,
+    Visibility as OverviewIcon,
     ChevronLeft as ChevronLeftIcon,
     ChevronRight as ChevronRightIcon,
 } from '@mui/icons-material';
@@ -44,6 +45,11 @@ const Navigation: React.FC<NavigationProps> = ({ open, onToggle }) => {
             label: 'Environments',
             path: '/environments',
             icon: <EnvironmentsIcon />
+        },
+        {
+            label: 'Overview',
+            path: '/environment-overview',
+            icon: <OverviewIcon />
         },
         {
             label: 'Projects',

@@ -1,0 +1,630 @@
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import {
+    Box,
+    Typography,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
+    Paper,
+    Card,
+    CardContent,
+    Chip,
+    CircularProgress,
+    Button,
+    IconButton,
+    Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
+} from '@mui/material';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import CloseIcon from '@mui/icons-material/Close';
+import BallerinaIcon from './BallerinaIcon';
+import ReactFlow, {
+    Node,
+    Edge,
+    useNodesState,
+    useEdgesState,
+    Controls,
+    Background,
+    BackgroundVariant,
+    Position,
+} from 'reactflow';
+import 'reactflow/dist/style.css';
+
+import {
+    useEnvironments,
+    useRuntimes,
+} from '../services/hooks';
+import {
+    Environment,
+    Runtime,
+} from '../types';
+
+// Function to get the appropriate icon for runtime type
+const getRuntimeIcon = (runtimeType: string) => {
+    if (runtimeType?.toUpperCase().includes('BI') || runtimeType?.toLowerCase().includes('ballerina')) {
+        return <BallerinaIcon sx={{ fontSize: 16, color: '#1976d2' }} />;
+    }
+    return '🖥️'; // Default computer emoji for other runtime types
+};
+
+const EnvironmentOverview: React.FC = () => {
+    const [searchParams] = useSearchParams();
+    const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>('');
+    const [dialogOpen, setDialogOpen] = useState<boolean>(false);
+    const [selectedRuntime, setSelectedRuntime] = useState<Runtime | null>(null);
+
+    // Data hooks
+    const { loading: environmentsLoading, value: environments, retry: retryEnvironments } = useEnvironments();
+    const { loading: runtimesLoading, value: allRuntimes, retry: retryRuntimes } = useRuntimes();
+
+    // Effect to handle URL parameters for automatic environment selection
+    useEffect(() => {
+        const environmentIdFromUrl = searchParams.get('environmentId');
+        if (environmentIdFromUrl && environments.length > 0) {
+            // Check if the environment exists in the loaded environments
+            const environmentExists = environments.some(env => env.environmentId === environmentIdFromUrl);
+            if (environmentExists) {
+                setSelectedEnvironmentId(environmentIdFromUrl);
+            }
+        }
+    }, [searchParams, environments]);
+
+    // Filter runtimes by selected environment
+    const filteredRuntimes = useMemo(() => {
+        if (!selectedEnvironmentId) return [];
+        return allRuntimes.filter(runtime => runtime.environment?.environmentId === selectedEnvironmentId);
+    }, [allRuntimes, selectedEnvironmentId]);
+
+    // Create nodes and edges for React Flow
+    const { nodes, edges } = useMemo(() => {
+        if (!filteredRuntimes.length) {
+            return { nodes: [], edges: [] };
+        }
+
+        // Group runtimes by project and component
+        const projectGroups: { [key: string]: { [key: string]: Runtime[] } } = {};
+
+        filteredRuntimes.forEach(runtime => {
+            const projectName = runtime.component?.project?.name || 'Unknown Project';
+            const componentName = runtime.component?.name || 'Unknown Component';
+
+            if (!projectGroups[projectName]) {
+                projectGroups[projectName] = {};
+            }
+            if (!projectGroups[projectName][componentName]) {
+                projectGroups[projectName][componentName] = [];
+            }
+            projectGroups[projectName][componentName].push(runtime);
+        });
+
+        const nodes: Node[] = [];
+        const edges: Edge[] = [];
+
+        let yOffset = 0;
+        const projectSpacing = 300;
+        const componentSpacing = 200;
+        const runtimeSpacing = 150;
+
+        Object.entries(projectGroups).forEach(([projectName, components], projectIndex) => {
+            // Create project node
+            const projectNodeId = `project-${projectIndex}`;
+            nodes.push({
+                id: projectNodeId,
+                type: 'default',
+                position: { x: 50, y: yOffset },
+                data: {
+                    label: (
+                        <Box sx={{ textAlign: 'center', p: 1 }}>
+                            <Typography variant="h6" fontWeight="bold">
+                                📁 {projectName}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                                Project
+                            </Typography>
+                        </Box>
+                    )
+                },
+                style: {
+                    background: '#e3f2fd',
+                    border: '2px solid #1976d2',
+                    borderRadius: '10px',
+                    width: 180,
+                    height: 80,
+                },
+                sourcePosition: Position.Right,
+                targetPosition: Position.Left,
+            });
+
+            let componentYOffset = yOffset;
+
+            Object.entries(components).forEach(([componentName, runtimes], componentIndex) => {
+                // Create component node
+                const componentNodeId = `component-${projectIndex}-${componentIndex}`;
+                const componentX = 300;
+
+                nodes.push({
+                    id: componentNodeId,
+                    type: 'default',
+                    position: { x: componentX, y: componentYOffset },
+                    data: {
+                        label: (
+                            <Box sx={{ textAlign: 'center', p: 1 }}>
+                                <Typography variant="subtitle1" fontWeight="medium">
+                                    🧩 {componentName}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    Component
+                                </Typography>
+                            </Box>
+                        )
+                    },
+                    style: {
+                        background: '#f3e5f5',
+                        border: '2px solid #9c27b0',
+                        borderRadius: '8px',
+                        width: 160,
+                        height: 70,
+                    },
+                    sourcePosition: Position.Right,
+                    targetPosition: Position.Left,
+                });
+
+                // Create edge from project to component
+                edges.push({
+                    id: `edge-${projectNodeId}-${componentNodeId}`,
+                    source: projectNodeId,
+                    target: componentNodeId,
+                    style: { stroke: '#1976d2', strokeWidth: 2 },
+                    type: 'smoothstep',
+                });
+
+                // Create runtime nodes
+                runtimes.forEach((runtime, runtimeIndex) => {
+                    const runtimeNodeId = `runtime-${projectIndex}-${componentIndex}-${runtimeIndex}`;
+                    const runtimeX = 550;
+                    const runtimeY = componentYOffset + (runtimeIndex * 120) - (runtimes.length - 1) * 60;
+
+                    const getStatusColor = (status: string) => {
+                        switch (status?.toLowerCase()) {
+                            case 'active':
+                            case 'ready':
+                            case 'running':
+                                return { bg: '#e8f5e8', border: '#4caf50' };
+                            case 'offline':
+                            case 'creating':
+                                return { bg: '#fff3e0', border: '#ff9800' };
+                            case 'error':
+                            case 'failed':
+                                return { bg: '#ffebee', border: '#f44336' };
+                            default:
+                                return { bg: '#f5f5f5', border: '#9e9e9e' };
+                        }
+                    };
+
+                    const statusColor = getStatusColor(runtime.status);
+
+                    nodes.push({
+                        id: runtimeNodeId,
+                        type: 'default',
+                        position: { x: runtimeX, y: runtimeY },
+                        data: {
+                            label: (
+                                <Box sx={{ textAlign: 'center', p: 1, position: 'relative' }}>
+                                    <Typography variant="caption" fontWeight="medium" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                        {getRuntimeIcon(runtime.runtimeType)} {runtime.runtimeId}
+                                    </Typography>
+                                    <Chip
+                                        label={runtime.status}
+                                        size="small"
+                                        sx={{
+                                            fontSize: '0.7rem',
+                                            height: 15,
+                                            backgroundColor: statusColor.border,
+                                            color: 'white'
+                                        }}
+                                    />
+                                    <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleViewRuntime(runtime);
+                                        }}
+                                        sx={{
+                                            position: 'absolute',
+                                            bottom: 2,
+                                            right: 2,
+                                            width: 20,
+                                            height: 20,
+                                            backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                            '&:hover': {
+                                                backgroundColor: 'rgba(255, 255, 255, 1)',
+                                            }
+                                        }}
+                                    >
+                                        <VisibilityIcon sx={{ fontSize: 12 }} />
+                                    </IconButton>
+                                </Box>
+                            )
+                        },
+                        style: {
+                            background: statusColor.bg,
+                            border: `2px solid ${statusColor.border}`,
+                            borderRadius: '6px',
+                            width: 140,
+                            height: 80,
+                        },
+                        targetPosition: Position.Left,
+                    });
+
+                    // Create edge from component to runtime
+                    edges.push({
+                        id: `edge-${componentNodeId}-${runtimeNodeId}`,
+                        source: componentNodeId,
+                        target: runtimeNodeId,
+                        style: { stroke: '#9c27b0', strokeWidth: 2 },
+                        type: 'smoothstep',
+                    });
+                });
+
+                componentYOffset += Math.max(runtimes.length * 120, 120) + 40;
+            });
+
+            yOffset = componentYOffset + projectSpacing;
+        });
+
+        return { nodes, edges };
+    }, [filteredRuntimes]);
+
+    const [reactFlowNodes, setNodes, onNodesChange] = useNodesState(nodes);
+    const [reactFlowEdges, setEdges, onEdgesChange] = useEdgesState(edges);
+
+    // Update React Flow when data changes
+    React.useEffect(() => {
+        setNodes(nodes);
+        setEdges(edges);
+    }, [nodes, edges, setNodes, setEdges]);
+
+    const handleRefresh = useCallback(() => {
+        retryEnvironments();
+        retryRuntimes();
+    }, [retryEnvironments, retryRuntimes]);
+
+    // Dialog handlers
+    const handleViewRuntime = useCallback((runtime: Runtime) => {
+        setSelectedRuntime(runtime);
+        setDialogOpen(true);
+    }, []);
+
+    const handleCloseDialog = useCallback(() => {
+        setDialogOpen(false);
+        setSelectedRuntime(null);
+    }, []);
+
+    // Prevent deletion of nodes and edges
+    const onNodesDelete = useCallback(() => {
+        // Do nothing to prevent deletion
+    }, []);
+
+    const onEdgesDelete = useCallback(() => {
+        // Do nothing to prevent deletion
+    }, []);
+
+    const selectedEnvironment = environments.find(env => env.environmentId === selectedEnvironmentId);
+
+    const isLoading = environmentsLoading || runtimesLoading;
+
+    return (
+        <Box sx={{ p: 3, height: 'calc(100vh - 100px)' }}>
+            <Typography variant="h4" gutterBottom>
+                Environment Overview
+            </Typography>
+
+            {/* Environment Selection */}
+            <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                    <FormControl sx={{ minWidth: 300 }}>
+                        <InputLabel>Select Environment</InputLabel>
+                        <Select
+                            value={selectedEnvironmentId}
+                            onChange={(e) => setSelectedEnvironmentId(e.target.value)}
+                            label="Select Environment"
+                            disabled={environmentsLoading}
+                        >
+                            {environments.map((environment) => (
+                                <MenuItem key={environment.environmentId} value={environment.environmentId}>
+                                    {environment.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                    <Tooltip title="Refresh data">
+                        <IconButton
+                            onClick={handleRefresh}
+                            disabled={isLoading}
+                            color="primary"
+                            size="large"
+                            sx={{
+                                border: '1px solid',
+                                borderColor: 'primary.main',
+                                '&:hover': {
+                                    backgroundColor: 'primary.light',
+                                    color: 'primary.contrastText'
+                                }
+                            }}
+                        >
+                            <RefreshIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+
+                {selectedEnvironment && (
+                    <Box>
+                        <Typography variant="h6" gutterBottom>
+                            {selectedEnvironment.name}
+                        </Typography>
+                        {selectedEnvironment.description && (
+                            <Typography variant="body2" color="text.secondary" gutterBottom>
+                                {selectedEnvironment.description}
+                            </Typography>
+                        )}
+                        <Typography variant="body2">
+                            <strong>Runtimes:</strong> {filteredRuntimes.length}
+                        </Typography>
+                    </Box>
+                )}
+            </Paper>
+
+            {/* React Flow Visualization */}
+            {selectedEnvironmentId && (
+                <Card sx={{ height: 'calc(100vh - 350px)', minHeight: 400 }}>
+                    <CardContent sx={{ height: '100%', p: 0 }}>
+                        {isLoading ? (
+                            <Box sx={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                height: '100%'
+                            }}>
+                                <CircularProgress />
+                            </Box>
+                        ) : filteredRuntimes.length === 0 ? (
+                            <Box sx={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                height: '100%',
+                                flexDirection: 'column'
+                            }}>
+                                <Typography variant="h6" color="text.secondary">
+                                    No runtimes found in this environment
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                    Try selecting a different environment or check if runtimes are deployed.
+                                </Typography>
+                            </Box>
+                        ) : (
+                            <ReactFlow
+                                nodes={reactFlowNodes}
+                                edges={reactFlowEdges}
+                                onNodesChange={onNodesChange}
+                                onEdgesChange={onEdgesChange}
+                                onNodesDelete={onNodesDelete}
+                                onEdgesDelete={onEdgesDelete}
+                                fitView
+                                fitViewOptions={{ padding: 0.2 }}
+                                nodesDraggable={true}
+                                nodesConnectable={false}
+                                elementsSelectable={true}
+                                selectNodesOnDrag={false}
+                                panOnDrag={true}
+                                zoomOnScroll={true}
+                                zoomOnPinch={true}
+                                zoomOnDoubleClick={true}
+                                preventScrolling={false}
+                            >
+                                <Controls />
+                                <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
+                            </ReactFlow>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
+
+            {!selectedEnvironmentId && (
+                <Card sx={{ height: 'calc(100vh - 350px)', minHeight: 400 }}>
+                    <CardContent>
+                        <Box sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            height: '100%',
+                            flexDirection: 'column'
+                        }}>
+                            <Typography variant="h6" color="text.secondary" gutterBottom>
+                                Select an environment to view runtime visualization
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                Choose an environment from the dropdown above to see the runtime topology.
+                            </Typography>
+                        </Box>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Runtime Details Dialog */}
+            <Dialog
+                open={dialogOpen}
+                onClose={handleCloseDialog}
+                maxWidth="md"
+                fullWidth
+            >
+                <DialogTitle>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Typography variant="h6">Runtime Details</Typography>
+                        <IconButton onClick={handleCloseDialog} size="small">
+                            <CloseIcon />
+                        </IconButton>
+                    </Box>
+                </DialogTitle>
+                <DialogContent>
+                    {selectedRuntime && (
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            <Box>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
+                                    Basic Information
+                                </Typography>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2 }}>
+                                    <Box>
+                                        <Typography variant="body2" color="text.secondary">Runtime ID</Typography>
+                                        <Typography variant="body1">{selectedRuntime.runtimeId}</Typography>
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="body2" color="text.secondary">Runtime Type</Typography>
+                                        <Typography variant="body1">{selectedRuntime.runtimeType}</Typography>
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="body2" color="text.secondary">Status</Typography>
+                                        <Chip
+                                            label={selectedRuntime.status}
+                                            size="small"
+                                            color={
+                                                selectedRuntime.status?.toLowerCase() === 'active' ? 'success' :
+                                                    selectedRuntime.status?.toLowerCase() === 'error' ? 'error' : 'default'
+                                            }
+                                        />
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="body2" color="text.secondary">Component</Typography>
+                                        <Typography variant="body1">{selectedRuntime.component?.name || 'N/A'}</Typography>
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="body2" color="text.secondary">Environment</Typography>
+                                        <Typography variant="body1">{selectedRuntime.environment?.name || 'N/A'}</Typography>
+                                    </Box>
+                                    <Box>
+                                        <Typography variant="body2" color="text.secondary">Last Heartbeat</Typography>
+                                        <Typography variant="body1">
+                                            {selectedRuntime.lastHeartbeat
+                                                ? new Date(selectedRuntime.lastHeartbeat).toLocaleString()
+                                                : 'Never'
+                                            }
+                                        </Typography>
+                                    </Box>
+                                </Box>
+                            </Box>
+
+                            {selectedRuntime.version && (
+                                <Box>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
+                                        Version Information
+                                    </Typography>
+                                    <Typography variant="body1">{selectedRuntime.version}</Typography>
+                                </Box>
+                            )}
+
+                            {selectedRuntime.artifacts && selectedRuntime.artifacts.listeners && selectedRuntime.artifacts.listeners.length > 0 && (
+                                <Box>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
+                                        Listeners
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                        {selectedRuntime.artifacts.listeners.map((listener, index) => (
+                                            <Card key={index} variant="outlined" sx={{ p: 2 }}>
+                                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">Name</Typography>
+                                                        <Typography variant="body2">{listener.name}</Typography>
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">Protocol</Typography>
+                                                        <Typography variant="body2">{listener.protocol}</Typography>
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">State</Typography>
+                                                        <Chip label={listener.state} size="small" variant="outlined" />
+                                                    </Box>
+                                                </Box>
+                                            </Card>
+                                        ))}
+                                    </Box>
+                                </Box>
+                            )}
+
+                            {selectedRuntime.artifacts && selectedRuntime.artifacts.services && selectedRuntime.artifacts.services.length > 0 && (
+                                <Box>
+                                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>
+                                        Services
+                                    </Typography>
+                                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                        {selectedRuntime.artifacts.services.map((service, index) => (
+                                            <Card key={index} variant="outlined" sx={{ p: 2 }}>
+                                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">Name</Typography>
+                                                        <Typography variant="body2">{service.name}</Typography>
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">Base Path</Typography>
+                                                        <Typography variant="body2">{service.basePath}</Typography>
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">Package</Typography>
+                                                        <Typography variant="body2">{service.package}</Typography>
+                                                    </Box>
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary">State</Typography>
+                                                        <Chip label={service.state} size="small" variant="outlined" />
+                                                    </Box>
+                                                </Box>
+                                                {service.resources && service.resources.length > 0 && (
+                                                    <Box>
+                                                        <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+                                                            Resources
+                                                        </Typography>
+                                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                                                            {service.resources.map((resource, resourceIndex) => (
+                                                                <Box key={resourceIndex} sx={{ pl: 2, borderLeft: '2px solid #e0e0e0' }}>
+                                                                    <Typography variant="body2" sx={{ fontWeight: 'medium' }}>
+                                                                        {resource.url}
+                                                                    </Typography>
+                                                                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                                                        {resource.methods.map((method, methodIndex) => (
+                                                                            <Chip
+                                                                                key={methodIndex}
+                                                                                label={method}
+                                                                                size="small"
+                                                                                variant="outlined"
+                                                                                sx={{ fontSize: '0.7rem', height: 20 }}
+                                                                            />
+                                                                        ))}
+                                                                    </Box>
+                                                                </Box>
+                                                            ))}
+                                                        </Box>
+                                                    </Box>
+                                                )}
+                                            </Card>
+                                        ))}
+                                    </Box>
+                                </Box>
+                            )}
+                        </Box>
+                    )}
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCloseDialog} variant="contained">
+                        Close
+                    </Button>
+                </DialogActions>
+            </Dialog>
+        </Box>
+    );
+};
+
+export default EnvironmentOverview;

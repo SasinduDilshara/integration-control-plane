@@ -3,17 +3,21 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'r
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline, AppBar, Toolbar, Typography, Box, IconButton } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
 
 // Import ICP components
 import HomePage from './components/HomePage';
 import RuntimesPage from './components/RuntimesPage';
 import EnvironmentsPage from './components/EnvironmentsPage';
+import EnvironmentOverview from './components/EnvironmentOverview';
 import ComponentsPage from './components/ComponentsPage';
 import ProjectsPage from './components/ProjectsPage';
 import Navigation, { DRAWER_WIDTH, DRAWER_WIDTH_COLLAPSED } from './components/Navigation';
 
-const theme = createTheme({
+const createAppTheme = (mode: 'light' | 'dark') => createTheme({
     palette: {
+        mode,
         primary: {
             main: '#1976d2',
         },
@@ -23,7 +27,7 @@ const theme = createTheme({
     },
 });
 
-function AppContent() {
+function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeToggle: () => void }) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const navigate = useNavigate();
 
@@ -67,6 +71,13 @@ function AppContent() {
                     >
                         Integration Control Plane
                     </Typography>
+                    <IconButton
+                        color="inherit"
+                        onClick={onThemeToggle}
+                        aria-label="toggle theme"
+                    >
+                        {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
+                    </IconButton>
                 </Toolbar>
             </AppBar>
 
@@ -83,13 +94,17 @@ function AppContent() {
                         }),
                     mt: '64px', // Height of AppBar
                     minHeight: 'calc(100vh - 64px)',
-                    backgroundColor: (theme) => theme.palette.grey[50],
+                    backgroundColor: (theme) => 
+                        theme.palette.mode === 'dark' 
+                            ? theme.palette.grey[900] 
+                            : theme.palette.grey[50],
                 }}
             >
                 <Routes>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/runtimes" element={<RuntimesPage />} />
                     <Route path="/environments" element={<EnvironmentsPage />} />
+                    <Route path="/environment-overview" element={<EnvironmentOverview />} />
                     <Route path="/components" element={<ComponentsPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
                 </Routes>
@@ -99,11 +114,18 @@ function AppContent() {
 }
 
 function App() {
+    const [darkMode, setDarkMode] = useState(false);
+    const theme = createAppTheme(darkMode ? 'dark' : 'light');
+
+    const handleThemeToggle = () => {
+        setDarkMode(!darkMode);
+    };
+
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <Router>
-                <AppContent />
+                <AppContent darkMode={darkMode} onThemeToggle={handleThemeToggle} />
             </Router>
         </ThemeProvider>
     );
