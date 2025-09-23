@@ -28,6 +28,9 @@ replay_pid*
 .idea/
 .DS_Store
 
+# VSCode files
+.vscode/
+
 # Eclipse files
 .project
 
