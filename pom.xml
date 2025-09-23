@@ -234,11 +234,6 @@
                 </exclusions>
             </dependency>
             <dependency>
-                <groupId>org.wso2.securevault</groupId>
-                <artifactId>org.wso2.securevault</artifactId>
-                <version>${securevault.version}</version>
-            </dependency>
-            <dependency>
                 <groupId>org.jsoup</groupId>
                 <artifactId>jsoup</artifactId>
                 <version>${org.jsoup.version}</version>
@@ -315,11 +310,6 @@
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
-                <version>${jackson.core.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.fasterxml.jackson.core</groupId>
-                <artifactId>jackson-annotations</artifactId>
                 <version>${jackson.core.version}</version>
             </dependency>
             <dependency>
@@ -416,6 +406,65 @@
                 <groupId>org.wso2.ei</groupId>
                 <artifactId>org.wso2.micro.integrator.core</artifactId>
                 <version>${mi.user.core.version}</version>
+            </dependency>
+            
+            <!-- Jetty Dependencies -->
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-server</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-servlet</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-webapp</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-util</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-http</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-io</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-security</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.eclipse.jetty</groupId>
+                <artifactId>jetty-xml</artifactId>
+                <version>${jetty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>javax.servlet</groupId>
+                <artifactId>javax.servlet-api</artifactId>
+                <version>3.1.0</version>
+            </dependency>
+            
+            <!-- Other missing dependencies -->
+            <dependency>
+                <groupId>net.consensys.cava</groupId>
+                <artifactId>cava-toml</artifactId>
+                <version>${cava.toml.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.antlr</groupId>
+                <artifactId>antlr4-runtime</artifactId>
+                <version>${antlr4.runtime.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -514,9 +563,9 @@
         <commons-codec.orbit.version>1.15</commons-codec.orbit.version>
         <hikari.cp.version>3.4.5</hikari.cp.version>
         <httpcomponents.version>4.5.13</httpcomponents.version>
-        <code.gson.version>2.9.1</code.gson.version>
+        <code.gson.version>2.11.0</code.gson.version>
         <config.mapper.version>1.0.20</config.mapper.version>
-        <asgardeo.java.oidc.sdk.version>0.1.13</asgardeo.java.oidc.sdk.version>
+        <asgardeo.java.oidc.sdk.version>0.1.27</asgardeo.java.oidc.sdk.version>
         <net.minidev.asm.version>2.4.8</net.minidev.asm.version>
         <net.minidev.json-smart.version>2.5.1</net.minidev.json-smart.version>
         <guava.version>33.2.0-jre</guava.version>
@@ -525,5 +574,15 @@
         <cipher.tool.version>1.1.24</cipher.tool.version>
         <maven.war.plugin.version>3.3.2</maven.war.plugin.version>
         <mi.user.core.version>4.2.0</mi.user.core.version>
+        
+        <!-- Jetty -->
+        <jetty.version>9.4.50.v20221201</jetty.version>
+        
+        <!-- Other missing dependencies -->
+        <cava.toml.version>0.5.0</cava.toml.version>
+        <antlr4.runtime.version>4.7.2</antlr4.runtime.version>
+        
+        <!-- Maven plugins -->
+        <maven.compiler.plugin.version>3.8.1</maven.compiler.plugin.version>
     </properties>
 </project>

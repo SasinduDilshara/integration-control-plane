@@ -24,6 +24,7 @@ import com.nimbusds.oauth2.sdk.auth.Secret;
 import com.nimbusds.oauth2.sdk.id.ClientID;
 import com.nimbusds.oauth2.sdk.id.Issuer;
 import io.asgardeo.java.oidc.sdk.config.model.OIDCAgentConfig;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.eclipse.jetty.server.Connector;
@@ -80,8 +81,8 @@ public class DashboardServer {
     private static final String MI_RESOURCE_DIR = "resources";
     private static final String DEPLOYMENT_TOML = "deployment.toml";
     private static final String SECURITY_DIR = "security";
-    private static final String KEYSTORE_FILE = "dashboard.jks";
     private static final String TOML_CONF_PORT = "server_config.port";
+    private static final String TOML_CONF_PROTOCOL = "server_config.protocol";
     private static final String TOML_MI_USERNAME = "mi_super_admin.username";
     private static final String TOML_MI_PASSWORD = "mi_super_admin.password";
     private static final String MI_USERNAME = "mi_username";
@@ -90,7 +91,10 @@ public class DashboardServer {
     private static final String TOML_BAL_SERVICE_PASSWORD = "bal_service_account.password";
     private static final String BAL_USERNAME = "bal_username";
     private static final String BAL_PASSWORD = "bal_password";
-//    private static final String TOML_USER_STORE_TYPE = "user_store.type";
+    private static final String TOML_SI_SERVICE_USERNAME = "si_service_account.username";
+    private static final String TOML_SI_SERVICE_PASSWORD = "si_service_account.password";
+    private static final String SI_USERNAME = "si_username";
+    private static final String SI_PASSWORD = "si_password";
     private static final String TOML_CONF_HEARTBEAT_POOL_SIZE = "heartbeat_config.pool_size";
     private static final String SERVER_DIR = "server";
     private static final String WEBAPPS_DIR = "webapps";
@@ -109,7 +113,6 @@ public class DashboardServer {
     private static final String CARBON_HOME = "carbon.home";
     private static final String SECRET_CONF = "secret-conf.properties";
     private static final String CARBON_CONFIG_DIR = "carbon.config.dir.path";
-//    private static final String USER_STORE_TYPE = "user_store_type";
     private static final String FILE_BASED_USER_STORE_ENABLE = "internal_apis.file_user_store.enable";
     private static final String IS_USER_STORE_FILE_BASED = "is.user.store.file.based";
     private static final int EXECUTOR_SERVICE_TERMINATION_TIMEOUT = 5000;
@@ -120,46 +123,83 @@ public class DashboardServer {
     private static SSOConfig ssoConfig;
     private static Thread shutdownHook;
     private static SecretResolver secretResolver = new SecretResolver();
+    private static boolean makeNonAdminUsersReadOnly;
+    private static final String TOML_MAKE_NON_ADMIN_USERS_READ_ONLY = "user_access.make_non_admin_users_read_only";
+    private static final String MAKE_NON_ADMIN_USERS_READ_ONLY = "make_non_admin_users_read_only";
+    private static final String HTTP_PROTOCOL = "http";
+    private static final String HTTPS_PROTOCOL = "https";
 
     private static final Logger logger = LogManager.getLogger(DashboardServer.class);
 
     public void startServerWithConfigs() {
-
         int serverPort = 9743;
-        String tomlFile = DASHBOARD_HOME + File.separator + CONF_DIR + File.separator + DEPLOYMENT_TOML;
+        String serverProtocol = HTTPS_PROTOCOL;
+        String tomlFilePath = DASHBOARD_HOME + File.separator + CONF_DIR + File.separator + DEPLOYMENT_TOML;
 
         try {
-            Map<String, Object> parsedConfigs = parseConfigJS(tomlFile);
-
-            Object serverPortConfig = parsedConfigs.get(TOML_CONF_PORT);
-            if (serverPortConfig instanceof Long) {
-                serverPort = ((Long) serverPortConfig).intValue();
-            }
+            Map<String, Object> parsedConfigs = parseConfigJS(tomlFilePath);
+            serverPort = getServerPort(parsedConfigs, serverPort);
+            serverProtocol = getServerProtocol(parsedConfigs);
 
             initSecureVault(parsedConfigs);
             loadConfigurations(parsedConfigs);
+            setJavaxSslTruststore(parsedConfigs);
             ssoConfig = generateSSOConfig(parsedConfigs);
         } catch (SSOConfigException e) {
             logger.error("Error reading SSO configs from TOML file", e);
             System.exit(1);
         } catch (ConfigParserException e) {
             logger.error("Error while reading TOML file configs", e);
+            System.exit(1);
         }
 
         Server server = new Server();
-        setServerConnectors(serverPort, server, DASHBOARD_HOME);
-        setServerHandlers(DASHBOARD_HOME, server);
-        addShutdownHook();
-
+        configureServer(server, serverPort, serverProtocol);
         try {
-            server.start();
-            writePID(DASHBOARD_HOME);
-            printServerStartupLog(serverPort);
-            server.join();
+            startAndMonitorServer(server, serverPort, serverProtocol);
         } catch (Exception ex) {
             logger.error("Error while starting up the server", ex);
         }
         logger.info("Stopping the server");
+    }
+
+    private int getServerPort(Map<String, Object> parsedConfigs, int defaultPort) {
+        Object serverPortConfig = parsedConfigs.get(TOML_CONF_PORT);
+        if (serverPortConfig instanceof Long) {
+            return ((Long) serverPortConfig).intValue();
+        }
+        return defaultPort;
+    }
+
+    private String getServerProtocol(Map<String, Object> parsedConfigs) throws ConfigParserException {
+        if (!parsedConfigs.containsKey(TOML_CONF_PROTOCOL)) {
+            return HTTPS_PROTOCOL; // Default to HTTPS
+        }
+        Object serverProtocolConfig = parsedConfigs.get(TOML_CONF_PROTOCOL);
+        if (serverProtocolConfig instanceof String) {
+            String protocol = (String) serverProtocolConfig;
+            if (HTTPS_PROTOCOL.equalsIgnoreCase(protocol)) {
+                return HTTPS_PROTOCOL;
+            }
+            if (HTTP_PROTOCOL.equalsIgnoreCase(protocol)) {
+                return HTTP_PROTOCOL;
+            }
+        }
+        throw new ConfigParserException("Invalid value provided for " + TOML_CONF_PROTOCOL
+                + ": expected either \"http\" or \"https\"");
+    }
+
+    private void configureServer(Server server, int serverPort, String serverProtocol) {
+        setServerConnectors(serverPort, serverProtocol, server);
+        setServerHandlers(DASHBOARD_HOME, server);
+        addShutdownHook();
+    }
+
+    private void startAndMonitorServer(Server server, int serverPort, String serverProtocol) throws Exception {
+        server.start();
+        writePID(DASHBOARD_HOME);
+        printServerStartupLog(serverPort, serverProtocol);
+        server.join();
     }
 
     private void addShutdownHook() {
@@ -188,30 +228,29 @@ public class DashboardServer {
         }
     }
 
-    private void setServerConnectors(int serverPort, Server server, String dashboardHome) {
+    private void setServerConnectors(int serverPort, String serverProtocol, Server server) {
+        ServerConnector serverConnector;
+        if (HTTPS_PROTOCOL.equals(serverProtocol)) {
+            HttpConfiguration httpConfiguration = new HttpConfiguration();
+            httpConfiguration.addCustomizer(new SecureRequestCustomizer());
+            httpConfiguration.setSecureScheme("https");
+            httpConfiguration.setSecurePort(serverPort);
+            httpConfiguration.setSendServerVersion(false);
+            server.setAttribute("org.eclipse.jetty.server.Request.maxFormContentSize", 2000);
 
-        HttpConfiguration https = new HttpConfiguration();
-        https.addCustomizer(new SecureRequestCustomizer());
-        https.setSecureScheme("https");
-        https.setSecurePort(serverPort);
-        https.setSendServerVersion(false);
-        server.setAttribute("org.eclipse.jetty.server.Request.maxFormContentSize", 2000);
-
-        SslContextFactory sslContextFactory = new SslContextFactory.Server();
-        String jksPath =
-                dashboardHome + File.separator + jksFileLocation;
-        sslContextFactory.setKeyStorePath(jksPath);
-        sslContextFactory.setKeyStorePassword(keyStorePassword);
-        sslContextFactory.setKeyManagerPassword(keyManagerPassword);
-
-        SslConnectionFactory sslConnectionFactory = new SslConnectionFactory(sslContextFactory, "http/1.1");
-
-        ServerConnector sslConnector = new ServerConnector(server,
-                new DetectorConnectionFactory(sslConnectionFactory),
-                new HttpConnectionFactory(https));
-        sslConnector.setPort(serverPort);
-
-        server.setConnectors(new Connector[] { sslConnector });
+            SslContextFactory sslContextFactory = new SslContextFactory.Server();
+            String jksPath = DashboardServer.DASHBOARD_HOME + File.separator + jksFileLocation;
+            sslContextFactory.setKeyStorePath(jksPath);
+            sslContextFactory.setKeyStorePassword(keyStorePassword);
+            sslContextFactory.setKeyManagerPassword(keyManagerPassword);
+            SslConnectionFactory sslConnectionFactory = new SslConnectionFactory(sslContextFactory, "http/1.1");
+            serverConnector = new ServerConnector(server, new DetectorConnectionFactory(sslConnectionFactory),
+                    new HttpConnectionFactory(httpConfiguration));
+        } else {
+            serverConnector = new ServerConnector(server);
+        }
+        serverConnector.setPort(serverPort);
+        server.addConnector(serverConnector);
     }
 
     private void setServerHandlers(String dashboardHome, Server server) {
@@ -244,7 +283,7 @@ public class DashboardServer {
         server.setHandler(handlers);
     }
 
-    private void printServerStartupLog(int serverPort) {
+    private void printServerStartupLog(int serverPort, String serverProtocol) {
         InetAddress localHost;
         String hostName;
         try {
@@ -253,7 +292,7 @@ public class DashboardServer {
         } catch (UnknownHostException e) {
             hostName = "127.0.0.1";
         }
-        String loginUrl = "https://" + hostName + ":" + serverPort + "/login";
+        String loginUrl = serverProtocol + "://" + hostName + ":" + serverPort + "/login";
         logger.info("WSO2 Integration Control Plane started.");
         logger.info("Login to Integration Control Plane Dashboard : '" + loginUrl + "'");
     }
@@ -290,6 +329,18 @@ public class DashboardServer {
             properties.put(BAL_PASSWORD, resolveSecret(balPassword));
         }
 
+        String siUsername = System.getProperty(SI_USERNAME);
+        if (StringUtils.isEmpty(siUsername)) {
+            siUsername = (String) parsedConfigs.get(TOML_SI_SERVICE_USERNAME);
+            properties.put(SI_USERNAME, resolveSecret(siUsername));
+        }
+
+        String siPassword = System.getProperty(SI_PASSWORD);
+        if (StringUtils.isEmpty(siPassword)) {
+            siPassword = (String) parsedConfigs.get(TOML_SI_SERVICE_PASSWORD);
+            properties.put(SI_PASSWORD, resolveSecret(siPassword));
+        }
+
         keyStorePassword = System.getProperty(KEYSTORE_PASSWORD);
         if (StringUtils.isEmpty(keyStorePassword)) {
             keyStorePassword = resolveSecret((String) parsedConfigs.get(TOML_KEYSTORE_PASSWORD));
@@ -312,6 +363,15 @@ public class DashboardServer {
             }
             properties.put(IS_USER_STORE_FILE_BASED, String.valueOf(isFileBased));
         }
+
+        String makeNonAdminUsersReadOnlySystemValue = System.getProperty(MAKE_NON_ADMIN_USERS_READ_ONLY);
+        if (StringUtils.isNotEmpty(makeNonAdminUsersReadOnlySystemValue)) {
+            makeNonAdminUsersReadOnly = Boolean.parseBoolean(makeNonAdminUsersReadOnlySystemValue);
+        } else {
+            makeNonAdminUsersReadOnly = Boolean.parseBoolean(
+                    String.valueOf(parsedConfigs.get(TOML_MAKE_NON_ADMIN_USERS_READ_ONLY)));
+        }
+        properties.put(MAKE_NON_ADMIN_USERS_READ_ONLY, String.valueOf(makeNonAdminUsersReadOnly));
 
         System.setProperties(properties);
     }
@@ -387,7 +447,6 @@ public class DashboardServer {
             if (parseResult.get(SSOConstants.TOML_SSO_USER_INFO_ENDPOINT) instanceof String) {
                 userInfoEndpoint = (String) parseResult.get(SSOConstants.TOML_SSO_USER_INFO_ENDPOINT);
             }
-            setJavaxSslTruststore(parseResult);
             return new SSOConfig(oidcAgentConfig, adminGroupAttribute, adminGroups, wellKnownEndpointPath, baseUrl,
                                  introspectionEndpoint, userInfoEndpoint);
         }
@@ -451,11 +510,16 @@ public class DashboardServer {
         String trustStoreLocation = (String) trustStoreFileLocationRes;
         trustStoreLocation = resolveSecret(trustStoreLocation);
         trustStoreLocation = DASHBOARD_HOME + File.separator + trustStoreLocation;
-        System.setProperty(JAVAX_SSL_TRUSTSTORE, trustStoreLocation);
-
-        String trustStorePassword = (String) truststorePasswordRes;
-        trustStorePassword = resolveSecret(trustStorePassword);
-        System.setProperty(JAVAX_SSL_TRUSTSTORE_PASSWORD, trustStorePassword);
+        // Add truststore location only if the file exists.
+        if (new File(trustStoreLocation).exists()) {
+            System.setProperty(JAVAX_SSL_TRUSTSTORE, trustStoreLocation);
+            String trustStorePassword = (String) truststorePasswordRes;
+            trustStorePassword = resolveSecret(trustStorePassword);
+            System.setProperty(JAVAX_SSL_TRUSTSTORE_PASSWORD, trustStorePassword);
+        } else {
+            logger.warn("Couldn't find the TrustStore file in: {}, proceeding with default truststore."
+                    , trustStoreLocation);
+        }
     }
 
     private void initSecureVault(Map<String, Object> parseResult) {

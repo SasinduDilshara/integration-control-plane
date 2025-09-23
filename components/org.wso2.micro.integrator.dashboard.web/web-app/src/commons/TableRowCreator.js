@@ -100,10 +100,11 @@ export default function TableRowCreator(props) {
             case 'message_count':
                 return <TableCell>{data.nodes.map(node=><StringCell data={node.details.size === '-1' ? "Not Supported" : node.details.size}/>)}</TableCell>
 
-            // Message Processors
+            // Message Processors and inbound endpoints
+            // isDisabled : Add filter to disable the switch based on different criteria (pageId, protocol, etc.)
             case 'status':
-                return <TableCell>{data.nodes.map(node=><SwitchStatusCell pageId={pageId} artifactName={node.details.name} 
-                        nodeId={node.nodeId} status={node.details.status === 'active' ? true : false} retrieveData={retrieveData}/>)}</TableCell>
+                return <TableCell>{data.nodes.map(node=><SwitchStatusCell pageId={pageId} artifactName={node.details.name}
+                                        nodeId={node.nodeId} status={node.details.status === 'active' ? true : false} retrieveData={retrieveData} isDisabled={false}/>)}</TableCell>
 
             // Apis
             case 'url':
@@ -129,7 +130,8 @@ export default function TableRowCreator(props) {
 
             case 'connector_status':
                 return <TableCell><table>{data.nodes.map(node=><ConnectorStatus status={node.details.status} />)}</table></TableCell>
-
+            case 'si_artifact_status':
+                return <TableCell><table>{data.nodes.map(node=><SiArtifactStatus status={node.details.status} />)}</table></TableCell>
             case 'capp_status':
                 return <TableCell><table>{data.nodes.map(node=><StatusIcon status={node.details.status} />)}</table></TableCell>
 
@@ -221,6 +223,14 @@ function ConnectorStatus(props) {
     )
 }
 
+function SiArtifactStatus(props) {
+    return (
+        <tr>
+            {props.status === 'Enabled' ? <EnabledIcon style={{color:"green"}}/> : <DisabledIcon style={{color:"red"}}/>}
+        </tr>
+    )
+}
+
 function StatusIcon(props) {
     return (
         <tr>
@@ -231,9 +241,24 @@ function StatusIcon(props) {
 }
 
 function SwitchStatusCell(props) {
-    const { pageId, artifactName, nodeId, status, retrieveData} = props;
+    const { pageId, artifactName, nodeId, status, retrieveData, isDisabled } = props;
     var isActive = status;
     const globalGroupId = useSelector(state => state.groupId);
+    const shouldBeDisabled = !AuthManager.hasEditPermission() || isDisabled;
+
+    const [errorDialog, setErrorDialog] = React.useState({
+        open: false,
+        title: '',
+        message: ''
+    });
+
+    const handleErrorDialogClose = () => {
+        setErrorDialog({
+            open: false,
+            title: '',
+            message: ''
+        });
+    };
 
     const changeState = () => {
         isActive = !isActive
@@ -251,10 +276,34 @@ function SwitchStatusCell(props) {
             if (response.data.status === 'success') {
                 retrieveData('', true);
             }
+        }).catch(error => {
+            const serverMessage = error?.response?.data?.message || error?.message || 'Unknown error';
+            console.error('updateArtifact error:', serverMessage);
+            setErrorDialog({
+                open: true,
+                title: 'Server Error',
+                message: serverMessage
+            });
         });
     }
 
-    return <tr><td><Switch checked={isActive} onChange={changeState} height={16} width={36} /></td></tr>
+    return <>
+        <tr><td><Switch checked={isActive} onChange={changeState} height={16} width={36} disabled={shouldBeDisabled} /></td></tr>
+        <Dialog open={errorDialog.open} onClose={handleErrorDialogClose}
+            aria-labelledby="alert-dialog-title" aria-describedby="alert-dialog-description">
+            <DialogTitle id="alert-dialog-title">{errorDialog.title}</DialogTitle>
+            <DialogContent dividers>
+                <DialogContentText id="alert-dialog-description">
+                    {errorDialog.message}
+                </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+                <Button onClick={handleErrorDialogClose} variant="contained" autoFocus>
+                    OK
+                </Button>
+            </DialogActions>
+        </Dialog>
+    </>
 }
 
 function LogConfigLevelDropDown(props) {
