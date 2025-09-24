@@ -2,6 +2,10 @@
 
 Monitor, troubleshoot and control integration deployments
 
+
+[![Build Status](https://wso2.org/jenkins/buildStatus/icon?job=products%2Fintegration-control-plane)](https://wso2.org/jenkins/job/products/job/integration-control-plane/)
+
+
 ## Building from the source
 
 ### Setting up the development environment
