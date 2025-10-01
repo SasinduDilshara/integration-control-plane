@@ -155,7 +155,7 @@ public isolated function getProjectIdByName(string projectName) returns string|e
 
 // Delete an environment by ID
 public isolated function deleteEnvironment(string environmentId) returns error? {
-    sql:ParameterizedQuery deleteQuery = `DELETE FROM environments WHERE env_id = ${environmentId}`;
+    sql:ParameterizedQuery deleteQuery = `DELETE FROM environments WHERE environment_id = ${environmentId}`;
     var result = dbClient->execute(deleteQuery);
     if result is sql:Error {
         log:printError(string `Failed to delete environment ${environmentId}`, result);
@@ -166,7 +166,7 @@ public isolated function deleteEnvironment(string environmentId) returns error? 
 }
 
 // Get all runtimes with optional filtering
-public isolated function getRuntimes(string? status, string? runtimeType, string? environment, string? projectId, string? componentId) returns types:Runtime[]|error {
+public isolated function getRuntimes(string? status, string? runtimeType, string? environmentId, string? projectId, string? componentId) returns types:Runtime[]|error {
     types:Runtime[] runtimeList = [];
     sql:ParameterizedQuery whereClause = ` WHERE 1=1 `;
     sql:ParameterizedQuery whereConditions = ` `;
@@ -176,8 +176,7 @@ public isolated function getRuntimes(string? status, string? runtimeType, string
     if runtimeType is string {
         whereConditions = sql:queryConcat(whereConditions, ` AND runtime_type = ${runtimeType} `);
     }
-    if environment is string {
-        string environmentId = <string>check getEnvironmentIdByName(environment);
+    if environmentId is string {
         whereConditions = sql:queryConcat(whereConditions, ` AND environment_id = ${environmentId} `);
     }
     if projectId is string {
@@ -219,6 +218,17 @@ public isolated function getRuntimeById(string runtimeId) returns types:Runtime?
     }
 
     return check mapToRuntime(runtimeRecords[0]);
+}
+
+// Delete a runtime by ID
+public isolated function deleteRuntime(string runtimeId) returns error? {
+    sql:ParameterizedQuery deleteQuery = `DELETE FROM runtimes WHERE runtime_id = ${runtimeId}`;
+    var result = dbClient->execute(deleteQuery);
+    if result is sql:Error {
+        log:printError(string `Failed to delete runtime ${runtimeId}`, result);
+        return result;
+    }
+    log:printInfo(string `Successfully deleted runtime ${runtimeId}`);
 }
 
 // Get services for a specific runtime
@@ -331,8 +341,13 @@ public isolated function mapToService(types:Service serviceRecord, string runtim
 // Helper function to convert time:Utc to MySQL datetime format
 isolated function utcToMySQLDateTime(time:Utc utcTime) returns string|error {
     time:Civil civilTime = time:utcToCivil(utcTime);
+    // Ensure seconds is between 0-59 by truncating instead of rounding
+    int seconds = <int>civilTime.second;
+    if seconds > 59 {
+        seconds = 59;
+    }
     // Format: YYYY-MM-DD HH:MM:SS
-    string formattedTime = string `${civilTime.year}-${civilTime.month.toString().padStart(2, "0")}-${civilTime.day.toString().padStart(2, "0")} ${civilTime.hour.toString().padStart(2, "0")}:${civilTime.minute.toString().padStart(2, "0")}:${(<int>civilTime.second).toString().padStart(2, "0")}`;
+    string formattedTime = string `${civilTime.year}-${civilTime.month.toString().padStart(2, "0")}-${civilTime.day.toString().padStart(2, "0")} ${civilTime.hour.toString().padStart(2, "0")}:${civilTime.minute.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
     return formattedTime;
 }
 
@@ -383,7 +398,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
         transaction {
             sql:ExecutionResult _ = check dbClient->execute(`
                 UPDATE runtimes 
-                SET last_heartbeat = ${currentTimeStr}
+                SET last_heartbeat = ${currentTimeStr}, status = 'RUNNING'
                 WHERE runtime_id = ${deltaHeartbeat.runtimeId}
             `);
 
@@ -405,7 +420,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
         // Update only the heartbeat timestamp
         sql:ExecutionResult _ = check dbClient->execute(`
             UPDATE runtimes 
-            SET last_heartbeat = ${currentTimeStr}
+            SET last_heartbeat = ${currentTimeStr}, status = 'RUNNING'
             WHERE runtime_id = ${deltaHeartbeat.runtimeId}
         `);
 

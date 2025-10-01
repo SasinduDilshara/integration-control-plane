@@ -40,8 +40,8 @@ listener graphql:Listener graphqlListener = new (graphqlPort
 service /graphql on graphqlListener {
     // ----------- Runtime Resources
     // Get all runtimes with optional filtering
-    isolated resource function get runtimes(string? status, string? runtimeType, string? environment, string? projectId, string? componentId) returns types:Runtime[]|error {
-        return check storage:getRuntimes(status, runtimeType, environment, projectId, componentId);
+    isolated resource function get runtimes(string? status, string? runtimeType, string? environmentId, string? projectId, string? componentId) returns types:Runtime[]|error {
+        return check storage:getRuntimes(status, runtimeType, environmentId, projectId, componentId);
     }
 
     // Get a specific runtime by ID
@@ -57,6 +57,12 @@ service /graphql on graphqlListener {
     // Get listeners for a specific runtime
     isolated resource function get listeners(string runtimeId) returns types:Listener[]|error {
         return check storage:getListenersForRuntime(runtimeId);
+    }
+
+    // Delete a runtime by ID
+    isolated remote function deleteRuntime(string runtimeId) returns boolean|error {
+        check storage:deleteRuntime(runtimeId);
+        return true;
     }
 
     // ----------- Environment Resources
