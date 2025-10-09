@@ -12,9 +12,20 @@ interface GraphQLResponse<T = any> {
 
 class ICPApiClient {
     private readonly endpoint: string;
+    private readonly authEndpoint: string;
+    private token: string | null = null;
 
-    constructor(endpoint: string = 'http://localhost:9446/graphql') {
+    constructor(endpoint: string = 'http://localhost:9446/graphql', authEndpoint: string = 'https://localhost:9445/auth') {
         this.endpoint = endpoint;
+        this.authEndpoint = authEndpoint;
+    }
+
+    setToken(token: string | null) {
+        this.token = token;
+    }
+
+    getToken(): string | null {
+        return this.token;
     }
 
     private async executeGraphQL<T = any>(
@@ -22,11 +33,17 @@ class ICPApiClient {
         variables?: Record<string, any>
     ): Promise<T> {
         try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (this.token) {
+                headers['Authorization'] = `Bearer ${this.token}`;
+            }
+
             const response = await fetch(this.endpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({
                     query,
                     variables,
@@ -62,6 +79,33 @@ class ICPApiClient {
     // Mutation method for executing GraphQL mutations
     async mutate<T = any>(mutation: string, variables?: Record<string, any>): Promise<T> {
         return this.executeGraphQL<T>(mutation, variables);
+    }
+
+    // Authentication methods
+    async login(email: string, password: string): Promise<any> {
+        try {
+            const response = await fetch(`${this.authEndpoint}/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    email,
+                    password,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Login failed with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Login Error:', error);
+            throw error;
+        }
     }
 }
 

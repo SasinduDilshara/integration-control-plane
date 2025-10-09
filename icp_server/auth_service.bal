@@ -37,6 +37,11 @@ final readonly & jwt:IssuerSignatureConfig jwtSignatureConfig = {
     config: defaultJwtHMACSecret
 };
 
+@http:ServiceConfig {
+    cors: {
+        allowOrigins: ["*"]
+    }
+}
 service /auth on httpListener {
 
     isolated resource function post login(types:Credentials credentials) returns types:LoginResponse|http:Unauthorized|http:InternalServerError|error {

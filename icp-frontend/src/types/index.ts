@@ -114,3 +114,32 @@ export interface UpdateProjectRequest {
     name: string;
     description: string;
 }
+
+// Authentication types
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface Role {
+  roleId: string;
+  projectId: string;
+  environmentId: string;
+  privilegeLevel: string;
+  roleName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LoginResponse {
+  isNewUser: boolean;
+  token: string;
+  expiresIn: number;
+}
+
+export interface AuthUser {
+  email: string;
+  token: string;
+  roles: Role[];
+  expiresAt: number;
+}
