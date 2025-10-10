@@ -1093,3 +1093,39 @@ public isolated function updateComponent(string componentId, string? name, strin
     log:printInfo(string `Successfully updated component ${componentId}`);
     return ();
 }
+
+// Get user details by email
+public isolated function getUserDetailsByEmail(string email) returns types:User|error {
+    log:printDebug(string `Fetching user details for email: ${email}`);
+    types:User|sql:Error user = dbClient->queryRow(
+        `SELECT user_id as userId, email, display_name as displayName, created_at as createdAt, updated_at as updatedAt 
+         FROM users 
+         WHERE email = ${email}`
+    );
+
+    if user is sql:Error {
+        log:printError(string `Failed to get user details for ${email}`, user);
+        return user;
+    }
+
+    return user;
+}
+
+// Get user roles by user ID
+public isolated function getUserRoles(string userId) returns types:Role[]|error {
+    log:printDebug(string `Fetching roles for user: ${userId}`);
+    types:Role[] roles = [];
+    stream<types:Role, sql:Error?> roleStream = dbClient->query(
+        `SELECT r.role_id, r.project_id, r.environment_id, r.privilege_level, r.role_name, r.created_at, r.updated_at
+         FROM roles r
+         JOIN user_roles ur ON r.role_id = ur.role_id
+         WHERE ur.user_id = ${userId}`
+    );
+
+    check from types:Role role in roleStream
+        do {
+            roles.push(role);
+        };
+
+    return roles;
+}

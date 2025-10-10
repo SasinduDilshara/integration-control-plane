@@ -14,17 +14,11 @@
 # specific language governing permissions and limitations
 # under the License.
 
-FROM mysql:latest
+FROM ballerina/ballerina:2201.12.8
 
-ENV MYSQL_ROOT_PASSWORD=my-secret-pw
-ENV MYSQL_DATABASE=icp_database
+USER root
 
-# Copy initialization script and entrypoint
-COPY ./init-scripts/mysql_init.sql /tmp/mysql_init.sql
-COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY . /home/work-dir/icp_server
+WORKDIR /home/work-dir/icp_server
 
-# Make entrypoint executable
-RUN chmod +x /usr/local/bin/entrypoint.sh
-
-# Use custom entrypoint
-CMD ["/usr/local/bin/entrypoint.sh"]
+RUN bal build

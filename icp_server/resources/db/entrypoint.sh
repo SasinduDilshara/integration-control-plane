@@ -14,17 +14,28 @@
 # specific language governing permissions and limitations
 # under the License.
 
-FROM mysql:latest
+#!/bin/bash
+set -e
 
-ENV MYSQL_ROOT_PASSWORD=my-secret-pw
-ENV MYSQL_DATABASE=icp_database
+# Start MySQL in background
+docker-entrypoint.sh mysqld &
+MYSQL_PID=$!
 
-# Copy initialization script and entrypoint
-COPY ./init-scripts/mysql_init.sql /tmp/mysql_init.sql
-COPY ./entrypoint.sh /usr/local/bin/entrypoint.sh
+# Wait for MySQL to be ready
+echo "Waiting for MySQL to start..."
+for i in {1..30}; do
+    if mysqladmin ping -h localhost -u root -p"$MYSQL_ROOT_PASSWORD" --silent 2>/dev/null; then
+        echo "MySQL is ready!"
+        break
+    fi
+    echo "Waiting... ($i/30)"
+    sleep 2
+done
 
-# Make entrypoint executable
-RUN chmod +x /usr/local/bin/entrypoint.sh
+# Execute the initialization script
+echo "Running initialization script..."
+mysql -u root -p"$MYSQL_ROOT_PASSWORD" </tmp/mysql_init.sql
+echo "Database initialized successfully!"
 
-# Use custom entrypoint
-CMD ["/usr/local/bin/entrypoint.sh"]
+# Keep MySQL running
+wait $MYSQL_PID

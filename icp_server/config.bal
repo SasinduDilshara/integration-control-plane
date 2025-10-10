@@ -33,11 +33,21 @@ configurable types:DeploymentType deploymentType = "VM";
 configurable int heartbeatTimeoutSeconds = 300;
 configurable int schedulerIntervalSeconds = 600;
 
-// Authentication configuration
-configurable string jwtIssuer = "icp-jwt-issuer";
+// Runtime auth configuration (runtime and server communication)
+configurable string jwtIssuer = "icp-runtime-jwt-issuer";
 configurable string|string[] jwtAudience = "icp-server";
 configurable string publicCertFile = "./resources/keys/public.cert";
 configurable decimal jwtClockSkewSeconds = 10;
+
+// Frontend auth configuration (frontend and server communication)
+configurable string defaultJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs256";
+configurable string frontendJwtIssuer = "icp-frontend-jwt-issuer";
+configurable string frontendJwtAudience = "icp-server";
+configurable int defaultTokenExpiryTime = 3600; // 1 hour
+
+// Authentication backend configuration 
+configurable string authBackendUrl = "https://localhost:9447";
+configurable string authBackendApiKey = "default-api-key";
 
 // Logging configuration
 configurable string logLevel = "INFO"; // DEBUG, INFO, WARN, ERROR

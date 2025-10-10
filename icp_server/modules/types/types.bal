@@ -412,3 +412,80 @@ public type ComponentInDB record {
     string project_updated_at?;
     string project_updated_by?;
 };
+
+// === Auth Related Types ===
+
+public type Credentials record {
+    string email;
+    string password;
+};
+
+public type LoginResponse record {|
+    boolean isNewUser = false;
+    string token?;
+    int expiresIn?;
+    string email?;
+    Role[] roles?;
+|};
+
+// Types for the /authenticate endpoint
+public type AuthenticateResponse record {
+    boolean authenticated;
+    string? email;
+    string? timestamp;
+};
+
+// Database user record type
+public type User record {
+    string userId;
+    string email;
+    string displayName;
+    string? createdAt?;
+    string? updatedAt?;
+};
+
+// Database user_credentials record type
+public type UserCredentials record {
+    string email;
+    string passwordHash;
+    string? createdAt?;
+    string? updatedAt?;
+};
+
+// Privilege level enum
+public enum PrivilegeLevel {
+    ADMIN = "admin",
+    DEVELOPER = "developer"
+};
+
+// Database role record type
+public type Role record {
+    @sql:Column {
+        name: "role_id"
+    }
+    string roleId;
+    @sql:Column {
+        name: "project_id"
+    }
+    string projectId;
+    @sql:Column {
+        name: "environment_id"
+    }
+    string environmentId;
+    @sql:Column {
+        name: "privilege_level"
+    }
+    PrivilegeLevel privilegeLevel;
+    @sql:Column {
+        name: "role_name"
+    }
+    string roleName; // Format: <project_name>:<env_name>:<privilege_level>
+    @sql:Column {
+        name: "created_at"
+    }
+    string? createdAt?;
+    @sql:Column {
+        name: "updated_at"
+    }
+    string? updatedAt?;
+};

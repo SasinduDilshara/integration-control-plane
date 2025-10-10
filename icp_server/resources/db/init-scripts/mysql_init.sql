@@ -14,43 +14,18 @@ USE icp_database;
 
 CREATE TABLE users (
   user_id              CHAR(36) NOT NULL PRIMARY KEY,
-  username             VARCHAR(50)  NOT NULL UNIQUE,
   email                VARCHAR(255) NOT NULL UNIQUE,
-  password_hash        VARCHAR(255) NOT NULL,
-  full_name            VARCHAR(200) NULL,
-  status               ENUM('ACTIVE','INACTIVE','LOCKED','PENDING') NOT NULL DEFAULT 'PENDING',
-  last_login           TIMESTAMP NULL,
-  failed_login_attempts INT NOT NULL DEFAULT 0,
-  locked_until         TIMESTAMP NULL,
+  display_name         VARCHAR(200) NOT NULL,
   created_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_username (username),
-  INDEX idx_email (email),
-  INDEX idx_status (status),
-  INDEX idx_last_login (last_login)
+  INDEX idx_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE roles (
-  role_id     VARCHAR(50) NOT NULL PRIMARY KEY,
-  role_name   VARCHAR(100) NOT NULL UNIQUE,
-  description TEXT NULL,
-  permissions JSON NOT NULL,
-  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_role_name (role_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-CREATE TABLE user_roles (
-  user_id     CHAR(36) NOT NULL,
-  role_id     VARCHAR(50) NOT NULL,
-  assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  assigned_by CHAR(36) NULL,
-  PRIMARY KEY (user_id, role_id),
-  CONSTRAINT fk_user_roles_user  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  CONSTRAINT fk_user_roles_role  FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE,
-  INDEX idx_user_id (user_id),
-  INDEX idx_role_id (role_id),
-  INDEX idx_assigned_at (assigned_at)
+CREATE TABLE user_credentials (
+  email         VARCHAR(255) NOT NULL PRIMARY KEY,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
@@ -98,6 +73,37 @@ CREATE TABLE environments (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_environments_created_by FOREIGN KEY (created_by) REFERENCES users(user_id) ON DELETE SET NULL,
   CONSTRAINT fk_environments_updated_by FOREIGN KEY (updated_by) REFERENCES users(user_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================================
+-- ROLES & USER ROLES (moved after projects/environments)
+-- ============================================================================
+
+CREATE TABLE roles (
+  role_id         CHAR(36) NOT NULL PRIMARY KEY,
+  project_id      CHAR(36) NOT NULL,
+  environment_id  CHAR(36) NOT NULL,
+  privilege_level ENUM('admin','developer') NOT NULL,
+  role_name       VARCHAR(200) NOT NULL UNIQUE, -- Format: <project_name>:<env_name>:<privilege_level>
+  created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_roles_project     FOREIGN KEY (project_id) REFERENCES projects(project_id) ON DELETE CASCADE,
+  CONSTRAINT fk_roles_environment FOREIGN KEY (environment_id) REFERENCES environments(environment_id) ON DELETE CASCADE,
+  UNIQUE KEY uk_role_project_env_priv (project_id, environment_id, privilege_level),
+  INDEX idx_role_name (role_name),
+  INDEX idx_project_id (project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE user_roles (
+  user_id     CHAR(36) NOT NULL,
+  role_id     CHAR(36) NOT NULL,
+  assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  assigned_by CHAR(36) NULL,
+  PRIMARY KEY (user_id, role_id),
+  CONSTRAINT fk_user_roles_user  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+  CONSTRAINT fk_user_roles_role  FOREIGN KEY (role_id) REFERENCES roles(role_id) ON DELETE CASCADE,
+  INDEX idx_user_id (user_id),
+  INDEX idx_role_id (role_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================
@@ -387,5 +393,41 @@ FROM control_commands cc
 JOIN runtimes r ON cc.runtime_id = r.runtime_id
 WHERE cc.status IN ('pending','sent')
 ORDER BY cc.issued_at ASC;
+
+-- ============================================================================
+-- SAMPLE DATA FOR TESTING
+-- ============================================================================
+
+-- Insert a default admin user for testing
+INSERT INTO users (user_id, email, display_name) VALUES 
+('550e8400-e29b-41d4-a716-446655440000',
+ 'admin@example.com', 
+ 'System Administrator');
+
+-- Insert credentials for admin user
+-- Password: admin123 (Bcrypt hashed)
+INSERT INTO user_credentials (email, password_hash) VALUES 
+('admin@example.com', '$2a$12$KrkW4mKHgENeQHJDnMF5Ru2jZ62koqvW32cRwOG0Uhw/mHUFIB24AQ=='),
+('newuser@example.com', '$2a$12$qJcaAGnurmpgmAPywgMocpUJQCDt3aPTknPZeItz3vEyca46bbg4Kw==');
+
+-- Insert sample project
+INSERT INTO projects (project_id, name, description, created_by) VALUES
+('650e8400-e29b-41d4-a716-446655440001', 'sample_project', 'Sample project for testing', '550e8400-e29b-41d4-a716-446655440000');
+
+-- Insert sample environments
+INSERT INTO environments (environment_id, name, description, created_by) VALUES
+('750e8400-e29b-41d4-a716-446655440001', 'dev', 'Development environment', '550e8400-e29b-41d4-a716-446655440000'),
+('750e8400-e29b-41d4-a716-446655440002', 'prod', 'Production environment', '550e8400-e29b-41d4-a716-446655440000');
+
+-- Insert sample roles with format: <project_name>:<env_name>:<privilege_level>
+INSERT INTO roles (role_id, project_id, environment_id, privilege_level, role_name) VALUES
+('850e8400-e29b-41d4-a716-446655440001', '650e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440001', 'admin', 'sample_project:dev:admin'),
+('850e8400-e29b-41d4-a716-446655440002', '650e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440001', 'developer', 'sample_project:dev:developer'),
+('850e8400-e29b-41d4-a716-446655440003', '650e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440002', 'admin', 'sample_project:prod:admin'),
+('850e8400-e29b-41d4-a716-446655440004', '650e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440002', 'developer', 'sample_project:prod:developer');
+
+-- Assign admin role to the admin user for sample_project:prod
+INSERT INTO user_roles (user_id, role_id, assigned_by) VALUES 
+('550e8400-e29b-41d4-a716-446655440000', '850e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440000');
 
 

@@ -1,60 +1,50 @@
-# ICP Server Configuration File
-# This file contains all configurable parameters for the Integration Control Plane server
+# Test Configuration for ICP Server
+# This configuration is used when running tests
 
 # =============================================================================
 # SERVER CONFIGURATION
 # =============================================================================
-# HTTP server settings
-# serverPort = 9445
-# serverHost = "0.0.0.0"
-# graphqlPort = 9090
+serverPort = 9445
+serverHost = "0.0.0.0"
+graphqlPort = 9446
 
 # =============================================================================
 # OPERATIONAL CONFIGURATION
 # =============================================================================
-# Runtime management settings
-heartbeatTimeoutSeconds = 300  # 5 minutes
-schedulerIntervalSeconds = 600  # 1 minute
+heartbeatTimeoutSeconds = 300
+schedulerIntervalSeconds = 600
 
 # =============================================================================
 # LOGGING CONFIGURATION
 # =============================================================================
-# Logging and monitoring settings
-logLevel = "INFO"  # Options: DEBUG, INFO, WARN, ERROR
+logLevel = "DEBUG"
 enableAuditLogging = true
 enableMetrics = true
 
 # =============================================================================
 # AUTHENTICATION BACKEND CONFIGURATION
 # =============================================================================
-# Authentication backend service settings
-# URL of the authentication backend service (can be custom implementation)
 authBackendUrl = "https://localhost:9447"
 authBackendApiKey = "default-api-key"
 
-
-# =============================================================================
-# AUTH SERVICE CONFIGURATION
-# =============================================================================
-# Authorization service settings
+# JWT Configuration
 defaultJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs256"
-
+frontendJwtIssuer = "icp-frontend-jwt-issuer"
+frontendJwtAudience = "icp-server"
+defaultTokenExpiryTime = 3600
 
 # =============================================================================
 # DATABASE CONFIGURATION
 # =============================================================================
 [icp_server.storage]
-# Primary database connection settings
 dbHost = "mysql-db"
 dbPort = 3306
 dbName = "icp_database"
 dbUser = "root"
 dbPassword = "my-secret-pw"
-dbType = "mysql"  # Options: mysql, postgresql
-
+dbType = "mysql"
 
 [[ballerina.log.modules]]
 name = "wso2/icp_server"
 level = "DEBUG"
-
 
