@@ -485,12 +485,9 @@ public type OIDCIdTokenClaims record {|
     string|string[] aud; // Audience
     int exp; // Expiration time
     int iat; // Issued at
-    string? nonce?; // Nonce for replay protection
     string? email?; // Email address
     string? name?; // Full name
     string? preferred_username?; // Preferred username
-    // Allow additional claims
-    never...;
 |};
 
 // Type to hold extracted user information

@@ -156,10 +156,12 @@ public isolated function decodeAndValidateIdToken(string idToken, types:SSOConfi
     // Extract payload from decode result
     jwt:Payload payload = decodeResult[1];
     
-    // Convert payload to OIDCIdTokenClaims
-    types:OIDCIdTokenClaims|error claims = payload.cloneWithType();
+    // Manually construct OIDCIdTokenClaims from JWT payload
+    // This is necessary because jwt:Payload may contain additional fields (like nbf, jti)
+    // that are not part of our closed OIDCIdTokenClaims record
+    types:OIDCIdTokenClaims|error claims = buildIdTokenClaims(payload);
     if claims is error {
-        log:printError("ID token payload does not match expected claims structure", claims);
+        log:printError("Failed to build ID token claims structure", claims);
         return createUnauthorizedError("Invalid ID token structure");
     }
     
@@ -173,6 +175,71 @@ public isolated function decodeAndValidateIdToken(string idToken, types:SSOConfi
     }
     
     log:printInfo("ID token validation successful", sub = claims.sub);
+    return claims;
+}
+
+// Build OIDCIdTokenClaims from JWT payload
+isolated function buildIdTokenClaims(jwt:Payload payload) returns types:OIDCIdTokenClaims|error {
+    // Extract required claims
+    string|error sub = payload.sub.ensureType();
+    if sub is error {
+        return error("Missing or invalid 'sub' claim");
+    }
+    
+    string|error iss = payload.iss.ensureType();
+    if iss is error {
+        return error("Missing or invalid 'iss' claim");
+    }
+    
+    string|string[]|error aud = payload.aud.ensureType();
+    if aud is error {
+        return error("Missing or invalid 'aud' claim");
+    }
+    
+    int|error exp = payload.exp.ensureType();
+    if exp is error {
+        return error("Missing or invalid 'exp' claim");
+    }
+    
+    int|error iat = payload.iat.ensureType();
+    if iat is error {
+        return error("Missing or invalid 'iat' claim");
+    }
+    
+    // Extract optional claims from the payload map
+    // Cast payload to map<json> to access additional claims
+    map<json> payloadMap = <map<json>>payload.toJson();
+    
+    string? email = ();
+    json emailJson = payloadMap["email"];
+    if emailJson is string {
+        email = emailJson;
+    }
+    
+    string? name = ();
+    json nameJson = payloadMap["name"];
+    if nameJson is string {
+        name = nameJson;
+    }
+    
+    string? preferredUsername = ();
+    json preferredUsernameJson = payloadMap["preferred_username"];
+    if preferredUsernameJson is string {
+        preferredUsername = preferredUsernameJson;
+    }
+    
+    // Construct OIDCIdTokenClaims record
+    types:OIDCIdTokenClaims claims = {
+        sub: sub,
+        iss: iss,
+        aud: aud,
+        exp: exp,
+        iat: iat,
+        email: email,
+        name: name,
+        preferred_username: preferredUsername
+    };
+    
     return claims;
 }
 
