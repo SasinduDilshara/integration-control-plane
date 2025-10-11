@@ -442,6 +442,64 @@ public type AuthenticateResponse record {
     string? timestamp;
 };
 
+// === OIDC/SSO Related Types ===
+
+// SSO Configuration
+public type SSOConfig record {|
+    boolean enabled;
+    string issuer;
+    string authorizationEndpoint;
+    string tokenEndpoint;
+    string logoutEndpoint;
+    string clientId;
+    string clientSecret;
+    string redirectUri;
+    string usernameClaim; // "email" or "preferred_username"
+    string[] scopes;
+|};
+
+// OIDC Authorization URL response
+public type OIDCAuthorizationUrlResponse record {|
+    string authorizationUrl;
+|};
+
+// OIDC callback request
+public type OIDCCallbackRequest record {|
+    string code;
+|};
+
+// OIDC token response from provider
+public type OIDCTokenResponse record {|
+    string access_token;
+    string? refresh_token;
+    string id_token;
+    string token_type;
+    int expires_in;
+    string? scope;
+|};
+
+// OIDC ID Token claims (standard claims)
+public type OIDCIdTokenClaims record {|
+    string sub; // Subject (user ID)
+    string iss; // Issuer
+    string|string[] aud; // Audience
+    int exp; // Expiration time
+    int iat; // Issued at
+    string? nonce?; // Nonce for replay protection
+    string? email?; // Email address
+    string? name?; // Full name
+    string? preferred_username?; // Preferred username
+    // Allow additional claims
+    never...;
+|};
+
+// Type to hold extracted user information
+public type ExtractedUserInfo record {|
+    string userId;
+    string username;
+    string displayName;
+|};
+
 // Database user record type
 public type User record {
     string userId;

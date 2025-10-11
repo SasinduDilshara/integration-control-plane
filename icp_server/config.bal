@@ -49,8 +49,87 @@ configurable int defaultTokenExpiryTime = 3600; // 1 hour
 configurable string authBackendUrl = "https://localhost:9447";
 configurable string authBackendApiKey = "default-api-key";
 
+// SSO (OIDC) configuration
+configurable boolean ssoEnabled = false;
+configurable string ssoIssuer = "";
+configurable string ssoAuthorizationEndpoint = "";
+configurable string ssoTokenEndpoint = "";
+configurable string ssoLogoutEndpoint = "";
+configurable string ssoClientId = "";
+configurable string ssoClientSecret = "";
+configurable string ssoRedirectUri = "";
+configurable string ssoUsernameClaim = "email"; // Claim to use for username: "email" or "preferred_username"
+configurable string[] ssoScopes = ["openid", "email", "profile"];
+
 // Logging configuration
 configurable string logLevel = "INFO"; // DEBUG, INFO, WARN, ERROR
 configurable boolean enableAuditLogging = true;
 configurable boolean enableMetrics = true;
+
+// Build SSO configuration from configurable values
+public isolated function getSSOConfig() returns types:SSOConfig => {
+    enabled: ssoEnabled,
+    issuer: ssoIssuer,
+    authorizationEndpoint: ssoAuthorizationEndpoint,
+    tokenEndpoint: ssoTokenEndpoint,
+    logoutEndpoint: ssoLogoutEndpoint,
+    clientId: ssoClientId,
+    clientSecret: ssoClientSecret,
+    redirectUri: ssoRedirectUri,
+    usernameClaim: ssoUsernameClaim,
+    scopes: ssoScopes
+};
+
+// Validate SSO configuration
+public isolated function validateSSOConfig(types:SSOConfig config) returns error? {
+    if !config.enabled {
+        // SSO is disabled, no validation needed
+        return;
+    }
+
+    // Validate required fields
+    if config.issuer.trim() == "" {
+        return error("SSO is enabled but 'ssoIssuer' is not configured");
+    }
+    if config.authorizationEndpoint.trim() == "" {
+        return error("SSO is enabled but 'ssoAuthorizationEndpoint' is not configured");
+    }
+    if config.tokenEndpoint.trim() == "" {
+        return error("SSO is enabled but 'ssoTokenEndpoint' is not configured");
+    }
+    if config.logoutEndpoint.trim() == "" {
+        return error("SSO is enabled but 'ssoLogoutEndpoint' is not configured");
+    }
+    if config.clientId.trim() == "" {
+        return error("SSO is enabled but 'ssoClientId' is not configured");
+    }
+    if config.clientSecret.trim() == "" {
+        return error("SSO is enabled but 'ssoClientSecret' is not configured");
+    }
+    if config.redirectUri.trim() == "" {
+        return error("SSO is enabled but 'ssoRedirectUri' is not configured");
+    }
+
+    // Validate usernameClaim is either "email" or "preferred_username"
+    if config.usernameClaim != "email" && config.usernameClaim != "preferred_username" {
+        return error("'ssoUsernameClaim' must be either 'email' or 'preferred_username'");
+    }
+
+    // Validate scopes contain at least "openid"
+    if config.scopes.length() == 0 {
+        return error("'ssoScopes' must contain at least 'openid' scope");
+    }
+    
+    boolean hasOpenIdScope = false;
+    foreach string scope in config.scopes {
+        if scope == "openid" {
+            hasOpenIdScope = true;
+            break;
+        }
+    }
+    
+    if !hasOpenIdScope {
+        return error("'ssoScopes' must include 'openid' scope");
+    }
+}
 

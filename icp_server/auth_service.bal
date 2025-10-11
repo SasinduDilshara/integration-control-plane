@@ -16,6 +16,7 @@
 
 import icp_server.storage;
 import icp_server.types as types;
+import icp_server.utils;
 
 import ballerina/http;
 import ballerina/jwt;
@@ -53,40 +54,40 @@ service /auth on httpListener {
 
         if authResponse is error {
             log:printError("Error calling authentication backend", authResponse);
-            return createInternalServerError("Authentication service unavailable");
+            return utils:createInternalServerError("Authentication service unavailable");
         }
 
         // Check status code before parsing response
         if authResponse.statusCode == http:STATUS_UNAUTHORIZED {
             log:printError("Authentication failed for user", username = credentials.username);
-            return createUnauthorizedError("Invalid credentials");
+            return utils:createUnauthorizedError("Invalid credentials");
         } else if authResponse.statusCode != http:STATUS_OK {
             log:printError("Unexpected status code from authentication backend", statusCode = authResponse.statusCode);
-            return createInternalServerError("Authentication service error");
+            return utils:createInternalServerError("Authentication service error");
         }
 
         // Parse response body
         json|error authPayload = authResponse.getJsonPayload();
         if authPayload is error {
             log:printError("JSON payload not present in authentication response", authPayload);
-            return createInternalServerError("Invalid response from authentication service");
+            return utils:createInternalServerError("Invalid response from authentication service");
         }
 
         types:AuthenticateResponse|error authResult = authPayload.cloneWithType();
         if authResult is error {
             log:printError("Authentication response payload does not match expected type", authResult);
-            return createInternalServerError("Invalid response from authentication service");
+            return utils:createInternalServerError("Invalid response from authentication service");
         }
 
         if !authResult.authenticated {
             log:printError("Authentication failed for user", username = credentials.username);
-            return createUnauthorizedError("Invalid credentials");
+            return utils:createUnauthorizedError("Invalid credentials");
         }
 
         // Validate that auth backend returned required user claims
         if authResult.userId is () || authResult.displayName is () {
             log:printError("Authentication backend did not return required user claims", username = credentials.username);
-            return createInternalServerError("Invalid response from authentication service");
+            return utils:createInternalServerError("Invalid response from authentication service");
         }
 
         string userId = <string>authResult.userId;
@@ -102,27 +103,27 @@ service /auth on httpListener {
                 error? createResult = storage:createUser(userId, username, displayName);
                 if createResult is error {
                     log:printError("Error creating user in database", createResult, username = username);
-                    return createInternalServerError("Error creating user record");
+                    return utils:createInternalServerError("Error creating user record");
                 }
 
                 // Fetch the newly created user details
                 userDetails = storage:getUserDetailsById(userId);
                 if userDetails is error {
                     log:printError("Error getting newly created user details", userDetails);
-                    return createInternalServerError("Error getting user details");
+                    return utils:createInternalServerError("Error getting user details");
                 }
 
                 //TODO Handle roles for new users
             } else {
                 log:printError("Error getting user details", userDetails);
-                return createInternalServerError("Error getting user details");
+                return utils:createInternalServerError("Error getting user details");
             }
         }
 
         types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
         if userRoles is error {
             log:printError("Error getting user roles", userRoles);
-            return createInternalServerError("Error getting user roles");
+            return utils:createInternalServerError("Error getting user roles");
         }
 
         jwt:IssuerConfig issuerConfig = {
@@ -140,7 +141,7 @@ service /auth on httpListener {
         string|jwt:Error jwtToken = jwt:issue(issuerConfig);
         if jwtToken is jwt:Error {
             log:printError("Error generating JWT token", jwtToken);
-            return createInternalServerError("Error generating JWT token");
+            return utils:createInternalServerError("Error generating JWT token");
         }
 
         log:printInfo("Login successful for user", username = username);
@@ -153,22 +154,152 @@ service /auth on httpListener {
             }
         };
     }
+
+    // OIDC Authorization URL endpoint
+    isolated resource function get oidc/'authorize\-url() returns http:Ok|http:BadRequest|http:InternalServerError {
+        log:printInfo("OIDC authorization URL requested");
+
+        // Get SSO configuration
+        types:SSOConfig ssoConfig = getSSOConfig();
+
+        // Validate SSO configuration
+        error? validationError = validateSSOConfig(ssoConfig);
+        if validationError is error {
+            log:printError("SSO configuration validation failed", validationError);
+            return utils:createBadRequestError(validationError.message());
+        }
+
+        // Check if SSO is enabled
+        if !ssoConfig.enabled {
+            log:printWarn("OIDC authorization URL requested but SSO is not enabled");
+            return utils:createBadRequestError("SSO authentication is not enabled");
+        }
+
+        // Build authorization URL
+        string|error authorizationUrl = utils:buildAuthorizationUrl(ssoConfig);
+        if authorizationUrl is error {
+            log:printError("Error building authorization URL", authorizationUrl);
+            return utils:createInternalServerError("Failed to generate authorization URL");
+        }
+
+        log:printInfo("OIDC authorization URL generated successfully");
+        return <http:Ok>{
+            body: {
+                authorizationUrl: authorizationUrl
+            }
+        };
+    }
+
+    // OIDC Login endpoint - exchanges authorization code for ICP token
+    isolated resource function post login/oidc(types:OIDCCallbackRequest request) returns http:Ok|http:Unauthorized|http:BadRequest|http:InternalServerError {
+        log:printInfo("OIDC login attempt - exchanging authorization code");
+
+        // Get SSO configuration
+        types:SSOConfig ssoConfig = getSSOConfig();
+
+        // Validate SSO configuration
+        error? validationError = validateSSOConfig(ssoConfig);
+        if validationError is error {
+            log:printError("SSO configuration validation failed", validationError);
+            return utils:createBadRequestError(validationError.message());
+        }
+
+        // Check if SSO is enabled
+        if !ssoConfig.enabled {
+            log:printWarn("OIDC login attempted but SSO is not enabled");
+            return utils:createBadRequestError("SSO authentication is not enabled");
+        }
+
+        // Exchange authorization code for tokens
+        types:OIDCTokenResponse|http:Unauthorized|http:InternalServerError tokenResponse = utils:exchangeCodeForTokens(request.code, ssoConfig);
+        
+        if tokenResponse is http:Unauthorized|http:InternalServerError {
+            return tokenResponse;
+        }
+
+        log:printInfo("Successfully exchanged authorization code for tokens");
+        
+        // Decode and validate ID token (p2-7, p2-8)
+        types:OIDCIdTokenClaims|http:Unauthorized|http:InternalServerError claims = 
+            utils:decodeAndValidateIdToken(tokenResponse.id_token, ssoConfig);
+        
+        if claims is http:Unauthorized|http:InternalServerError {
+            return claims;
+        }
+        
+        // Extract user information (p2-9, p2-10)
+        types:ExtractedUserInfo|http:InternalServerError userInfo = utils:extractUserInfo(claims, ssoConfig);
+        
+        if userInfo is http:InternalServerError {
+            return userInfo;
+        }
+        
+        // Check if user exists, create if new (p2-11)
+        types:User|error userDetails = storage:getUserDetailsById(userInfo.userId);
+        if userDetails is error {
+            if userDetails is sql:NoRowsError {
+                // New OIDC user - create record
+                log:printInfo("New OIDC user, creating user record", 
+                    userId = userInfo.userId, 
+                    username = userInfo.username);
+                
+                error? createResult = storage:createUser(userInfo.userId, userInfo.username, userInfo.displayName);
+                if createResult is error {
+                    log:printError("Error creating OIDC user in database", createResult, 
+                        username = userInfo.username);
+                    return utils:createInternalServerError("Error creating user record");
+                }
+                
+                // Fetch the newly created user details
+                userDetails = storage:getUserDetailsById(userInfo.userId);
+                if userDetails is error {
+                    log:printError("Error getting newly created OIDC user details", userDetails);
+                    return utils:createInternalServerError("Error getting user details");
+                }
+                
+                // TODO: Handle roles for new OIDC users
+            } else {
+                log:printError("Error getting OIDC user details", userDetails);
+                return utils:createInternalServerError("Error getting user details");
+            }
+        }
+        
+        // Fetch user roles (p2-12)
+        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
+        if userRoles is error {
+            log:printError("Error getting user roles for OIDC user", userRoles);
+            return utils:createInternalServerError("Error getting user roles");
+        }
+        
+        // Issue ICP JWT token (p2-13)
+        jwt:IssuerConfig issuerConfig = {
+            username: userDetails.userId,
+            issuer: frontendJwtIssuer,
+            expTime: <decimal>defaultTokenExpiryTime,
+            audience: frontendJwtAudience,
+            signatureConfig: jwtSignatureConfig
+        };
+        
+        issuerConfig.customClaims["roles"] = userRoles.toJson();
+        issuerConfig.customClaims["username"] = userInfo.username;
+        issuerConfig.customClaims["displayName"] = userInfo.displayName;
+        
+        string|jwt:Error jwtToken = jwt:issue(issuerConfig);
+        if jwtToken is jwt:Error {
+            log:printError("Error generating JWT token for OIDC user", jwtToken);
+            return utils:createInternalServerError("Error generating JWT token");
+        }
+        
+        // Return login response (p2-14)
+        log:printInfo("OIDC login successful", username = userInfo.username);
+        return <http:Ok>{
+            body: {
+                token: jwtToken,
+                expiresIn: defaultTokenExpiryTime,
+                username: userInfo.username,
+                roles: userRoles
+            }
+        };
+    }
 }
 
-public isolated function createUnauthorizedError(string message) returns http:Unauthorized => {
-    body: {
-        message
-    }
-};
-
-public isolated function createBadRequestError(string message) returns http:BadRequest => {
-    body: {
-        message
-    }
-};
-
-public isolated function createInternalServerError(string message) returns http:InternalServerError => {
-    body: {
-        message
-    }
-};

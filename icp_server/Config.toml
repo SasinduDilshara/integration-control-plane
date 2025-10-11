@@ -41,6 +41,58 @@ defaultJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs256
 
 
 # =============================================================================
+# SSO (OIDC) CONFIGURATION
+# =============================================================================
+# Single Sign-On using OpenID Connect (OIDC)
+# Enable this to allow users to authenticate with an external identity provider
+# This works alongside the pluggable authentication backend
+
+# Enable or disable SSO authentication
+# ssoEnabled = false
+
+# Example configuration for Asgardeo (WSO2's Identity Provider)
+# Replace {org_name} with your Asgardeo organization name
+# ssoIssuer = "https://api.asgardeo.io/t/{org_name}/oauth2/token"
+# ssoAuthorizationEndpoint = "https://api.asgardeo.io/t/{org_name}/oauth2/authorize"
+# ssoTokenEndpoint = "https://api.asgardeo.io/t/{org_name}/oauth2/token"
+# ssoLogoutEndpoint = "https://api.asgardeo.io/t/{org_name}/oidc/logout"
+# ssoClientId = "your-client-id-from-asgardeo"
+# ssoClientSecret = "your-client-secret-from-asgardeo"
+# ssoRedirectUri = "https://localhost:3000/auth/callback"
+# ssoUsernameClaim = "email"  # or "preferred_username"
+# ssoScopes = ["openid", "email", "profile"]
+
+# Example configuration for Okta
+# ssoIssuer = "https://{your-domain}.okta.com/oauth2/default"
+# ssoAuthorizationEndpoint = "https://{your-domain}.okta.com/oauth2/default/v1/authorize"
+# ssoTokenEndpoint = "https://{your-domain}.okta.com/oauth2/default/v1/token"
+# ssoLogoutEndpoint = "https://{your-domain}.okta.com/oauth2/default/v1/logout"
+# ssoClientId = "your-okta-client-id"
+# ssoClientSecret = "your-okta-client-secret"
+# ssoRedirectUri = "https://localhost:3000/auth/callback"
+# ssoUsernameClaim = "email"
+# ssoScopes = ["openid", "email", "profile"]
+
+# Example configuration for Auth0
+# ssoIssuer = "https://{your-domain}.auth0.com/"
+# ssoAuthorizationEndpoint = "https://{your-domain}.auth0.com/authorize"
+# ssoTokenEndpoint = "https://{your-domain}.auth0.com/oauth/token"
+# ssoLogoutEndpoint = "https://{your-domain}.auth0.com/v2/logout"
+# ssoClientId = "your-auth0-client-id"
+# ssoClientSecret = "your-auth0-client-secret"
+# ssoRedirectUri = "https://localhost:3000/auth/callback"
+# ssoUsernameClaim = "email"
+# ssoScopes = ["openid", "email", "profile"]
+
+# Notes:
+# - The 'openid' scope is required for OIDC authentication
+# - Use 'email' or 'profile' scopes to get additional user information
+# - The usernameClaim must be either 'email' or 'preferred_username'
+# - On first login, a new user will be created in the ICP database
+# - The redirect URI must match what's configured in your identity provider
+
+
+# =============================================================================
 # DATABASE CONFIGURATION
 # =============================================================================
 [icp_server.storage]

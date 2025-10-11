@@ -16,6 +16,7 @@
 
 import icp_server.storage;
 import icp_server.types;
+import icp_server.utils;
 
 import ballerina/crypto;
 import ballerina/http;
@@ -50,14 +51,14 @@ service / on defaultAuthServiceListener {
         // TODO Validate API key
         if apiKeyHeader is () || apiKeyHeader != apiKey {
             log:printWarn("Authentication attempt with invalid API key");
-            return createBadRequestError("Invalid API key");
+            return utils:createBadRequestError("Invalid API key");
         }
 
         // Perform authentication against database
         types:User|error user = authenticateUser(request.username, request.password);
         if user is error {
             log:printError("Error authenticating user", user);
-            return createUnauthorizedError("Invalid credentials");
+            return utils:createUnauthorizedError("Invalid credentials");
         }
 
         // Create response timestamp
