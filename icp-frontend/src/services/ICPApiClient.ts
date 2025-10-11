@@ -107,6 +107,49 @@ class ICPApiClient {
             throw error;
         }
     }
+
+    // OIDC methods
+    async getOIDCAuthorizationUrl(): Promise<{ authorizationUrl: string }> {
+        try {
+            const response = await fetch(`${this.authEndpoint}/oidc/authorize-url`, {
+                method: 'GET',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to get authorization URL with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('OIDC Authorization URL Error:', error);
+            throw error;
+        }
+    }
+
+    async loginWithOIDC(code: string): Promise<any> {
+        try {
+            const response = await fetch(`${this.authEndpoint}/login/oidc`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ code }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `OIDC login failed with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('OIDC Login Error:', error);
+            throw error;
+        }
+    }
 }
 
 // Create a singleton instance

@@ -15,6 +15,7 @@ import EnvironmentOverview from './components/EnvironmentOverview';
 import ComponentsPage from './components/ComponentsPage';
 import ProjectsPage from './components/ProjectsPage';
 import LoginPage from './components/LoginPage';
+import OIDCCallbackPage from './components/OIDCCallbackPage';
 import Navigation, { DRAWER_WIDTH, DRAWER_WIDTH_COLLAPSED } from './components/Navigation';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { icpApiClient } from './services/ICPApiClient';
@@ -58,11 +59,12 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
         navigate('/login');
     };
 
-    // If not authenticated, show only login page
+    // If not authenticated, show only login page and callback
     if (!isAuthenticated) {
         return (
             <Routes>
                 <Route path="/login" element={<LoginPage />} />
+                <Route path="/auth/callback" element={<OIDCCallbackPage />} />
                 <Route path="*" element={<Navigate to="/login" replace />} />
             </Routes>
         );

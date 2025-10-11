@@ -9,8 +9,10 @@ import {
     Alert,
     CircularProgress,
     Container,
+    Divider,
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import LoginIcon from '@mui/icons-material/Login';
 import { useAuth } from '../contexts/AuthContext';
 import { icpApiClient } from '../services/ICPApiClient';
 import { LoginResponse } from '../types';
@@ -20,6 +22,7 @@ const LoginPage: React.FC = () => {
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [ssoLoading, setSsoLoading] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
@@ -54,6 +57,22 @@ const LoginPage: React.FC = () => {
             setError(err.message || 'Login failed. Please check your credentials.');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSSOLogin = async () => {
+        setError('');
+        setSsoLoading(true);
+
+        try {
+            // Get the authorization URL from backend
+            const { authorizationUrl } = await icpApiClient.getOIDCAuthorizationUrl();
+            
+            // Redirect to the OIDC provider
+            window.location.href = authorizationUrl;
+        } catch (err: any) {
+            setError(err.message || 'SSO login failed. Please try again.');
+            setSsoLoading(false);
         }
     };
 
@@ -140,7 +159,7 @@ const LoginPage: React.FC = () => {
                             fullWidth
                             variant="contained"
                             sx={{ mt: 3, mb: 2, py: 1.5 }}
-                            disabled={loading}
+                            disabled={loading || ssoLoading}
                         >
                             {loading ? (
                                 <>
@@ -150,6 +169,23 @@ const LoginPage: React.FC = () => {
                             ) : (
                                 'Sign In'
                             )}
+                        </Button>
+
+                        <Divider sx={{ my: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                                OR
+                            </Typography>
+                        </Divider>
+
+                        <Button
+                            fullWidth
+                            variant="outlined"
+                            onClick={handleSSOLogin}
+                            disabled={loading || ssoLoading}
+                            startIcon={ssoLoading ? <CircularProgress size={20} /> : <LoginIcon />}
+                            sx={{ py: 1.5 }}
+                        >
+                            {ssoLoading ? 'Redirecting...' : 'Login with SSO'}
                         </Button>
                     </Box>
                 </Paper>

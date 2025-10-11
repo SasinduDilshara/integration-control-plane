@@ -148,3 +148,12 @@ export interface AuthUser {
     roles: Role[];
     expiresAt: number;
 }
+
+// OIDC types
+export interface OIDCAuthorizationUrlResponse {
+  authorizationUrl: string;
+}
+
+export interface OIDCCallbackRequest {
+  code: string;
+}
