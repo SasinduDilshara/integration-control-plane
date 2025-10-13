@@ -17,6 +17,7 @@ export const GET_RUNTIMES = `
         environmentId
         name
         description
+        isProduction
         createdAt
         updatedAt
         updatedBy
@@ -80,6 +81,7 @@ export const GET_RUNTIME = `
         environmentId
         name
         description
+        isProduction
         createdAt
         updatedAt
         updatedBy
@@ -132,6 +134,7 @@ export const GET_ENVIRONMENTS = `
       environmentId
       name
       description
+      isProduction
       createdAt
       updatedAt
       updatedBy

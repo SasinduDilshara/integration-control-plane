@@ -12,6 +12,9 @@ import {
     Typography,
     Snackbar,
     Tooltip,
+    FormControlLabel,
+    Switch,
+    Chip,
 } from '@mui/material';
 import { Alert } from '@mui/lab';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -63,12 +66,14 @@ const EnvironmentsPage: React.FC = () => {
     const [newEnvironment, setNewEnvironment] = useState<CreateEnvironmentRequest>({
         name: '',
         description: '',
+        isProduction: false,
     });
 
     const [editEnvironment, setEditEnvironment] = useState<UpdateEnvironmentRequest>({
         environmentId: '',
         name: '',
         description: '',
+        isProduction: false,
     });
 
     // Material React Table columns configuration
@@ -105,6 +110,25 @@ const EnvironmentsPage: React.FC = () => {
                             </Typography>
                         </Tooltip>
                     ) : '-';
+                },
+            },
+            {
+                accessorKey: 'isProduction',
+                header: 'Environment Type',
+                enableResizing: true,
+                minSize: 120,
+                maxSize: 180,
+                grow: true,
+                Cell: ({ cell }) => {
+                    const isProduction = cell.getValue<boolean>();
+                    return (
+                        <Chip
+                            label={isProduction ? 'Production' : 'Non-Production'}
+                            color={isProduction ? 'error' : 'primary'}
+                            variant="outlined"
+                            size="small"
+                        />
+                    );
                 },
             },
             {
@@ -173,7 +197,7 @@ const EnvironmentsPage: React.FC = () => {
         try {
             await createEnvironment(newEnvironment);
             setCreateDialogOpen(false);
-            setNewEnvironment({ name: '', description: '' });
+            setNewEnvironment({ name: '', description: '', isProduction: false });
             setSnackbar({
                 open: true,
                 message: 'Environment created successfully',
@@ -213,6 +237,7 @@ const EnvironmentsPage: React.FC = () => {
             environmentId: environment.environmentId,
             name: environment.name,
             description: environment.description,
+            isProduction: environment.isProduction,
         });
         setEditDialogOpen(true);
     };
@@ -371,6 +396,20 @@ const EnvironmentsPage: React.FC = () => {
                             ...newEnvironment,
                             description: e.target.value
                         })}
+                        sx={{ mb: 2 }}
+                    />
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={newEnvironment.isProduction}
+                                onChange={(e) => setNewEnvironment({
+                                    ...newEnvironment,
+                                    isProduction: e.target.checked
+                                })}
+                                color="primary"
+                            />
+                        }
+                        label="Production Environment"
                     />
                 </DialogContent>
                 <DialogActions>
@@ -421,6 +460,20 @@ const EnvironmentsPage: React.FC = () => {
                             ...editEnvironment,
                             description: e.target.value
                         })}
+                        sx={{ mb: 2 }}
+                    />
+                    <FormControlLabel
+                        control={
+                            <Switch
+                                checked={editEnvironment.isProduction}
+                                onChange={(e) => setEditEnvironment({
+                                    ...editEnvironment,
+                                    isProduction: e.target.checked
+                                })}
+                                color="primary"
+                            />
+                        }
+                        label="Production Environment"
                     />
                 </DialogContent>
                 <DialogActions>

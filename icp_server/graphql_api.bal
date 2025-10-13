@@ -89,6 +89,12 @@ service /graphql on graphqlListener {
         return check storage:getEnvironmentById(environmentId);
     }
 
+    // Update environment production status
+    isolated remote function updateEnvironmentProductionStatus(string environmentId, boolean isProduction) returns types:Environment?|error {
+        check storage:updateEnvironmentProductionStatus(environmentId, isProduction);
+        return check storage:getEnvironmentById(environmentId);
+    }
+
     //------------- Project Resources
     // Create a new project
     isolated remote function createProject(types:ProjectInput project) returns types:Project|error? {

@@ -12,6 +12,7 @@ export const CREATE_ENVIRONMENT = `
       environmentId
       name
       description
+      isProduction
       createdAt
       updatedAt
       updatedBy
@@ -21,11 +22,12 @@ export const CREATE_ENVIRONMENT = `
 `;
 
 export const UPDATE_ENVIRONMENT = `
-  mutation UpdateEnvironment($environmentId: String!, $name: String, $description: String) {
-    updateEnvironment(environmentId: $environmentId, name: $name, description: $description) {
+  mutation UpdateEnvironment($environmentId: String!, $name: String, $description: String, $isProduction: Boolean) {
+    updateEnvironment(environmentId: $environmentId, name: $name, description: $description, isProduction: $isProduction) {
       environmentId
       name
       description
+      isProduction
       createdAt
       updatedAt
       updatedBy

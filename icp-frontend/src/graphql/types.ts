@@ -9,12 +9,14 @@ export interface CreateRuntimeInput {
 export interface CreateEnvironmentInput {
     name: string;
     description: string;
+    isProduction: boolean;
 }
 
 export interface UpdateEnvironmentInput {
     environmentId: string;
     name: string;
     description: string;
+    isProduction: boolean;
 }
 
 export interface CreateComponentInput {

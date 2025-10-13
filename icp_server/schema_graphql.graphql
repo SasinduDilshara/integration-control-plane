@@ -52,6 +52,7 @@ type Environment {
   environmentId: String!
   name: String!
   description: String
+  isProduction: Boolean!
   createdAt: String
   updatedAt: String
   updatedBy: String
@@ -96,6 +97,7 @@ type Mutation {
   createEnvironment(environment: EnvironmentInput!): Environment
   deleteEnvironment(environmentId: String!): Boolean!
   updateEnvironment(environmentId: String!, name: String, description: String): Environment
+  updateEnvironmentProductionStatus(environmentId: String!, isProduction: Boolean!): Environment
   createProject(project: ProjectInput!): Project
   deleteProject(projectId: String!): Boolean!
   updateProject(projectId: String!, name: String, description: String): Project
@@ -107,6 +109,7 @@ type Mutation {
 input EnvironmentInput {
   name: String!
   description: String
+  isProduction: Boolean
 }
 
 input ProjectInput {
