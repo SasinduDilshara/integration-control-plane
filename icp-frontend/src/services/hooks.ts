@@ -128,6 +128,7 @@ export function useCreateEnvironment() {
                     environment: {
                         name: environment.name,
                         description: environment.description,
+                        isProduction: environment.isProduction,
                     },
                 }
             );
@@ -157,6 +158,7 @@ export function useUpdateEnvironment() {
                     environmentId: environment.environmentId,
                     name: environment.name,
                     description: environment.description,
+                    isProduction: environment.isProduction,
                 }
             );
             return result.updateEnvironment;

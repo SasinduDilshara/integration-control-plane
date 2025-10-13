@@ -103,7 +103,7 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {user && (
                             <Typography variant="body2" sx={{ mr: 1 }}>
-                                {user.email}
+                                {user.username}
                             </Typography>
                         )}
                         <IconButton
@@ -138,9 +138,9 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
                         }),
                     mt: '64px', // Height of AppBar
                     minHeight: 'calc(100vh - 64px)',
-                    backgroundColor: (theme) => 
-                        theme.palette.mode === 'dark' 
-                            ? theme.palette.grey[900] 
+                    backgroundColor: (theme) =>
+                        theme.palette.mode === 'dark'
+                            ? theme.palette.grey[900]
                             : theme.palette.grey[50],
                 }}
             >

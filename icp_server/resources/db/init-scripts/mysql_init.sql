@@ -70,6 +70,7 @@ CREATE TABLE environments (
     environment_id CHAR(36) PRIMARY KEY,
     name VARCHAR(200) NOT NULL UNIQUE, -- e.g., dev, stage, prod
     description TEXT,
+    is_production BOOLEAN NOT NULL DEFAULT FALSE, -- Flag to mark environment as production
     created_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by CHAR(36) NULL,
@@ -444,7 +445,11 @@ ORDER BY cc.issued_at ASC;
 
 -- Insert a default admin user for testing
 INSERT INTO
-    users (user_id, username, display_name)
+    users (
+        user_id,
+        username,
+        display_name
+    )
 VALUES (
         '550e8400-e29b-41d4-a716-446655440000',
         'admin',
@@ -454,7 +459,12 @@ VALUES (
 -- Insert credentials for admin user
 -- Password: admin123 (Bcrypt hashed)
 INSERT INTO
-    user_credentials (user_id, username, display_name, password_hash)
+    user_credentials (
+        user_id,
+        username,
+        display_name,
+        password_hash
+    )
 VALUES (
         '550e8400-e29b-41d4-a716-446655440000',
         'admin',
@@ -505,18 +515,21 @@ INSERT INTO
         environment_id,
         name,
         description,
+        is_production,
         created_by
     )
 VALUES (
         '750e8400-e29b-41d4-a716-446655440001',
         'dev',
         'Development environment',
+        FALSE,
         '550e8400-e29b-41d4-a716-446655440000'
     ),
     (
         '750e8400-e29b-41d4-a716-446655440002',
         'prod',
         'Production environment',
+        TRUE,
         '550e8400-e29b-41d4-a716-446655440000'
     );
 
@@ -565,6 +578,4 @@ VALUES (
         '550e8400-e29b-41d4-a716-446655440000',
         '850e8400-e29b-41d4-a716-446655440003',
         '550e8400-e29b-41d4-a716-446655440000'
-
     );
-

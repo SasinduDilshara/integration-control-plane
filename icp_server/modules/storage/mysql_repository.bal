@@ -34,7 +34,7 @@ configurable int heartbeatTimeoutSeconds = 300;
 // Get all environments from the environments table
 public isolated function getEnvironments() returns types:Environment[]|error {
     types:Environment[] environments = [];
-    stream<types:Environment, sql:Error?> envStream = dbClient->query(`SELECT environment_id, name , description, created_at, updated_at, created_by, updated_by
+    stream<types:Environment, sql:Error?> envStream = dbClient->query(`SELECT environment_id, name , description, is_production, created_at, updated_at, created_by, updated_by
                                                                        FROM environments ORDER BY name ASC`);
     check from types:Environment env in envStream
         do {
@@ -42,6 +42,7 @@ public isolated function getEnvironments() returns types:Environment[]|error {
                 environmentId: env.environmentId,
                 description: env.description,
                 name: env.name,
+                isProduction: env.isProduction,
                 createdAt: env.createdAt
             });
         };
@@ -50,32 +51,34 @@ public isolated function getEnvironments() returns types:Environment[]|error {
 
 // Get environment by ID
 public isolated function getEnvironmentById(string environmentId) returns types:Environment|error {
-    stream<record {|string environment_id; string name; string? description; string? created_at; string? updated_at;|}, sql:Error?> envStream =
-        dbClient->query(`SELECT environment_id, name, description, created_at, updated_at FROM environments WHERE environment_id = ${environmentId}`);
+    stream<record {|string environment_id; string name; string? description; boolean is_production; string? created_at; string? updated_at;|}, sql:Error?> envStream =
+        dbClient->query(`SELECT environment_id, name, description, is_production, created_at, updated_at FROM environments WHERE environment_id = ${environmentId}`);
 
-    record {|string environment_id; string name; string? description; string? created_at; string? updated_at;|}[] envRecords =
-        check from record {|string environment_id; string name; string? description; string? created_at; string? updated_at;|} env in envStream
+    record {|string environment_id; string name; string? description; boolean is_production; string? created_at; string? updated_at;|}[] envRecords =
+        check from record {|string environment_id; string name; string? description; boolean is_production; string? created_at; string? updated_at;|} env in envStream
         select env;
 
     if envRecords.length() == 0 {
         return error(string `Environment ${environmentId} not found.`);
     }
 
-    record {|string environment_id; string name; string? description; string? created_at; string? updated_at;|} env = envRecords[0];
+    record {|string environment_id; string name; string? description; boolean is_production; string? created_at; string? updated_at;|} env = envRecords[0];
     return {
         environmentId: env.environment_id,
         name: env.name,
         description: env.description,
+        isProduction: env.is_production,
         createdAt: env.created_at,
         updatedAt: env.updated_at
     };
 }
 
 // Insert a list of environments into the environments table
-public isolated function createEnvironment(types:EnvironmentInput environment) returns error? {
+public isolated function createEnvironment(types:EnvironmentInput environment) returns types:Environment|error? {
     log:printInfo(string `Register environment : ${environment.toString()}`);
     string envId = uuid:createRandomUuid();
-    sql:ParameterizedQuery insertQuery = `INSERT INTO environments (environment_id, name, description) VALUES (${envId}, ${environment.name}, ${environment.description})`;
+    boolean isProduction = environment.isProduction ?: false;
+    sql:ParameterizedQuery insertQuery = `INSERT INTO environments (environment_id, name, description, is_production) VALUES (${envId}, ${environment.name}, ${environment.description}, ${isProduction})`;
     var result = dbClient->execute(insertQuery);
     if result is sql:Error {
         // If error is not duplicate entry, log and return
@@ -83,7 +86,11 @@ public isolated function createEnvironment(types:EnvironmentInput environment) r
             log:printError(string `Failed to insert environment: ${environment.name}`, result);
             return result;
         }
+        return ();
     }
+
+    // Return the created environment
+    return check getEnvironmentById(envId);
 }
 
 // Update environment name and/or description
@@ -105,6 +112,18 @@ public isolated function updateEnvironment(string environmentId, string? name, s
         return result;
     }
     log:printInfo(string `Successfully updated environment ${environmentId}`);
+    return ();
+}
+
+// Update environment production status
+public isolated function updateEnvironmentProductionStatus(string environmentId, boolean isProduction) returns error? {
+    sql:ParameterizedQuery updateQuery = `UPDATE environments SET is_production = ${isProduction}, updated_at = CURRENT_TIMESTAMP WHERE environment_id = ${environmentId}`;
+    var result = dbClient->execute(updateQuery);
+    if result is sql:Error {
+        log:printError(string `Failed to update environment production status ${environmentId}`, result);
+        return result;
+    }
+    log:printInfo(string `Successfully updated environment production status ${environmentId}`);
     return ();
 }
 

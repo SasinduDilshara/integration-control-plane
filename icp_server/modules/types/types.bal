@@ -371,6 +371,11 @@ public type Environment record {
     string description?;
 
     @sql:Column {
+        name: "is_production"
+    }
+    boolean isProduction;
+
+    @sql:Column {
         name: "created_at"
     }
     string createdAt?;
@@ -394,6 +399,7 @@ public type Environment record {
 public type EnvironmentInput record {
     string name;
     string description?;
+    boolean isProduction?;
 };
 
 public type ComponentInDB record {

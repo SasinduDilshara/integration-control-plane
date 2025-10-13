@@ -3,6 +3,7 @@ export interface Environment {
     environmentId: string;
     name: string;
     description: string;
+    isProduction: boolean;
     createdAt: string;
     updatedAt: string;
     updatedBy: string;
@@ -83,12 +84,14 @@ export interface CreateRuntimeRequest {
 export interface CreateEnvironmentRequest {
     name: string;
     description: string;
+    isProduction: boolean;
 }
 
 export interface UpdateEnvironmentRequest {
     environmentId: string;
     name: string;
     description: string;
+    isProduction: boolean;
 }
 
 export interface CreateComponentRequest {
@@ -117,31 +120,31 @@ export interface UpdateProjectRequest {
 
 // Authentication types
 export interface LoginRequest {
-  username: string;
-  password: string;
+    username: string;
+    password: string;
 }
 
 export interface Role {
-  roleId: string;
-  projectId: string;
-  environmentId: string;
-  privilegeLevel: string;
-  roleName: string;
-  createdAt: string;
-  updatedAt: string;
+    roleId: string;
+    projectId: string;
+    environmentId: string;
+    privilegeLevel: string;
+    roleName: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface LoginResponse {
-  isNewUser: boolean;
-  token: string;
-  expiresIn: number;
-  username: string;
-  roles: Role[];
+    isNewUser: boolean;
+    token: string;
+    expiresIn: number;
+    username: string;
+    roles: Role[];
 }
 
 export interface AuthUser {
-  username: string;
-  token: string;
-  roles: Role[];
-  expiresAt: number;
+    username: string;
+    token: string;
+    roles: Role[];
+    expiresAt: number;
 }

@@ -28,7 +28,7 @@ yarn start
 
 For local development and testing, use the default admin credentials:
 
-- **Email**: `admin@example.com`
+- **Email**: `admin`
 - **Password**: `admin123`
 
 > **Note**: These credentials are for local development only. The default admin user is provisioned in the database initialization scripts.

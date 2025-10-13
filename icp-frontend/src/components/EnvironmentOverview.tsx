@@ -374,9 +374,17 @@ const EnvironmentOverview: React.FC = () => {
 
                 {selectedEnvironment && (
                     <Box>
-                        <Typography variant="h6" gutterBottom>
-                            {selectedEnvironment.name}
-                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                            <Typography variant="h6">
+                                {selectedEnvironment.name}
+                            </Typography>
+                            <Chip
+                                label={selectedEnvironment.isProduction ? 'Production' : 'Non-Production'}
+                                color={selectedEnvironment.isProduction ? 'error' : 'primary'}
+                                variant="outlined"
+                                size="small"
+                            />
+                        </Box>
                         {selectedEnvironment.description && (
                             <Typography variant="body2" color="text.secondary" gutterBottom>
                                 {selectedEnvironment.description}
