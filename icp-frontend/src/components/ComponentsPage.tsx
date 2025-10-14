@@ -311,7 +311,7 @@ const ComponentsPage: React.FC = () => {
 
     const generateRuntimeConfig = (component: Component) => {
         return `[ballerinax.wso2.icp]
-runtime= <change me>
+runtime=<change me>
 environment=<change me>
 component="${component.name}"
 project="${component.project.name}"
@@ -378,7 +378,7 @@ heartbeatInterval=30`;
                         setCreateDialogOpen(true);
                     }}
                 >
-                    Add Component
+                    Create
                 </Button>
                 <Button
                     variant="outlined"
