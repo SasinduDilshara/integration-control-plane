@@ -20,6 +20,16 @@ import Navigation, { DRAWER_WIDTH, DRAWER_WIDTH_COLLAPSED } from './components/N
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { icpApiClient } from './services/ICPApiClient';
 
+const ICPLogo: React.FC<{ size?: number }> = ({ size = 100 }) => (
+    <img
+        src="/favicon.svg"
+        alt="WSO2 ICP Logo"
+        width={size}
+        height={size}
+        style={{ display: 'block' }}
+    />
+);
+
 const createAppTheme = (mode: 'light' | 'dark') => createTheme({
     palette: {
         mode,
@@ -87,7 +97,7 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
                         onClick={handleSidebarToggle}
                         sx={{ mr: 2 }}
                     >
-                        <MenuIcon />
+                        <ICPLogo size={50} />
                     </IconButton>
                     <Typography
                         variant="h6"
@@ -161,11 +171,19 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
 }
 
 function App() {
-    const [darkMode, setDarkMode] = useState(false);
+    // Initialize theme from localStorage or default to false (light mode)
+    const [darkMode, setDarkMode] = useState(() => {
+        const savedTheme = localStorage.getItem('icp-theme-mode');
+        return savedTheme === 'dark';
+    });
+
     const theme = createAppTheme(darkMode ? 'dark' : 'light');
 
     const handleThemeToggle = () => {
-        setDarkMode(!darkMode);
+        const newDarkMode = !darkMode;
+        setDarkMode(newDarkMode);
+        // Persist theme preference to localStorage
+        localStorage.setItem('icp-theme-mode', newDarkMode ? 'dark' : 'light');
     };
 
     return (

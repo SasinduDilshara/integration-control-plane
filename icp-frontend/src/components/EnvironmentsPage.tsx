@@ -308,7 +308,7 @@ const EnvironmentsPage: React.FC = () => {
                     startIcon={<AddIcon />}
                     onClick={() => setCreateDialogOpen(true)}
                 >
-                    Add Environment
+                    Create
                 </Button>
                 <Button
                     variant="outlined"

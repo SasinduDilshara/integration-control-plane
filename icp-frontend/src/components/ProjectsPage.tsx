@@ -281,7 +281,7 @@ const ProjectsPage: React.FC = () => {
                     startIcon={<AddIcon />}
                     onClick={() => setCreateDialogOpen(true)}
                 >
-                    Add Project
+                    Create
                 </Button>
                 <Button
                     variant="outlined"
