@@ -356,9 +356,18 @@ const EnvironmentsPage: React.FC = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                Environments ({environments.length})
-            </Typography>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="h4" gutterBottom>
+                    Environments
+                </Typography>
+                <Chip
+                    label={`${environments.length}`}
+                    color="primary"
+                    variant="outlined"
+                />
+            </Box>
+
 
             <MaterialReactTable {...tableConfig} />
 
@@ -551,7 +560,7 @@ const EnvironmentsPage: React.FC = () => {
                     {snackbar.message}
                 </Alert>
             </Snackbar>
-        </Box>
+        </Box >
     );
 };
 

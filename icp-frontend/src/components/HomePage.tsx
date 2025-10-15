@@ -12,7 +12,6 @@ import {
     Alert,
     CircularProgress,
     CardActions,
-    Chip,
 } from '@mui/material';
 import {
     Folder as ProjectsIcon,
@@ -22,15 +21,6 @@ import {
 } from '@mui/icons-material';
 import { useProjects } from '../services/hooks';
 
-const ICPLogo: React.FC<{ size?: number }> = ({ size = 100 }) => (
-    <img
-        src="/favicon.svg"
-        alt="WSO2 ICP Logo"
-        width={size}
-        height={size}
-        style={{ display: 'block' }}
-    />
-);
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
@@ -111,6 +101,7 @@ const HomePage: React.FC = () => {
                         <Grid item xs={12} sm={6} md={4} lg={3} key={project.projectId}>
                             <Card
                                 elevation={3}
+                                onClick={() => navigate(`/components?projectId=${project.projectId}`)}
                                 sx={{
                                     height: '100%',
                                     display: 'flex',

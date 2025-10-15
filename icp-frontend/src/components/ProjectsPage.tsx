@@ -10,6 +10,7 @@ import {
     IconButton,
     TextField,
     Typography,
+    Chip,
     Snackbar,
     Tooltip,
 } from '@mui/material';
@@ -329,9 +330,16 @@ const ProjectsPage: React.FC = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                Projects ({projects.length})
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="h4" gutterBottom>
+                    Projects
+                </Typography>
+                <Chip
+                    label={`${projects.length}`}
+                    color="primary"
+                    variant="outlined"
+                />
+            </Box>
 
             <MaterialReactTable {...tableConfig} />
 

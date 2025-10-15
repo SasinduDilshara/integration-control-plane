@@ -38,7 +38,7 @@ const DRAWER_WIDTH_COLLAPSED = 64;
 const Navigation: React.FC<NavigationProps> = ({ open, onToggle }) => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [projectsExpanded, setProjectsExpanded] = useState(false);
+    const [projectsExpanded, setProjectsExpanded] = useState(true);
 
     const navigationItems = [
         {

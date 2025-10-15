@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -14,6 +14,7 @@ import {
     Tooltip,
     FormControl,
     InputLabel,
+    Chip,
     Select,
     MenuItem,
     Paper,
@@ -46,6 +47,7 @@ import {
 
 const ComponentsPage: React.FC = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     // Data hooks
     const { loading, error, value: components, retry } = useComponents();
@@ -339,6 +341,11 @@ heartbeatInterval=30`;
         }
     };
 
+    const handleRowClick = (component: Component) => {
+        // Navigate to runtimes page with project and component filters
+        navigate(`/runtimes?projectId=${component.project.projectId}&componentId=${component.componentId}`);
+    };
+
     // Material React Table configuration
     const tableConfig = {
         columns,
@@ -364,6 +371,15 @@ heartbeatInterval=30`;
             maxSize: 1000,
             enableResizing: true,
         },
+        muiTableBodyRowProps: ({ row }: { row: MRT_Row<Component> }) => ({
+            onClick: () => handleRowClick(row.original),
+            sx: {
+                cursor: 'pointer',
+                '&:hover': {
+                    backgroundColor: 'action.hover'
+                }
+            },
+        }),
         renderTopToolbarCustomActions: () => (
             <Box sx={{ display: 'flex', gap: '1rem', p: '0.5rem', alignItems: 'center' }}>
                 <Button
@@ -417,9 +433,18 @@ heartbeatInterval=30`;
 
     return (
         <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                Components ({filteredComponents.length})
-            </Typography>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="h4" gutterBottom>
+                    Components
+                </Typography>
+                <Chip
+                    label={`${filteredComponents.length}`}
+                    color="primary"
+                    variant="outlined"
+                />
+            </Box>
+
 
             {/* Project Selection */}
             <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
