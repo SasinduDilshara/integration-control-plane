@@ -186,7 +186,27 @@ service /graphql on graphqlListener {
     }
 
     // Delete a runtime by ID
-    isolated remote function deleteRuntime(string runtimeId) returns boolean|error {
+    isolated remote function deleteRuntime(graphql:Context context, string runtimeId) returns boolean|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+        
+        // Extract user context for RBAC
+        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        
+        // First, fetch the runtime to get its project and environment
+        types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+        
+        if runtime is () {
+            return error("Runtime not found");
+        }
+        
+        // Verify user has admin access to the runtime's project and environment
+        if !utils:hasAdminAccess(userContext, runtime.component.project.projectId, runtime.environment.environmentId) {
+            return error("Admin access required to delete runtime");
+        }
+        
         check storage:deleteRuntime(runtimeId);
         return true;
     }
