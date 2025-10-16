@@ -37,6 +37,7 @@ import {
     useCreateComponent,
     useUpdateComponent,
     useDeleteComponent,
+    useAdminProjects,
 } from '../services/hooks';
 import {
     Component,
@@ -52,6 +53,7 @@ const ComponentsPage: React.FC = () => {
     // Data hooks
     const { loading, error, value: components, retry } = useComponents();
     const { loading: projectsLoading, value: projects } = useProjects();
+    const { value: adminProjects } = useAdminProjects();
 
     // Action hooks
     const { createComponent, loading: creating } = useCreateComponent();
@@ -99,6 +101,12 @@ const ComponentsPage: React.FC = () => {
     const selectedProject = useMemo(() => {
         return projects.find(project => project.projectId === selectedProjectId);
     }, [projects, selectedProjectId]);
+
+    // Check if user has admin access to selected project (in any environment)
+    const hasAdminAccess = useMemo(() => {
+        if (!selectedProjectId) return false;
+        return adminProjects.some(project => project.projectId === selectedProjectId);
+    }, [adminProjects, selectedProjectId]);
 
     // Effect to handle URL parameters for automatic project selection
     useEffect(() => {
@@ -197,35 +205,40 @@ const ComponentsPage: React.FC = () => {
                                 <ContentCopyIcon />
                             </IconButton>
                         </Tooltip>
-                        <Tooltip title="Edit Component">
-                            <IconButton
-                                color="primary"
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditClick(row.original);
-                                }}
-                            >
-                                <EditIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete Component">
-                            <IconButton
-                                color="error"
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteClick(row.original);
-                                }}
-                            >
-                                <DeleteIcon />
-                            </IconButton>
-                        </Tooltip>
+                        {/* Only show edit/delete buttons if user has admin access to project */}
+                        {hasAdminAccess && (
+                            <>
+                                <Tooltip title="Edit Component">
+                                    <IconButton
+                                        color="primary"
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEditClick(row.original);
+                                        }}
+                                    >
+                                        <EditIcon />
+                                    </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Delete Component">
+                                    <IconButton
+                                        color="error"
+                                        size="small"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteClick(row.original);
+                                        }}
+                                    >
+                                        <DeleteIcon />
+                                    </IconButton>
+                                </Tooltip>
+                            </>
+                        )}
                     </Box>
                 ),
             },
         ],
-        []
+        [hasAdminAccess]
     );
 
     const handleCreateComponent = async () => {
@@ -382,20 +395,23 @@ heartbeatInterval=30`;
         }),
         renderTopToolbarCustomActions: () => (
             <Box sx={{ display: 'flex', gap: '1rem', p: '0.5rem', alignItems: 'center' }}>
-                <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                        setNewComponent({
-                            name: '',
-                            description: '',
-                            projectId: selectedProjectId || ''
-                        });
-                        setCreateDialogOpen(true);
-                    }}
-                >
-                    Create
-                </Button>
+                {/* Only show Create button if user has admin access to selected project */}
+                {hasAdminAccess && (
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => {
+                            setNewComponent({
+                                name: '',
+                                description: '',
+                                projectId: selectedProjectId || ''
+                            });
+                            setCreateDialogOpen(true);
+                        }}
+                    >
+                        Create
+                    </Button>
+                )}
                 <Button
                     variant="outlined"
                     startIcon={<RefreshIcon />}

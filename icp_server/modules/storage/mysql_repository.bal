@@ -1484,6 +1484,26 @@ public isolated function updateUserProjectAuthor(string userId, boolean isProjec
     return ();
 }
 
+// Get all environment IDs where a component has runtimes
+public isolated function getEnvironmentIdsWithRuntimes(string componentId) returns string[]|error {
+    log:printDebug(string `Fetching environment IDs where component ${componentId} has runtimes`);
+    
+    stream<record {|string environmentId;|}, sql:Error?> envStream = dbClient->query(
+        `SELECT DISTINCT environment_id 
+         FROM runtimes 
+         WHERE component_id = ${componentId}`
+    );
+    
+    string[] environmentIds = [];
+    check from record {|string environmentId;|} envRecord in envStream
+        do {
+            environmentIds.push(envRecord.environmentId);
+        };
+    
+    log:printInfo(string `Component ${componentId} has runtimes in ${environmentIds.length()} environments`);
+    return environmentIds;
+}
+
 // Get all users with their roles
 public isolated function getAllUsers() returns types:UserWithRoles[]|error {
     log:printDebug("Fetching all users with roles");
