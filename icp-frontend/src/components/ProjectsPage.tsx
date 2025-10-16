@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -40,6 +40,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 const ProjectsPage: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
     const { user, refreshAuth } = useAuth(); // Get current user to check project author role
 
     // Data hooks
@@ -73,6 +74,16 @@ const ProjectsPage: React.FC = () => {
         name: '',
         description: '',
     });
+
+    // Check if URL has create=true parameter to open create dialog
+    useEffect(() => {
+        if (searchParams.get('create') === 'true') {
+            setCreateDialogOpen(true);
+            // Remove the parameter from URL after opening dialog
+            searchParams.delete('create');
+            setSearchParams(searchParams, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
 
     // Material React Table columns configuration
     const columns = useMemo<MRT_ColumnDef<Project>[]>(
@@ -185,8 +196,7 @@ const ProjectsPage: React.FC = () => {
                 message: 'Project created successfully',
                 severity: 'success'
             });
-            retry();
-            
+
             // Refresh auth token to get updated roles
             try {
                 await refreshAuth();
@@ -195,6 +205,9 @@ const ProjectsPage: React.FC = () => {
                 console.error('Failed to refresh token after project creation:', error);
                 // Don't fail the whole operation if token refresh fails
             }
+
+            // Refresh the projects list after auth refresh
+            await retry();
         } catch (error) {
             setSnackbar({
                 open: true,
@@ -213,7 +226,7 @@ const ProjectsPage: React.FC = () => {
                 message: 'Project updated successfully',
                 severity: 'success'
             });
-            retry();
+            await retry();
         } catch (error) {
             setSnackbar({
                 open: true,
@@ -250,7 +263,7 @@ const ProjectsPage: React.FC = () => {
                     message: 'Project deleted successfully',
                     severity: 'success'
                 });
-                retry();
+                await retry();
             } catch (err) {
                 setSnackbar({
                     open: true,
