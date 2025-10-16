@@ -67,6 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       
       const updatedUser: AuthUser = {
         username: response.username,
+        displayName: response.displayName,
         token: response.token,
         roles: response.roles,
         expiresAt,

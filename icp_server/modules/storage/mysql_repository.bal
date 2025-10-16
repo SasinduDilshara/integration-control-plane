@@ -1657,3 +1657,75 @@ public isolated function deleteUserById(string userId) returns error? {
     
     return ();
 }
+
+// Update user profile (display name)
+public isolated function updateUserProfile(string userId, string displayName) returns error? {
+    log:printDebug(string `Updating profile for user: ${userId}`);
+    
+    // First check if user exists
+    types:User|error existingUser = getUserDetailsById(userId);
+    if existingUser is error {
+        log:printError(string `User not found: ${userId}`, existingUser);
+        return error(string `User not found: ${userId}`);
+    }
+    
+    transaction {
+        // Update users table
+        sql:ExecutionResult _ = check dbClient->execute(
+            `UPDATE users 
+             SET display_name = ${displayName}, updated_at = CURRENT_TIMESTAMP 
+             WHERE user_id = ${userId}`
+        );
+        
+        // Update user_credentials table if exists (for users with local auth)
+        sql:ExecutionResult _ = check dbClient->execute(
+            `UPDATE user_credentials 
+             SET display_name = ${displayName}, updated_at = CURRENT_TIMESTAMP 
+             WHERE user_id = ${userId}`
+        );
+        
+        check commit;
+        log:printInfo(string `Successfully updated profile for user ${userId}`);
+    } on fail error e {
+        log:printError(string `Transaction failed while updating profile for user ${userId}`, e);
+        return error(string `Failed to update profile for user ${userId}`, e);
+    }
+    
+    return ();
+}
+
+// Update user password (for users with local authentication)
+public isolated function updateUserPassword(string userId, string newPasswordHash) returns error? {
+    log:printDebug(string `Updating password for user: ${userId}`);
+    
+    sql:ExecutionResult result = check dbClient->execute(
+        `UPDATE user_credentials 
+         SET password_hash = ${newPasswordHash}, updated_at = CURRENT_TIMESTAMP 
+         WHERE user_id = ${userId}`
+    );
+    
+    if result.affectedRowCount == 0 {
+        return error(string `User not found in credentials table or user does not have local authentication: ${userId}`);
+    }
+    
+    log:printInfo(string `Successfully updated password for user ${userId}`);
+    return ();
+}
+
+// Get user credentials for password verification
+public isolated function getUserCredentials(string userId) returns types:UserCredentials|error {
+    log:printDebug(string `Fetching credentials for userId: ${userId}`);
+    types:UserCredentials|sql:Error credentials = dbClient->queryRow(
+        `SELECT user_id as userId, username, display_name as displayName, 
+                password_hash as passwordHash, created_at as createdAt, updated_at as updatedAt
+         FROM user_credentials 
+         WHERE user_id = ${userId}`
+    );
+
+    if credentials is sql:Error {
+        log:printError(string `Failed to get credentials for ${userId}`, credentials);
+        return credentials;
+    }
+
+    return credentials;
+}

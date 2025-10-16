@@ -629,3 +629,14 @@ public type UpdateUserRolesRequest record {
     RoleAssignment[] roles;
     boolean? isProjectAuthor?; // Optional: only super admins can update this
 };
+
+// Input type for updating user profile (display name)
+public type UpdateProfileRequest record {
+    string displayName;
+};
+
+// Input type for changing password
+public type ChangePasswordRequest record {
+    string currentPassword;
+    string newPassword;
+};
