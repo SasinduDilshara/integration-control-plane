@@ -164,12 +164,9 @@ const LogsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h3" component="h1" gutterBottom color="primary">
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+        <Typography variant="h4" gutterBottom>
           Logs Dashboard
-        </Typography>
-        <Typography variant="h6" color="text.secondary">
-          Centralized log aggregation and analysis for troubleshooting
         </Typography>
       </Box>
 
@@ -486,24 +483,6 @@ const LogsPage: React.FC = () => {
         </Paper>
       )}
 
-      {/* Additional Info */}
-      <Box sx={{ mt: 4 }}>
-        <Paper
-          elevation={1}
-          sx={{ p: 4, backgroundColor: 'primary.light', color: 'primary.contrastText' }}
-        >
-          <Typography variant="h6" gutterBottom>
-            <LogIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-            About Logs
-          </Typography>
-          <Typography variant="body1">
-            The Logs Dashboard provides centralized access to all system logs across your integration
-            infrastructure. Use the search and filter capabilities to quickly identify issues, track system
-            events, and maintain audit trails. Logs are retained for 90 days and can be exported for
-            long-term archival. Click on any log entry to view additional tags and contextual information.
-          </Typography>
-        </Paper>
-      </Box>
     </Container>
   );
 };

@@ -7,7 +7,6 @@ import {
     Button,
     Typography,
     Alert,
-    Divider,
     Grid,
     Dialog,
     DialogTitle,
@@ -144,7 +143,7 @@ const ProfilePage: React.FC = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Typography variant="h4" sx={{ mb: 3, fontWeight: 600 }}>
+            <Typography variant="h4" gutterBottom>
                 My Profile
             </Typography>
 

@@ -115,17 +115,14 @@ const MetricsPage: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h3" component="h1" gutterBottom color="primary">
-          Metrics Dashboard
-        </Typography>
-        <Typography variant="h6" color="text.secondary">
-          Real-time performance metrics and system health indicators
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+        <Typography variant="h4" gutterBottom>
+          Logs Dashboard
         </Typography>
       </Box>
 
       {/* System Metrics */}
-      <Typography variant="h5" gutterBottom color="primary" sx={{ mb: 3 }}>
+      <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
         System Metrics
       </Typography>
 
@@ -186,7 +183,7 @@ const MetricsPage: React.FC = () => {
       </Grid>
 
       {/* Performance Metrics */}
-      <Typography variant="h5" gutterBottom color="primary" sx={{ mb: 3 }}>
+      <Typography variant="h5" gutterBottom sx={{ mb: 3 }}>
         Performance Metrics
       </Typography>
 
@@ -225,22 +222,6 @@ const MetricsPage: React.FC = () => {
           </Grid>
         ))}
       </Grid>
-
-      {/* Additional Info */}
-      <Box sx={{ mt: 6 }}>
-        <Paper elevation={1} sx={{ p: 4, backgroundColor: 'primary.light', color: 'primary.contrastText' }}>
-          <Typography variant="h6" gutterBottom>
-            <SpeedIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-            About Metrics
-          </Typography>
-          <Typography variant="body1">
-            The Metrics Dashboard provides real-time visibility into system performance and resource utilization.
-            Monitor key performance indicators, track trends, and identify potential bottlenecks before they
-            impact your integration services. All metrics are updated in real-time and historical data is
-            available for trend analysis.
-          </Typography>
-        </Paper>
-      </Box>
     </Container>
   );
 };
