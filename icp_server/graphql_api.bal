@@ -428,7 +428,19 @@ service /graphql on graphqlListener {
 
     // ----------- Component Resources
     // Create a new component
-    isolated remote function createComponent(types:ComponentInput component) returns types:Component|error? {
+    isolated remote function createComponent(graphql:Context context, types:ComponentInput component) returns types:Component|error? {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+        
+        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        
+        // Check if user is admin in the project (in any environment)
+        if !utils:isAdminInAnyEnvironment(userContext, component.projectId) {
+            return error("Admin access required in project to create components");
+        }
+        
         return storage:createComponent(component);
     }
 
@@ -484,13 +496,59 @@ service /graphql on graphqlListener {
     }
 
     // Delete a component
-    isolated remote function deleteComponent(string componentId) returns boolean|error {
+    isolated remote function deleteComponent(graphql:Context context, string componentId) returns boolean|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+        
+        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        
+        // Get component to check project access
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return error("Component not found");
+        }
+        
+        // Check if user is admin in the project (in any environment)
+        if !utils:isAdminInAnyEnvironment(userContext, component.project.projectId) {
+            return error("Admin access required in project to delete components");
+        }
+        
+        // Get all environments where this component has runtimes
+        string[] environmentsWithRuntimes = check storage:getEnvironmentIdsWithRuntimes(componentId);
+        
+        // Check if user is admin in ALL environments where the component has runtimes
+        foreach string envId in environmentsWithRuntimes {
+            if !utils:hasAdminAccess(userContext, component.project.projectId, envId) {
+                return error(string `Cannot delete component: it has runtimes in environment ${envId} where you don't have admin access`);
+            }
+        }
+        
         check storage:deleteComponent(componentId);
         return true;
     }
 
     // Update component name and/or description
-    isolated remote function updateComponent(string componentId, string? name, string? description) returns types:Component|error {
+    isolated remote function updateComponent(graphql:Context context, string componentId, string? name, string? description) returns types:Component|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+        
+        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        
+        // Get component to check project access
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return error("Component not found");
+        }
+        
+        // Check if user is admin in the project (in any environment)
+        if !utils:isAdminInAnyEnvironment(userContext, component.project.projectId) {
+            return error("Admin access required in project to update components");
+        }
+        
         check storage:updateComponent(componentId, name, description);
         return check storage:getComponentById(componentId);
     }

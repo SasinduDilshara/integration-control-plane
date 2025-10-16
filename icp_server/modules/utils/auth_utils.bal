@@ -677,3 +677,15 @@ public isolated function generateJWTToken(
     return jwtToken;
 }
 
+// Check if user is admin in a project (in ANY environment)
+public isolated function isAdminInAnyEnvironment(types:UserContext userContext, string projectId) returns boolean {
+    if userContext.isSuperAdmin {
+        return true;
+    }
+    
+    return userContext.roles.some(role => 
+        role.projectId == projectId && 
+        role.privilegeLevel == types:ADMIN
+    );
+}
+
