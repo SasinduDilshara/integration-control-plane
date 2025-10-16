@@ -135,10 +135,11 @@ export interface Role {
 }
 
 export interface LoginResponse {
-    isNewUser: boolean;
+    isNewUser?: boolean;
     token: string;
     expiresIn: number;
     username: string;
+    displayName: string;
     roles: Role[];
     isSuperAdmin: boolean; // Super admin flag from backend
     isProjectAuthor: boolean; // Project author flag from backend
@@ -146,6 +147,7 @@ export interface LoginResponse {
 
 export interface AuthUser {
     username: string;
+    displayName?: string; // Display name from JWT
     token: string;
     roles: Role[];
     expiresAt: number;
@@ -181,4 +183,23 @@ export interface OIDCAuthorizationUrlResponse {
 
 export interface OIDCCallbackRequest {
   code: string;
+}
+
+// Profile update types
+export interface UpdateProfileRequest {
+  displayName: string;
+}
+
+export interface UpdateProfileResponse {
+  message: string;
+  user: User;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
 }

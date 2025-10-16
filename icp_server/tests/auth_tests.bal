@@ -78,8 +78,9 @@ function testSuccessfulLogin() returns error? {
     test:assertEquals(payload["username"], TEST_USERNAME, "Username should match the logged-in user");
     test:assertTrue(payload["roles"] is json[], "Roles should be present in JWT custom claims");
 
-    json[] roles = check payload["roles"].ensureType();
-    test:assertTrue(roles.length() > 0, "User should have at least one role");
+    // Verify super admin status
+    test:assertTrue(payload["isSuperAdmin"] is boolean, "isSuperAdmin should be present in JWT custom claims");
+    test:assertTrue(payload["isSuperAdmin"] == true, "User should be super admin");
 }
 
 // Test: Login failure with invalid username

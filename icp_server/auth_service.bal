@@ -148,6 +148,7 @@ service /auth on httpListener {
                 token: jwtToken,
                 expiresIn: defaultTokenExpiryTime,
                 username: username,
+                displayName: userDetails.displayName,
                 roles: userRoles,
                 isSuperAdmin: userDetails.isSuperAdmin,
                 isProjectAuthor: userDetails.isProjectAuthor
@@ -258,6 +259,7 @@ service /auth on httpListener {
                 token: jwtToken,
                 expiresIn: defaultTokenExpiryTime,
                 username: userInfo.username,
+                displayName: userDetails.displayName,
                 roles: userRoles,
                 isSuperAdmin: userDetails.isSuperAdmin,
                 isProjectAuthor: userDetails.isProjectAuthor
@@ -328,6 +330,7 @@ service /auth on httpListener {
                 token: jwtToken,
                 expiresIn: defaultTokenExpiryTime,
                 username: userDetails.username,
+                displayName: userDetails.displayName,
                 roles: userRoles,
                 isSuperAdmin: userDetails.isSuperAdmin,
                 isProjectAuthor: userDetails.isProjectAuthor
@@ -587,6 +590,145 @@ service /auth on httpListener {
         return <http:Ok>{
             body: {
                 message: "User deleted successfully"
+            }
+        };
+    }
+    
+    // Update user profile (display name) - users can update their own profile
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
+    }
+    isolated resource function put profile(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:UpdateProfileRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Updating user profile");
+        
+        if authHeader is () {
+            log:printError("Authorization header missing in request");
+            return utils:createUnauthorizedError("Authorization header required");
+        }
+        
+        types:UserContext|error userContext = utils:extractUserContext(authHeader);
+        if userContext is error {
+            log:printError("Failed to extract user context", userContext);
+            return utils:createUnauthorizedError("Invalid authorization token");
+        }
+        
+        // Validate input
+        if request.displayName.trim().length() == 0 {
+            return utils:createBadRequestError("Display name cannot be empty");
+        }
+        
+        // Update profile
+        error? updateResult = storage:updateUserProfile(userContext.userId, request.displayName);
+        if updateResult is error {
+            log:printError("Error updating user profile", updateResult, userId = userContext.userId);
+            return utils:createInternalServerError("Failed to update profile");
+        }
+        
+        // Fetch updated user details
+        types:User|error updatedUser = storage:getUserDetailsById(userContext.userId);
+        if updatedUser is error {
+            log:printError("Error fetching updated user details", updatedUser);
+            return utils:createInternalServerError("Failed to fetch updated profile");
+        }
+        
+        log:printInfo("Profile updated successfully", userId = userContext.userId);
+        return <http:Ok>{
+            body: {
+                message: "Profile updated successfully",
+                user: updatedUser
+            }
+        };
+    }
+    
+    // Change password - users can change their own password
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
+    }
+    isolated resource function put password(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:ChangePasswordRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Changing user password");
+        
+        if authHeader is () {
+            log:printError("Authorization header missing in request");
+            return utils:createUnauthorizedError("Authorization header required");
+        }
+        
+        types:UserContext|error userContext = utils:extractUserContext(authHeader);
+        if userContext is error {
+            log:printError("Failed to extract user context", userContext);
+            return utils:createUnauthorizedError("Invalid authorization token");
+        }
+        
+        // Validate input
+        if request.currentPassword.trim().length() == 0 {
+            return utils:createBadRequestError("Current password is required");
+        }
+        if request.newPassword.trim().length() == 0 {
+            return utils:createBadRequestError("New password is required");
+        }
+        if request.newPassword.length() < 6 {
+            return utils:createBadRequestError("New password must be at least 6 characters long");
+        }
+        
+        // Get user credentials to verify current password
+        types:UserCredentials|error credentials = storage:getUserCredentials(userContext.userId);
+        if credentials is error {
+            if credentials is sql:NoRowsError {
+                log:printWarn("User attempted password change but has no local credentials (likely OIDC user)", 
+                    userId = userContext.userId);
+                return utils:createBadRequestError("Password change is not available for SSO users");
+            }
+            log:printError("Error fetching user credentials", credentials);
+            return utils:createInternalServerError("Failed to verify credentials");
+        }
+        
+        // Verify current password
+        boolean|crypto:Error? matches = crypto:verifyBcrypt(request.currentPassword, credentials.passwordHash);
+        if matches is crypto:Error {
+            log:printError("Error verifying current password", matches);
+            return utils:createInternalServerError("Failed to verify current password");
+        } else if matches is boolean && !matches {
+            log:printWarn("User provided incorrect current password", userId = userContext.userId);
+            return utils:createBadRequestError("Current password is incorrect");
+        }
+        
+        // Hash new password
+        string|crypto:Error newPasswordHash = crypto:hashBcrypt(request.newPassword);
+        if newPasswordHash is crypto:Error {
+            log:printError("Error hashing new password", newPasswordHash);
+            return utils:createInternalServerError("Failed to process new password");
+        }
+        
+        // Update password
+        error? updateResult = storage:updateUserPassword(userContext.userId, newPasswordHash);
+        if updateResult is error {
+            log:printError("Error updating password", updateResult, userId = userContext.userId);
+            return utils:createInternalServerError("Failed to update password");
+        }
+        
+        log:printInfo("Password changed successfully", userId = userContext.userId);
+        return <http:Ok>{
+            body: {
+                message: "Password changed successfully"
             }
         };
     }

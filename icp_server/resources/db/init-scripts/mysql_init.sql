@@ -494,7 +494,7 @@ VALUES (
         'sample_project',
         'Sample project for testing',
         '550e8400-e29b-41d4-a716-446655440000',
-        'Admin User'
+        'System Administrator'
     );
 
 INSERT INTO
@@ -573,18 +573,4 @@ VALUES (
         '750e8400-e29b-41d4-a716-446655440002',
         'developer',
         'sample_project:prod:developer'
-    );
-
--- Assign admin role to the admin user for sample_project:prod
-INSERT INTO
-    user_roles (user_id, role_id, assigned_by)
-VALUES (
-        '550e8400-e29b-41d4-a716-446655440000',
-        '850e8400-e29b-41d4-a716-446655440003',
-        '550e8400-e29b-41d4-a716-446655440000'
-    ),
-    (
-        '550e8400-e29b-41d4-a716-446655440000',
-        '850e8400-e29b-41d4-a716-446655440001',
-        '550e8400-e29b-41d4-a716-446655440000'
     );

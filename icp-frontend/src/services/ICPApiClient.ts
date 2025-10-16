@@ -322,6 +322,83 @@ class ICPApiClient {
             throw error;
         }
     }
+
+    // Profile management methods
+    async updateProfile(displayName: string): Promise<any> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            // Get token from localStorage (same as AuthContext)
+            const storedUser = localStorage.getItem('icp_auth_user');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.token) {
+                        headers['Authorization'] = `Bearer ${parsedUser.token}`;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth header', e);
+                }
+            }
+
+            const response = await fetch(`${this.authEndpoint}/profile`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ displayName }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to update profile with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Update Profile Error:', error);
+            throw error;
+        }
+    }
+
+    async changePassword(currentPassword: string, newPassword: string): Promise<any> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            // Get token from localStorage (same as AuthContext)
+            const storedUser = localStorage.getItem('icp_auth_user');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.token) {
+                        headers['Authorization'] = `Bearer ${parsedUser.token}`;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth header', e);
+                }
+            }
+
+            const response = await fetch(`${this.authEndpoint}/password`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ currentPassword, newPassword }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to change password with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Change Password Error:', error);
+            throw error;
+        }
+    }
 }
 
 // Create a singleton instance
