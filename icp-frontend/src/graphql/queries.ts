@@ -218,3 +218,33 @@ export const GET_PROJECT = `
     }
   }
 `;
+
+// Admin Project Queries (for permission management)
+export const GET_ADMIN_PROJECTS = `
+  query GetAdminProjects {
+    adminProjects {
+      projectId
+      name
+      description
+      createdBy
+      createdAt
+      updatedAt
+      updatedBy
+    }
+  }
+`;
+
+export const GET_ADMIN_ENVIRONMENTS = `
+  query GetAdminEnvironments {
+    adminEnvironments {
+      environmentId
+      name
+      description
+      isProduction
+      createdAt
+      updatedAt
+      updatedBy
+      createdBy
+    }
+  }
+`;

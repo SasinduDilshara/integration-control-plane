@@ -17,6 +17,17 @@ import { useAuth } from '../contexts/AuthContext';
 import { icpApiClient } from '../services/ICPApiClient';
 import { LoginResponse } from '../types';
 
+
+const ICPLogo: React.FC<{ size?: number }> = ({ size = 100 }) => (
+    <img
+        src="/favicon.svg"
+        alt="WSO2 ICP Logo"
+        width={size}
+        height={size}
+        style={{ display: 'block' }}
+    />
+);
+
 const LoginPage: React.FC = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -33,21 +44,24 @@ const LoginPage: React.FC = () => {
 
         try {
             const response: LoginResponse = await icpApiClient.login(username, password);
-            
+
             // Calculate token expiration time
             const expiresAt = Date.now() + (response.expiresIn * 1000);
-            
-            // Use server-provided user information
+
+            // Use server-provided user information (including displayName from backend)
             const authUser = {
                 username: response.username,
+                displayName: response.displayName,
                 token: response.token,
                 roles: response.roles,
                 expiresAt,
+                isSuperAdmin: response.isSuperAdmin,
+                isProjectAuthor: response.isProjectAuthor,
             };
 
             // Set token in API client
             icpApiClient.setToken(response.token);
-            
+
             // Update auth context
             login(authUser);
 
@@ -67,7 +81,7 @@ const LoginPage: React.FC = () => {
         try {
             // Get the authorization URL from backend
             const { authorizationUrl } = await icpApiClient.getOIDCAuthorizationUrl();
-            
+
             // Redirect to the OIDC provider
             window.location.href = authorizationUrl;
         } catch (err: any) {
@@ -112,7 +126,7 @@ const LoginPage: React.FC = () => {
                             mb: 2,
                         }}
                     >
-                        <LockOutlinedIcon sx={{ color: 'white', fontSize: 32 }} />
+                        <ICPLogo size={32} />
                     </Box>
                     <Typography component="h1" variant="h5" gutterBottom color="primary">
                         Integration Control Plane

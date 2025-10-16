@@ -45,12 +45,15 @@ const OIDCCallbackPage: React.FC = () => {
                 // Calculate token expiration time
                 const expiresAt = Date.now() + (response.expiresIn * 1000);
 
-                // Create auth user object
+                // Create auth user object (using displayName from backend response)
                 const authUser = {
                     username: response.username,
+                    displayName: response.displayName,
                     token: response.token,
                     roles: response.roles,
                     expiresAt,
+                    isSuperAdmin: response.isSuperAdmin,
+                    isProjectAuthor: response.isProjectAuthor,
                 };
 
                 // Set token in API client

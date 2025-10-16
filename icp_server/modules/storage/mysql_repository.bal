@@ -49,6 +49,51 @@ public isolated function getEnvironments() returns types:Environment[]|error {
     return environments;
 }
 
+// Get environments by specific environment IDs (for admin environment filtering)
+public isolated function getEnvironmentsByIds(string[] environmentIds) returns types:Environment[]|error {
+    // Return empty array if no environment IDs provided
+    if environmentIds.length() == 0 {
+        return [];
+    }
+
+    types:Environment[] environments = [];
+
+    // Build WHERE clause to filter by environment IDs
+    sql:ParameterizedQuery query = `SELECT environment_id, name, description, is_production, created_at, updated_at, created_by, updated_by
+                                     FROM environments 
+                                     WHERE environment_id IN (`;
+
+    // Add environment IDs to the IN clause
+    foreach int i in 0 ..< environmentIds.length() {
+        if i > 0 {
+            query = sql:queryConcat(query, `, `);
+        }
+        query = sql:queryConcat(query, `${environmentIds[i]}`);
+    }
+
+    query = sql:queryConcat(query, `) ORDER BY name ASC`);
+
+    stream<types:Environment, sql:Error?> envStream = dbClient->query(query);
+
+    check from types:Environment env in envStream
+        do {
+            environments.push({
+                environmentId: env.environmentId,
+                description: env.description,
+                name: env.name,
+                isProduction: env.isProduction,
+                createdAt: env.createdAt,
+                updatedAt: env.updatedAt,
+                createdBy: env.createdBy,
+                updatedBy: env.updatedBy
+            });
+        };
+
+    log:printInfo("Retrieved environments by IDs", environmentCount = environments.length());
+
+    return environments;
+}
+
 // Get environment by ID
 public isolated function getEnvironmentById(string environmentId) returns types:Environment|error {
     stream<record {|string environment_id; string name; string? description; boolean is_production; string? created_at; string? updated_at;|}, sql:Error?> envStream =
@@ -216,6 +261,70 @@ public isolated function getRuntimes(string? status, string? runtimeType, string
             runtimeList.push(check mapToRuntime(runtime));
         };
 
+    return runtimeList;
+}
+
+// Get all runtimes for multiple project+environment combinations (RBAC-aware batch query)
+// Updated to work with environment-type-based role model
+public isolated function getRuntimesByAccessibleEnvironments(types:RoleInfo[] roles) returns types:Runtime[]|error {
+    // Return empty array if no roles provided
+    if roles.length() == 0 {
+        return [];
+    }
+
+    // Get all environments to determine which ones the user has access to
+    types:Environment[]|error allEnvironments = getEnvironments();
+    if allEnvironments is error {
+        log:printError("Failed to fetch environments for runtime access check", allEnvironments);
+        return [];
+    }
+
+    // Build list of accessible environment IDs based on user's environment type permissions
+    string[] accessibleEnvironmentIds = [];
+    foreach types:Environment env in allEnvironments {
+        final types:EnvironmentType envType = env.isProduction ? types:PROD : types:NON_PROD;
+
+        // Check if user has any role for this environment type
+        boolean hasAccess = roles.some(isolated function(types:RoleInfo role) returns boolean {
+            return role.environmentType == envType;
+        });
+
+        if hasAccess {
+            accessibleEnvironmentIds.push(env.environmentId);
+        }
+    }
+
+    // Return empty array if no accessible environments
+    if accessibleEnvironmentIds.length() == 0 {
+        return [];
+    }
+
+    // Build WHERE clause for accessible environments
+    sql:ParameterizedQuery whereClause = ` WHERE environment_id IN (`;
+    foreach int i in 0 ..< accessibleEnvironmentIds.length() {
+        if i > 0 {
+            whereClause = sql:queryConcat(whereClause, `, `);
+        }
+        whereClause = sql:queryConcat(whereClause, `${accessibleEnvironmentIds[i]}`);
+    }
+    whereClause = sql:queryConcat(whereClause, `) `);
+
+    // Build the complete query
+    sql:ParameterizedQuery selectClause = ` SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version, 
+                 platform_name, platform_version, platform_home, os_name, os_version, 
+                 registration_time, last_heartbeat FROM runtimes `;
+    sql:ParameterizedQuery orderByClause = ` ORDER BY registration_time DESC`;
+    sql:ParameterizedQuery query = sql:queryConcat(selectClause, whereClause, orderByClause);
+
+    types:Runtime[] runtimeList = [];
+    stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(query);
+
+    check from types:RuntimeDBRecord runtime in runtimeStream
+        do {
+            runtimeList.push(check mapToRuntime(runtime));
+        };
+
+    log:printDebug(string `Found ${runtimeList.length()} runtimes for ${accessibleEnvironmentIds.length()} accessible environments`);
     return runtimeList;
 }
 
@@ -888,23 +997,68 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
 }
 
 // Create a new project in the projects table
-public isolated function createProject(types:ProjectInput project) returns types:Project|error? {
+public isolated function createProject(types:ProjectInput project, types:UserContext userContext) returns types:Project|error? {
     string projectId = uuid:createType1AsString();
-    sql:ParameterizedQuery insertQuery = `INSERT INTO projects (project_id, name, description) 
-                                          VALUES (${projectId}, ${project.name}, ${project.description})`;
-    var result = dbClient->execute(insertQuery);
-    if result is sql:Error {
-        log:printError(string `Failed to create project ${project.name}`, result);
-        return result;
+    string userId = userContext.userId;
+    string displayName = userContext.displayName;
+
+    transaction {
+        // Insert project with owner_id and created_by (display name)
+        sql:ParameterizedQuery insertQuery = `INSERT INTO projects (project_id, name, description, owner_id, created_by) 
+                                              VALUES (${projectId}, ${project.name}, ${project.description}, ${userId}, ${displayName})`;
+        sql:ExecutionResult _ = check dbClient->execute(insertQuery);
+
+        log:printInfo(string `Created project: ${project.name}`,
+                projectId = projectId,
+                ownerId = userId,
+                createdBy = displayName);
+
+        // Auto-assign admin roles to the creating user for both environment types
+        // Skip role assignment if user is super admin
+        if !userContext.isSuperAdmin {
+            // Assign admin role for production environment type
+            string prodRoleId = check getOrCreateRole(projectId, types:PROD, types:ADMIN);
+            sql:ExecutionResult _ = check dbClient->execute(
+                `INSERT INTO user_roles (user_id, role_id, assigned_by)
+                 VALUES (${userId}, ${prodRoleId}, ${userId})`
+            );
+            log:printInfo(string `Assigned production admin role to project creator`,
+                    userId = userId,
+                    projectId = projectId);
+
+            // Assign admin role for non-production environment type
+            string nonProdRoleId = check getOrCreateRole(projectId, types:NON_PROD, types:ADMIN);
+            sql:ExecutionResult _ = check dbClient->execute(
+                `INSERT INTO user_roles (user_id, role_id, assigned_by)
+                 VALUES (${userId}, ${nonProdRoleId}, ${userId})`
+            );
+            log:printInfo(string `Assigned non-production admin role to project creator`,
+                    userId = userId,
+                    projectId = projectId);
+        } else {
+            log:printInfo(string `Skipping role assignment for super admin user`,
+                    userId = userId,
+                    projectId = projectId);
+        }
+
+        check commit;
+        log:printInfo(string `Successfully created project and assigned admin roles`,
+                projectId = projectId,
+                owner = displayName);
     }
+
     return getProjectById(projectId);
 }
 
 // Get all projects
 public isolated function getProjects() returns types:Project[]|error {
     types:Project[] projects = [];
-    stream<types:Project, sql:Error?> projectStream =
-        dbClient->query(`SELECT project_id, name, description, created_by, created_at, updated_at, updated_by FROM projects ORDER BY name ASC`);
+
+    sql:ParameterizedQuery query = `SELECT project_id, name, description, owner_id, created_by, created_at, updated_at, updated_by 
+                                   FROM projects 
+                                   ORDER BY name ASC`;
+
+    stream<types:Project, sql:Error?> projectStream = dbClient->query(query);
 
     check from types:Project project in projectStream
         do {
@@ -912,13 +1066,54 @@ public isolated function getProjects() returns types:Project[]|error {
                 ...project
             });
         };
+
+    log:printInfo("Retrieved all projects", projectCount = projects.length());
+
+    return projects;
+}
+
+// Get projects by specific project IDs (for admin project filtering)
+public isolated function getProjectsByIds(string[] projectIds) returns types:Project[]|error {
+    // Return empty array if no project IDs provided
+    if projectIds.length() == 0 {
+        return [];
+    }
+
+    types:Project[] projects = [];
+
+    // Build WHERE clause to filter by project IDs
+    sql:ParameterizedQuery query = `SELECT project_id, name, description, owner_id, created_by, created_at, updated_at, updated_by 
+                                     FROM projects 
+                                     WHERE project_id IN (`;
+
+    // Add project IDs to the IN clause
+    foreach int i in 0 ..< projectIds.length() {
+        if i > 0 {
+            query = sql:queryConcat(query, `, `);
+        }
+        query = sql:queryConcat(query, `${projectIds[i]}`);
+    }
+
+    query = sql:queryConcat(query, `) ORDER BY name ASC`);
+
+    stream<types:Project, sql:Error?> projectStream = dbClient->query(query);
+
+    check from types:Project project in projectStream
+        do {
+            projects.push({
+                ...project
+            });
+        };
+
+    log:printInfo("Retrieved projects by IDs", projectCount = projects.length());
+
     return projects;
 }
 
 // Get a specific project by ID
 public isolated function getProjectById(string projectId) returns types:Project|error {
     stream<types:Project, sql:Error?> projectStream =
-        dbClient->query(`SELECT project_id, name, description, created_by, created_at, updated_at, updated_by FROM projects WHERE project_id = ${projectId}`);
+        dbClient->query(`SELECT project_id, name, description, owner_id, created_by, created_at, updated_at, updated_by FROM projects WHERE project_id = ${projectId}`);
 
     types:Project[] projectRecords =
         check from types:Project project in projectStream
@@ -1036,6 +1231,67 @@ public isolated function getComponents(string? projectId) returns types:Componen
     return components;
 }
 
+// Get all components for multiple projects (RBAC-aware batch query)
+public isolated function getComponentsByProjectIds(string[] projectIds) returns types:Component[]|error {
+    // Return empty array if no project IDs provided
+    if projectIds.length() == 0 {
+        return [];
+    }
+
+    types:Component[] components = [];
+
+    // Build WHERE IN clause for multiple project IDs
+    sql:ParameterizedQuery selectClause = `SELECT c.component_id, c.project_id, c.name as component_name, c.description as component_description, 
+                                                  c.created_by as component_created_by, c.created_at as component_created_at, c.updated_at as component_updated_at,
+                                                  c.updated_by as component_updated_by,
+                                                  p.name as project_name, p.description as project_description, p.created_by as project_created_by, 
+                                                  p.created_at as project_created_at, p.updated_at as project_updated_at, p.updated_by as project_updated_by
+                                           FROM components c 
+                                           JOIN projects p ON c.project_id = p.project_id 
+                                           WHERE c.project_id IN (`;
+
+    // Build the IN clause with parameterized values
+    sql:ParameterizedQuery inClause = ``;
+    foreach int i in 0 ..< projectIds.length() {
+        if i > 0 {
+            inClause = sql:queryConcat(inClause, `, `);
+        }
+        inClause = sql:queryConcat(inClause, `${projectIds[i]}`);
+    }
+
+    sql:ParameterizedQuery orderByClause = `) ORDER BY c.name ASC`;
+
+    // Concatenate all parts
+    sql:ParameterizedQuery query = sql:queryConcat(selectClause, inClause, orderByClause);
+
+    stream<types:ComponentInDB, sql:Error?> componentStream =
+        dbClient->query(query);
+
+    check from types:ComponentInDB component in componentStream
+        do {
+            components.push({
+                componentId: component.component_id,
+                project: {
+                    projectId: component.project_id,
+                    name: component.project_name,
+                    description: component.project_description,
+                    createdBy: component.project_created_by,
+                    createdAt: component.project_created_at,
+                    updatedAt: component.project_updated_at,
+                    updatedBy: component.project_updated_by
+                },
+                name: component.component_name,
+                description: component.component_description,
+                createdBy: component.component_created_by,
+                createdAt: component.component_created_at,
+                updatedAt: component.component_updated_at,
+                updatedBy: component.component_updated_by
+            });
+        };
+
+    return components;
+}
+
 // Get a specific component by ID
 public isolated function getComponentById(string componentId) returns types:Component|error {
     stream<types:ComponentInDB, sql:Error?> componentStream =
@@ -1117,7 +1373,7 @@ public isolated function updateComponent(string componentId, string? name, strin
 public isolated function getUserDetailsById(string userId) returns types:User|error {
     log:printDebug(string `Fetching user details for userId: ${userId}`);
     types:User|sql:Error user = dbClient->queryRow(
-        `SELECT user_id as userId, username, display_name as displayName, created_at as createdAt, updated_at as updatedAt 
+        `SELECT user_id, username, display_name, is_super_admin, is_project_author, created_at, updated_at 
          FROM users 
          WHERE user_id = ${userId}`
     );
@@ -1152,7 +1408,7 @@ public isolated function getUserRoles(string userId) returns types:Role[]|error 
     log:printDebug(string `Fetching roles for user: ${userId}`);
     types:Role[] roles = [];
     stream<types:Role, sql:Error?> roleStream = dbClient->query(
-        `SELECT r.role_id, r.project_id, r.environment_id, r.privilege_level, r.role_name, r.created_at, r.updated_at
+        `SELECT r.role_id, r.project_id, r.environment_type, r.privilege_level, r.role_name, r.created_at, r.updated_at
          FROM roles r
          JOIN user_roles ur ON r.role_id = ur.role_id
          WHERE ur.user_id = ${userId}`
@@ -1164,4 +1420,341 @@ public isolated function getUserRoles(string userId) returns types:Role[]|error 
         };
 
     return roles;
+}
+
+// Get or create a role for a specific project-environment-type-privilege combination
+isolated function getOrCreateRole(string projectId, types:EnvironmentType environmentType, types:PrivilegeLevel privilegeLevel) returns string|error {
+    // First try to get existing role
+    stream<record {|string role_id;|}, sql:Error?> roleStream = dbClient->query(
+        `SELECT role_id FROM roles 
+         WHERE project_id = ${projectId} 
+         AND environment_type = ${environmentType} 
+         AND privilege_level = ${privilegeLevel}`
+    );
+
+    record {|string role_id;|}[] existingRoles = check from record {|string role_id;|} role in roleStream
+        select role;
+
+    if existingRoles.length() > 0 {
+        return existingRoles[0].role_id;
+    }
+
+    // Role doesn't exist, create it
+    string roleId = uuid:createRandomUuid();
+
+    // Get project name for role_name
+    types:Project project = check getProjectById(projectId);
+
+    // Replace spaces with underscores in project name
+    string projectName = re `\s+`.replaceAll(project.name, "_");
+
+    string roleName = string `${projectName}:${environmentType}:${privilegeLevel}`;
+
+    sql:ExecutionResult _ = check dbClient->execute(
+        `INSERT INTO roles (role_id, project_id, environment_type, privilege_level, role_name)
+         VALUES (${roleId}, ${projectId}, ${environmentType}, ${privilegeLevel}, ${roleName})`
+    );
+
+    log:printInfo(string `Created new role: ${roleName}`);
+    return roleId;
+}
+
+// Update user roles - replaces all existing roles with the provided set
+public isolated function updateUserRoles(string userId, types:RoleAssignment[] roleAssignments) returns error? {
+    log:printDebug(string `Updating roles for user: ${userId}`);
+
+    transaction {
+        // First, delete all existing user_roles for this user
+        sql:ExecutionResult _ = check dbClient->execute(
+            `DELETE FROM user_roles WHERE user_id = ${userId}`
+        );
+
+        // Insert new role assignments
+        foreach types:RoleAssignment assignment in roleAssignments {
+            // Get or create the role
+            string roleId = check getOrCreateRole(
+                    assignment.projectId,
+                    assignment.environmentType,
+                    assignment.privilegeLevel
+            );
+
+            // Assign role to user
+            sql:ExecutionResult _ = check dbClient->execute(
+                `INSERT INTO user_roles (user_id, role_id)
+                 VALUES (${userId}, ${roleId})`
+            );
+        }
+
+        check commit;
+        log:printInfo(string `Successfully updated roles for user ${userId} with ${roleAssignments.length()} assignments`);
+    } on fail error e {
+        log:printError(string `Transaction failed while updating roles for user ${userId}`, e);
+        return error(string `Failed to update user roles for ${userId}`, e);
+    }
+
+    return ();
+}
+
+// Update user's project author flag (super admin only)
+public isolated function updateUserProjectAuthor(string userId, boolean isProjectAuthor) returns error? {
+    log:printDebug(string `Updating project author flag for user: ${userId} to ${isProjectAuthor}`);
+
+    sql:ExecutionResult result = check dbClient->execute(
+        `UPDATE users 
+         SET is_project_author = ${isProjectAuthor}
+         WHERE user_id = ${userId}`
+    );
+
+    if result.affectedRowCount == 0 {
+        return error(string `User not found: ${userId}`);
+    }
+
+    log:printInfo(string `Successfully updated project author flag for user ${userId} to ${isProjectAuthor}`);
+    return ();
+}
+
+// Get all environment IDs where a component has runtimes
+public isolated function getEnvironmentIdsWithRuntimes(string componentId) returns string[]|error {
+    log:printDebug(string `Fetching environment IDs where component ${componentId} has runtimes`);
+
+    stream<record {|string environment_Id;|}, sql:Error?> envStream = dbClient->query(
+        `SELECT DISTINCT environment_id 
+         FROM runtimes 
+         WHERE component_id = ${componentId}`
+    );
+
+    string[] environmentIds = [];
+    check from record {|string environment_Id;|} envRecord in envStream
+        do {
+            environmentIds.push(envRecord.environment_Id);
+        };
+
+    log:printInfo(string `Component ${componentId} has runtimes in ${environmentIds.length()} environments`);
+    return environmentIds;
+}
+
+// Get all users with their roles
+public isolated function getAllUsers() returns types:UserWithRoles[]|error {
+    log:printDebug("Fetching all users with roles");
+    types:UserWithRoles[] users = [];
+
+    // Get all users (including is_super_admin flag)
+    stream<types:User, sql:Error?> userStream = dbClient->query(
+        `SELECT user_id, username, display_name, is_super_admin, is_project_author, created_at, updated_at
+         FROM users
+         ORDER BY username ASC`
+    );
+
+    check from types:User user in userStream
+        do {
+            // Get roles for each user
+            types:Role[] userRoles = [];
+            types:Role[]|error rolesResult = getUserRoles(user.userId);
+            if rolesResult is error {
+                log:printError(string `Failed to get roles for user ${user.userId}`, rolesResult);
+            } else {
+                userRoles = rolesResult;
+            }
+
+            types:UserWithRoles userWithRoles = {
+                userId: user.userId,
+                username: user.username,
+                displayName: user.displayName,
+                isSuperAdmin: user.isSuperAdmin,
+                isProjectAuthor: user.isProjectAuthor,
+                createdAt: user?.createdAt,
+                updatedAt: user?.updatedAt,
+                roles: userRoles
+            };
+            users.push(userWithRoles);
+        };
+
+    log:printInfo(string `Successfully fetched ${users.length()} users`);
+    return users;
+}
+
+// Get users who have roles in specified projects (RBAC-aware for admin users)
+public isolated function getUsersByProjectIds(string[] projectIds) returns types:UserWithRoles[]|error {
+    // Return empty array if no project IDs provided
+    if projectIds.length() == 0 {
+        return [];
+    }
+
+    log:printDebug(string `Fetching users with roles in ${projectIds.length()} projects`);
+    types:UserWithRoles[] users = [];
+
+    // Build query to get distinct user IDs who have roles in the specified projects
+    // Need to join through user_roles -> roles to get project_id
+    sql:ParameterizedQuery selectClause = `SELECT DISTINCT u.user_id, u.username, u.display_name, u.is_super_admin, u.is_project_author, u.created_at, u.updated_at
+         FROM users u
+         INNER JOIN user_roles ur ON u.user_id = ur.user_id
+         INNER JOIN roles r ON ur.role_id = r.role_id
+         WHERE r.project_id IN (`;
+
+    // Build the IN clause with parameterized values
+    sql:ParameterizedQuery inClause = ``;
+    foreach int i in 0 ..< projectIds.length() {
+        if i > 0 {
+            inClause = sql:queryConcat(inClause, `, `);
+        }
+        inClause = sql:queryConcat(inClause, `${projectIds[i]}`);
+    }
+
+    sql:ParameterizedQuery orderByClause = `) ORDER BY u.username ASC`;
+    sql:ParameterizedQuery query = sql:queryConcat(selectClause, inClause, orderByClause);
+
+    stream<types:User, sql:Error?> userStream = dbClient->query(query);
+
+    check from types:User user in userStream
+        do {
+            // Get roles for each user
+            types:Role[] userRoles = [];
+            types:Role[]|error rolesResult = getUserRoles(user.userId);
+            if rolesResult is error {
+                log:printError(string `Failed to get roles for user ${user.userId}`, rolesResult);
+            } else {
+                userRoles = rolesResult;
+            }
+
+            types:UserWithRoles userWithRoles = {
+                userId: user.userId,
+                username: user.username,
+                displayName: user.displayName,
+                isSuperAdmin: user.isSuperAdmin,
+                isProjectAuthor: user.isProjectAuthor,
+                createdAt: user?.createdAt,
+                updatedAt: user?.updatedAt,
+                roles: userRoles
+            };
+            users.push(userWithRoles);
+        };
+
+    log:printInfo(string `Successfully fetched ${users.length()} users for specified projects`);
+    return users;
+}
+
+// Create a new user with credentials (password will be hashed)
+public isolated function createUserWithCredentials(string username, string displayName, string passwordHash) returns types:User|error {
+    log:printDebug(string `Creating user with credentials: ${username}`);
+    string userId = uuid:createRandomUuid();
+
+    transaction {
+        // Insert into users table
+        sql:ExecutionResult _ = check dbClient->execute(
+            `INSERT INTO users (user_id, username, display_name) 
+             VALUES (${userId}, ${username}, ${displayName})`
+        );
+
+        // Insert into user_credentials table
+        sql:ExecutionResult _ = check dbClient->execute(
+            `INSERT INTO user_credentials (user_id, username, display_name, password_hash) 
+             VALUES (${userId}, ${username}, ${displayName}, ${passwordHash})`
+        );
+
+        check commit;
+        log:printInfo(string `Successfully created user ${username} with userId ${userId}`);
+    } on fail error e {
+        log:printError(string `Transaction failed while creating user ${username}`, e);
+        return error(string `Failed to create user ${username}`, e);
+    }
+
+    // Return the created user
+    return check getUserDetailsById(userId);
+}
+
+// Delete a user by ID
+public isolated function deleteUserById(string userId) returns error? {
+    log:printDebug(string `Deleting user: ${userId}`);
+
+    transaction {
+        // Delete from user_credentials table (explicit delete, though FK might handle it)
+        sql:ExecutionResult _ = check dbClient->execute(
+            `DELETE FROM user_credentials WHERE user_id = ${userId}`
+        );
+
+        // Delete from users table (will cascade to user_roles)
+        sql:ExecutionResult _ = check dbClient->execute(
+            `DELETE FROM users WHERE user_id = ${userId}`
+        );
+
+        check commit;
+        log:printInfo(string `Successfully deleted user ${userId}`);
+    } on fail error e {
+        log:printError(string `Transaction failed while deleting user ${userId}`, e);
+        return error(string `Failed to delete user ${userId}`, e);
+    }
+
+    return ();
+}
+
+// Update user profile (display name)
+public isolated function updateUserProfile(string userId, string displayName) returns error? {
+    log:printDebug(string `Updating profile for user: ${userId}`);
+
+    // First check if user exists
+    types:User|error existingUser = getUserDetailsById(userId);
+    if existingUser is error {
+        log:printError(string `User not found: ${userId}`, existingUser);
+        return error(string `User not found: ${userId}`);
+    }
+
+    transaction {
+        // Update users table
+        sql:ExecutionResult _ = check dbClient->execute(
+            `UPDATE users 
+             SET display_name = ${displayName}, updated_at = CURRENT_TIMESTAMP 
+             WHERE user_id = ${userId}`
+        );
+
+        // Update user_credentials table if exists (for users with local auth)
+        sql:ExecutionResult _ = check dbClient->execute(
+            `UPDATE user_credentials 
+             SET display_name = ${displayName}, updated_at = CURRENT_TIMESTAMP 
+             WHERE user_id = ${userId}`
+        );
+
+        check commit;
+        log:printInfo(string `Successfully updated profile for user ${userId}`);
+    } on fail error e {
+        log:printError(string `Transaction failed while updating profile for user ${userId}`, e);
+        return error(string `Failed to update profile for user ${userId}`, e);
+    }
+
+    return ();
+}
+
+// Update user password (for users with local authentication)
+public isolated function updateUserPassword(string userId, string newPasswordHash) returns error? {
+    log:printDebug(string `Updating password for user: ${userId}`);
+
+    sql:ExecutionResult result = check dbClient->execute(
+        `UPDATE user_credentials 
+         SET password_hash = ${newPasswordHash}, updated_at = CURRENT_TIMESTAMP 
+         WHERE user_id = ${userId}`
+    );
+
+    if result.affectedRowCount == 0 {
+        return error(string `User not found in credentials table or user does not have local authentication: ${userId}`);
+    }
+
+    log:printInfo(string `Successfully updated password for user ${userId}`);
+    return ();
+}
+
+// Get user credentials for password verification
+public isolated function getUserCredentials(string userId) returns types:UserCredentials|error {
+    log:printDebug(string `Fetching credentials for userId: ${userId}`);
+    types:UserCredentials|sql:Error credentials = dbClient->queryRow(
+        `SELECT user_id as userId, username, display_name as displayName, 
+                password_hash as passwordHash, created_at as createdAt, updated_at as updatedAt
+         FROM user_credentials 
+         WHERE user_id = ${userId}`
+    );
+
+    if credentials is sql:Error {
+        log:printError(string `Failed to get credentials for ${userId}`, credentials);
+        return credentials;
+    }
+
+    return credentials;
 }

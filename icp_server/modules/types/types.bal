@@ -306,6 +306,10 @@ public type Project record {
     string name;
     string description?;
     @sql:Column {
+        name: "owner_id"
+    }
+    string ownerId?;
+    @sql:Column {
         name: "created_by"
     }
     string createdBy?;
@@ -551,10 +555,30 @@ public type ExtractedUserInfo record {|
 
 // Database user record type
 public type User record {
+    @sql:Column {
+        name: "user_id"
+    }
     string userId;
     string username;
+    @sql:Column {
+        name: "display_name"
+    }
     string displayName;
+    @sql:Column {
+        name: "is_super_admin"
+    }
+    boolean isSuperAdmin = false;
+    @sql:Column {
+        name: "is_project_author"
+    }
+    boolean isProjectAuthor = false;
+    @sql:Column {
+        name: "created_at"
+    }
     string? createdAt?;
+    @sql:Column {
+        name: "updated_at"
+    }
     string? updatedAt?;
 };
 
@@ -574,6 +598,32 @@ public enum PrivilegeLevel {
     DEVELOPER = "developer"
 };
 
+// Environment type enum
+public enum EnvironmentType {
+    PROD = "prod",
+    NON_PROD = "non-prod"
+};
+
+// === User Context for RBAC ===
+
+// Simplified role info extracted from JWT for authorization checks
+// Contains only the minimal information needed for authorization decisions
+public type RoleInfo record {
+    string projectId;
+    EnvironmentType environmentType;
+    PrivilegeLevel privilegeLevel;
+};
+
+// User context extracted from JWT token for RBAC
+public type UserContext record {
+    string userId;
+    string username;
+    string displayName;
+    RoleInfo[] roles;
+    boolean isSuperAdmin = false; // Global admin with access to all resources
+    boolean isProjectAuthor = false; // Can create/update/delete projects
+};
+
 // Database role record type
 public type Role record {
     @sql:Column {
@@ -585,9 +635,9 @@ public type Role record {
     }
     string projectId;
     @sql:Column {
-        name: "environment_id"
+        name: "environment_type"
     }
-    string environmentId;
+    EnvironmentType environmentType;
     @sql:Column {
         name: "privilege_level"
     }
@@ -595,7 +645,7 @@ public type Role record {
     @sql:Column {
         name: "role_name"
     }
-    string roleName; // Format: <project_name>:<env_name>:<privilege_level>
+    string roleName; // Format: <project_name>:<env_type>:<privilege_level>
     @sql:Column {
         name: "created_at"
     }
@@ -604,4 +654,47 @@ public type Role record {
         name: "updated_at"
     }
     string? updatedAt?;
+};
+
+// User with roles for API responses
+public type UserWithRoles record {
+    *User; // Type inclusion - includes all fields from User
+    Role[] roles;
+};
+
+// Input type for creating a new user
+public type CreateUserInput record {
+    string username;
+    string displayName;
+    string password;
+};
+
+// Input type for updating user roles
+public type UpdateUserRolesInput record {
+    string userId;
+    RoleAssignment[] roles;
+};
+
+// Role assignment for a specific project-environment type combination
+public type RoleAssignment record {
+    string projectId;
+    EnvironmentType environmentType;
+    PrivilegeLevel privilegeLevel;
+};
+
+// Request body for updating user roles and permissions
+public type UpdateUserRolesRequest record {
+    RoleAssignment[] roles;
+    boolean? isProjectAuthor?; // Optional: only super admins can update this
+};
+
+// Input type for updating user profile (display name)
+public type UpdateProfileRequest record {
+    string displayName;
+};
+
+// Input type for changing password
+public type ChangePasswordRequest record {
+    string currentPassword;
+    string newPassword;
 };

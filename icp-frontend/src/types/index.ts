@@ -159,7 +159,7 @@ export interface LoginRequest {
 export interface Role {
     roleId: string;
     projectId: string;
-    environmentId: string;
+    environmentType: 'prod' | 'non-prod';
     privilegeLevel: string;
     roleName: string;
     createdAt: string;
@@ -167,18 +167,45 @@ export interface Role {
 }
 
 export interface LoginResponse {
-    isNewUser: boolean;
+    isNewUser?: boolean;
     token: string;
     expiresIn: number;
     username: string;
+    displayName: string;
     roles: Role[];
+    isSuperAdmin: boolean; // Super admin flag from backend
+    isProjectAuthor: boolean; // Project author flag from backend
 }
 
 export interface AuthUser {
     username: string;
+    displayName?: string; // Display name from JWT
     token: string;
     roles: Role[];
     expiresAt: number;
+    isSuperAdmin?: boolean; // Super admin flag from JWT
+    isProjectAuthor?: boolean; // Project author flag from JWT
+}
+
+// User management types
+export interface User {
+    userId: string;
+    username: string;
+    displayName: string;
+    isSuperAdmin?: boolean;
+    isProjectAuthor?: boolean;
+    createdAt?: string;
+    updatedAt?: string;
+}
+
+export interface UserWithRoles extends User {
+    roles: Role[];
+}
+
+export interface CreateUserRequest {
+    username: string;
+    displayName: string;
+    password: string;
 }
 
 // OIDC types
@@ -188,4 +215,23 @@ export interface OIDCAuthorizationUrlResponse {
 
 export interface OIDCCallbackRequest {
   code: string;
+}
+
+// Profile update types
+export interface UpdateProfileRequest {
+  displayName: string;
+}
+
+export interface UpdateProfileResponse {
+  message: string;
+  user: User;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
 }

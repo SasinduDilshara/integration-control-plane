@@ -15,6 +15,8 @@ import ComponentsPage from './components/ComponentsPage';
 import ProjectsPage from './components/ProjectsPage';
 import LogsPage from './components/LogsPage';
 import MetricsPage from './components/MetricsPage';
+import UsersPage from './components/UsersPage';
+import ProfilePage from './components/ProfilePage';
 import LoginPage from './components/LoginPage';
 import OIDCCallbackPage from './components/OIDCCallbackPage';
 import Navigation, { DRAWER_WIDTH, DRAWER_WIDTH_COLLAPSED } from './components/Navigation';
@@ -115,9 +117,20 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
                     </Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         {user && (
-                            <Typography variant="body2" sx={{ mr: 1 }}>
-                                {user.username}
-                            </Typography>
+                            <Button
+                                color="inherit"
+                                onClick={() => navigate('/profile')}
+                                sx={{
+                                    textTransform: 'none',
+                                    '&:hover': {
+                                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                    },
+                                }}
+                            >
+                                <Typography variant="body2">
+                                    {user.displayName || user.username}
+                                </Typography>
+                            </Button>
                         )}
                         <IconButton
                             color="inherit"
@@ -166,6 +179,8 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
                     <Route path="/observability/logs" element={<LogsPage />} />
                     <Route path="/components" element={<ComponentsPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
+                    <Route path="/users" element={<UsersPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </Box>

@@ -5,6 +5,8 @@ import {
     GET_ENVIRONMENTS,
     GET_COMPONENTS,
     GET_PROJECTS,
+    GET_ADMIN_PROJECTS,
+    GET_ADMIN_ENVIRONMENTS,
     DELETE_RUNTIME,
     CREATE_ENVIRONMENT,
     UPDATE_ENVIRONMENT,
@@ -27,13 +29,15 @@ import {
     UpdateComponentRequest,
     CreateProjectRequest,
     UpdateProjectRequest,
+    UserWithRoles,
+    CreateUserRequest,
 } from '../types';
 
 // Generic async hook for GraphQL operations
 export function useGraphQLQuery<T>(
-    query: string,
-    variables?: Record<string, any>,
-    dependencies: any[] = []
+  query: string,
+  variables?: Record<string, any>,
+  dependencies: any[] = []
 ) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
@@ -68,8 +72,8 @@ export function useRuntimes(filters?: {
     componentId?: string;
 }) {
     const { data, loading, error, retry } = useGraphQLQuery<{ runtimes: Runtime[] }>(
-        GET_RUNTIMES,
-        filters
+      GET_RUNTIMES,
+      filters
     );
 
     return {
@@ -103,7 +107,7 @@ export function useDeleteRuntime() {
 // Environment hooks
 export function useEnvironments() {
     const { data, loading, error, retry } = useGraphQLQuery<{ environments: Environment[] }>(
-        GET_ENVIRONMENTS
+      GET_ENVIRONMENTS
     );
 
     return {
@@ -123,14 +127,14 @@ export function useCreateEnvironment() {
         setError(null);
         try {
             const result = await icpApiClient.mutate<{ createEnvironment: Environment }>(
-                CREATE_ENVIRONMENT,
-                {
-                    environment: {
-                        name: environment.name,
-                        description: environment.description,
-                        isProduction: environment.isProduction,
-                    },
-                }
+              CREATE_ENVIRONMENT,
+              {
+                  environment: {
+                      name: environment.name,
+                      description: environment.description,
+                      isProduction: environment.isProduction,
+                  },
+              }
             );
             return result.createEnvironment;
         } catch (err) {
@@ -153,13 +157,13 @@ export function useUpdateEnvironment() {
         setError(null);
         try {
             const result = await icpApiClient.mutate<{ updateEnvironment: Environment }>(
-                UPDATE_ENVIRONMENT,
-                {
-                    environmentId: environment.environmentId,
-                    name: environment.name,
-                    description: environment.description,
-                    isProduction: environment.isProduction,
-                }
+              UPDATE_ENVIRONMENT,
+              {
+                  environmentId: environment.environmentId,
+                  name: environment.name,
+                  description: environment.description,
+                  isProduction: environment.isProduction,
+              }
             );
             return result.updateEnvironment;
         } catch (err) {
@@ -196,8 +200,8 @@ export function useDeleteEnvironment() {
 // Component hooks
 export function useComponents(projectId?: string) {
     const { data, loading, error, retry } = useGraphQLQuery<{ components: Component[] }>(
-        GET_COMPONENTS,
-        projectId ? { projectId } : undefined
+      GET_COMPONENTS,
+      projectId ? { projectId } : undefined
     );
 
     return {
@@ -217,14 +221,14 @@ export function useCreateComponent() {
         setError(null);
         try {
             const result = await icpApiClient.mutate<{ createComponent: Component }>(
-                CREATE_COMPONENT,
-                {
-                    component: {
-                        projectId: component.projectId,
-                        name: component.name,
-                        description: component.description,
-                    },
-                }
+              CREATE_COMPONENT,
+              {
+                  component: {
+                      projectId: component.projectId,
+                      name: component.name,
+                      description: component.description,
+                  },
+              }
             );
             return result.createComponent;
         } catch (err) {
@@ -247,12 +251,12 @@ export function useUpdateComponent() {
         setError(null);
         try {
             const result = await icpApiClient.mutate<{ updateComponent: Component }>(
-                UPDATE_COMPONENT,
-                {
-                    componentId: component.componentId,
-                    name: component.name,
-                    description: component.description,
-                }
+              UPDATE_COMPONENT,
+              {
+                  componentId: component.componentId,
+                  name: component.name,
+                  description: component.description,
+              }
             );
             return result.updateComponent;
         } catch (err) {
@@ -289,11 +293,38 @@ export function useDeleteComponent() {
 // Project hooks
 export function useProjects() {
     const { data, loading, error, retry } = useGraphQLQuery<{ projects: Project[] }>(
-        GET_PROJECTS
+      GET_PROJECTS
     );
 
     return {
         value: data?.projects || [],
+        loading,
+        error,
+        retry,
+    };
+}
+
+// Admin project hooks (for permission management)
+export function useAdminProjects() {
+    const { data, loading, error, retry } = useGraphQLQuery<{ adminProjects: Project[] }>(
+      GET_ADMIN_PROJECTS
+    );
+
+    return {
+        value: data?.adminProjects || [],
+        loading,
+        error,
+        retry,
+    };
+}
+
+export function useAdminEnvironments() {
+    const { data, loading, error, retry } = useGraphQLQuery<{ adminEnvironments: Environment[] }>(
+      GET_ADMIN_ENVIRONMENTS
+    );
+
+    return {
+        value: data?.adminEnvironments || [],
         loading,
         error,
         retry,
@@ -309,13 +340,13 @@ export function useCreateProject() {
         setError(null);
         try {
             const result = await icpApiClient.mutate<{ createProject: Project }>(
-                CREATE_PROJECT,
-                {
-                    project: {
-                        name: project.name,
-                        description: project.description,
-                    },
-                }
+              CREATE_PROJECT,
+              {
+                  project: {
+                      name: project.name,
+                      description: project.description,
+                  },
+              }
             );
             return result.createProject;
         } catch (err) {
@@ -338,12 +369,12 @@ export function useUpdateProject() {
         setError(null);
         try {
             const result = await icpApiClient.mutate<{ updateProject: Project }>(
-                UPDATE_PROJECT,
-                {
-                    projectId: project.projectId,
-                    name: project.name,
-                    description: project.description,
-                }
+              UPDATE_PROJECT,
+              {
+                  projectId: project.projectId,
+                  name: project.name,
+                  description: project.description,
+              }
             );
             return result.updateProject;
         } catch (err) {
@@ -381,7 +412,7 @@ export function useDeleteProject() {
 import { observabilityApiClient } from './ObservabilityApiClient';
 import { LogEntry, LogRequest, LogStats } from '../types';
 
-// Add this hook to the file
+// Logs hook
 export function useLogs(request: LogRequest) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
@@ -424,4 +455,108 @@ export function useLogs(request: LogRequest) {
     }, [fetchLogs]);
 
     return { data, loading, error, stats, refetch: fetchLogs };
+}
+
+// User management hooks
+export function useUsers() {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+    const [data, setData] = useState<UserWithRoles[]>([]);
+
+    const fetchUsers = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const result = await icpApiClient.getUsers();
+            setData(result);
+        } catch (err) {
+            setError(err as Error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
+
+    return {
+        value: data,
+        loading,
+        error,
+        retry: fetchUsers,
+    };
+}
+
+export function useCreateUser() {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    const createUser = useCallback(async (user: CreateUserRequest) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const result = await icpApiClient.createUser(
+              user.username,
+              user.displayName,
+              user.password
+            );
+            return result;
+        } catch (err) {
+            setError(err as Error);
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    return { createUser, loading, error };
+}
+
+export function useDeleteUser() {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    const deleteUser = useCallback(async (userId: string) => {
+        setLoading(true);
+        setError(null);
+        try {
+            await icpApiClient.deleteUser(userId);
+        } catch (err) {
+            setError(err as Error);
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    return { deleteUser, loading, error };
+}
+
+export function useUpdateUserRoles() {
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    const updateUserRoles = useCallback(async (
+      userId: string,
+      roles: Array<{
+          projectId: string;
+          environmentType: 'prod' | 'non-prod';
+          privilegeLevel: string;
+      }>
+    ) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const result = await icpApiClient.updateUserRoles(userId, roles);
+            return result;
+        } catch (err) {
+            setError(err as Error);
+            throw err;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    return { updateUserRoles, loading, error };
 }

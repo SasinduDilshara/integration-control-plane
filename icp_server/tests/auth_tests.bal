@@ -78,8 +78,9 @@ function testSuccessfulLogin() returns error? {
     test:assertEquals(payload["username"], TEST_USERNAME, "Username should match the logged-in user");
     test:assertTrue(payload["roles"] is json[], "Roles should be present in JWT custom claims");
 
-    json[] roles = check payload["roles"].ensureType();
-    test:assertTrue(roles.length() > 0, "User should have at least one role");
+    // Verify super admin status
+    test:assertTrue(payload["isSuperAdmin"] is boolean, "isSuperAdmin should be present in JWT custom claims");
+    test:assertTrue(payload["isSuperAdmin"] == true, "User should be super admin");
 }
 
 // Test: Login failure with invalid username
@@ -188,7 +189,7 @@ function testJWTTokenExpiration() returns error? {
     }
 }
 
-// Test: JWT token contains user roles
+// Test: JWT token contains user roles (minimal RoleInfo format)
 @test:Config {
     groups: ["auth", "login", "jwt", "roles"]
 }
@@ -214,13 +215,11 @@ function testJWTContainsUserRoles() returns error? {
 
     json[] roles = check payload["roles"].ensureType();
 
-    // Verify each role has the expected structure
+    // Verify each role has the minimal RoleInfo structure (no roleId or roleName in token)
     foreach json role in roles {
-        test:assertTrue(role.roleId is string, "Role should have roleId");
         test:assertTrue(role.projectId is string, "Role should have projectId");
-        test:assertTrue(role.environmentId is string, "Role should have environmentId");
+        test:assertTrue(role.environmentType is string, "Role should have environmentType");
         test:assertTrue(role.privilegeLevel is string, "Role should have privilegeLevel");
-        test:assertTrue(role.roleName is string, "Role should have roleName");
     }
 }
 

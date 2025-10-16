@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -14,6 +14,7 @@ import {
     Tooltip,
     FormControl,
     InputLabel,
+    Chip,
     Select,
     MenuItem,
     Paper,
@@ -36,6 +37,7 @@ import {
     useCreateComponent,
     useUpdateComponent,
     useDeleteComponent,
+    useAdminProjects,
 } from '../services/hooks';
 import {
     Component,
@@ -46,10 +48,12 @@ import {
 
 const ComponentsPage: React.FC = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
 
     // Data hooks
     const { loading, error, value: components, retry } = useComponents();
     const { loading: projectsLoading, value: projects } = useProjects();
+    const { value: adminProjects } = useAdminProjects();
 
     // Action hooks
     const { createComponent, loading: creating } = useCreateComponent();
@@ -97,6 +101,12 @@ const ComponentsPage: React.FC = () => {
     const selectedProject = useMemo(() => {
         return projects.find(project => project.projectId === selectedProjectId);
     }, [projects, selectedProjectId]);
+
+    // Check if user has admin access to selected project (in any environment)
+    const hasAdminAccess = useMemo(() => {
+        if (!selectedProjectId) return false;
+        return adminProjects.some(project => project.projectId === selectedProjectId);
+    }, [adminProjects, selectedProjectId]);
 
     // Effect to handle URL parameters for automatic project selection
     useEffect(() => {
@@ -181,49 +191,62 @@ const ComponentsPage: React.FC = () => {
                 size: 160,
                 enableSorting: false,
                 enableColumnFilter: false,
-                Cell: ({ row }) => (
-                    <Box sx={{ display: 'flex', gap: '0.5rem' }}>
-                        <Tooltip title="Copy Runtime Config">
-                            <IconButton
-                                color="primary"
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleConfigClick(row.original);
-                                }}
-                            >
-                                <ContentCopyIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Edit Component">
-                            <IconButton
-                                color="primary"
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditClick(row.original);
-                                }}
-                            >
-                                <EditIcon />
-                            </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete Component">
-                            <IconButton
-                                color="error"
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDeleteClick(row.original);
-                                }}
-                            >
-                                <DeleteIcon />
-                            </IconButton>
-                        </Tooltip>
-                    </Box>
-                ),
+                Cell: ({ row }) => {
+                    // Check if user has admin access to this component's project
+                    const componentProjectId = row.original.project.projectId;
+                    const hasAccessToComponent = adminProjects.some(
+                        project => project.projectId === componentProjectId
+                    );
+
+                    return (
+                        <Box sx={{ display: 'flex', gap: '0.5rem' }}>
+                            <Tooltip title="Copy Runtime Config">
+                                <IconButton
+                                    color="primary"
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleConfigClick(row.original);
+                                    }}
+                                >
+                                    <ContentCopyIcon />
+                                </IconButton>
+                            </Tooltip>
+                            {/* Only show edit/delete buttons if user has admin access to this component's project */}
+                            {hasAccessToComponent && (
+                                <>
+                                    <Tooltip title="Edit Component">
+                                        <IconButton
+                                            color="primary"
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleEditClick(row.original);
+                                            }}
+                                        >
+                                            <EditIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                    <Tooltip title="Delete Component">
+                                        <IconButton
+                                            color="error"
+                                            size="small"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteClick(row.original);
+                                            }}
+                                        >
+                                            <DeleteIcon />
+                                        </IconButton>
+                                    </Tooltip>
+                                </>
+                            )}
+                        </Box>
+                    );
+                },
             },
         ],
-        []
+        [adminProjects]
     );
 
     const handleCreateComponent = async () => {
@@ -339,6 +362,11 @@ heartbeatInterval=30`;
         }
     };
 
+    const handleRowClick = (component: Component) => {
+        // Navigate to runtimes page with project and component filters
+        navigate(`/runtimes?projectId=${component.project.projectId}&componentId=${component.componentId}`);
+    };
+
     // Material React Table configuration
     const tableConfig = {
         columns,
@@ -364,22 +392,34 @@ heartbeatInterval=30`;
             maxSize: 1000,
             enableResizing: true,
         },
+        muiTableBodyRowProps: ({ row }: { row: MRT_Row<Component> }) => ({
+            onClick: () => handleRowClick(row.original),
+            sx: {
+                cursor: 'pointer',
+                '&:hover': {
+                    backgroundColor: 'action.hover'
+                }
+            },
+        }),
         renderTopToolbarCustomActions: () => (
             <Box sx={{ display: 'flex', gap: '1rem', p: '0.5rem', alignItems: 'center' }}>
-                <Button
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={() => {
-                        setNewComponent({
-                            name: '',
-                            description: '',
-                            projectId: selectedProjectId || ''
-                        });
-                        setCreateDialogOpen(true);
-                    }}
-                >
-                    Create
-                </Button>
+                {/* Only show Create button if user has admin access to selected project */}
+                {hasAdminAccess && (
+                    <Button
+                        variant="contained"
+                        startIcon={<AddIcon />}
+                        onClick={() => {
+                            setNewComponent({
+                                name: '',
+                                description: '',
+                                projectId: selectedProjectId || ''
+                            });
+                            setCreateDialogOpen(true);
+                        }}
+                    >
+                        Create
+                    </Button>
+                )}
                 <Button
                     variant="outlined"
                     startIcon={<RefreshIcon />}
@@ -417,9 +457,18 @@ heartbeatInterval=30`;
 
     return (
         <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                Components ({filteredComponents.length})
-            </Typography>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                <Typography variant="h4" gutterBottom>
+                    Components
+                </Typography>
+                <Chip
+                    label={`${filteredComponents.length}`}
+                    color="primary"
+                    variant="outlined"
+                />
+            </Box>
+
 
             {/* Project Selection */}
             <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
@@ -662,12 +711,13 @@ heartbeatInterval=30`;
                         sx={{
                             p: 2,
                             mt: 2,
-                            backgroundColor: 'grey.50',
+                            backgroundColor: 'background.default',
                             fontFamily: 'monospace',
                             fontSize: '0.875rem',
                             whiteSpace: 'pre-wrap',
                             border: '1px solid',
-                            borderColor: 'grey.300',
+                            borderColor: 'divider',
+                            color: 'text.primary',
                         }}
                     >
                         {selectedComponent ? generateRuntimeConfig(selectedComponent) : ''}

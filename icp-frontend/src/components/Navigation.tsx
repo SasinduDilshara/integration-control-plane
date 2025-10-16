@@ -14,19 +14,20 @@ import {
   Collapse,
 } from '@mui/material';
 import {
-  Dashboard as RuntimesIcon,
-  CloudQueue as EnvironmentsIcon,
-  Extension as ComponentsIcon,
-  Folder as ProjectsIcon,
-  Home as HomeIcon,
-  Visibility as OverviewIcon,
-  Insights as InsightsIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  ExpandLess,
-  ExpandMore,
-  ShowChart as MetricsIcon,
-  Description as LogsIcon,
+    Dashboard as RuntimesIcon,
+    CloudQueue as EnvironmentsIcon,
+    Extension as ComponentsIcon,
+    Folder as ProjectsIcon,
+    Home as HomeIcon,
+    Visibility as OverviewIcon,
+    Insights as InsightsIcon,
+    ChevronLeft as ChevronLeftIcon,
+    ChevronRight as ChevronRightIcon,
+    ExpandLess,
+    ExpandMore,
+    ShowChart as MetricsIcon,
+    Description as LogsIcon,
+    People as PeopleIcon,
 } from '@mui/icons-material';
 
 interface NavigationProps {
@@ -45,58 +46,68 @@ interface NavigationItem {
 }
 
 const Navigation: React.FC<NavigationProps> = ({ open, onToggle }) => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+    const navigate = useNavigate();
+    const location = useLocation();
+    const [expandedItems, setExpandedItems] = useState<string[]>([]);
+    const [projectsExpanded, setProjectsExpanded] = useState(true);
 
-  const navigationItems: NavigationItem[] = [
-    {
-      label: 'Home',
-      path: '/',
-      icon: <HomeIcon />
-    },
-    {
-      label: 'Environments',
-      path: '/environments',
-      icon: <EnvironmentsIcon />
-    },
-    {
-      label: 'Overview',
-      path: '/environment-overview',
-      icon: <OverviewIcon />
-    },
-    {
-      label: 'Observability',
-      icon: <InsightsIcon />,
-      children: [
+    const navigationItems: NavigationItem[] = [
         {
-          label: 'Metrics',
-          path: '/observability/metrics',
-          icon: <MetricsIcon />
+          label: 'Home',
+          path: '/',
+          icon: <HomeIcon />
         },
         {
-          label: 'Logs',
-          path: '/observability/logs',
-          icon: <LogsIcon />
+          label: 'Environments',
+          path: '/environments',
+          icon: <EnvironmentsIcon />
         },
-      ]
-    },
-    {
-      label: 'Projects',
-      path: '/projects',
-      icon: <ProjectsIcon />
-    },
-    {
-      label: 'Components',
-      path: '/components',
-      icon: <ComponentsIcon />
-    },
-    {
-      label: 'Runtimes',
-      path: '/runtimes',
-      icon: <RuntimesIcon />
-    },
-  ];
+        {
+          label: 'Overview',
+          path: '/environment-overview',
+          icon: <OverviewIcon />
+        },
+        {
+          label: 'Observability',
+          icon: <InsightsIcon />,
+          children: [
+            {
+              label: 'Metrics',
+              path: '/observability/metrics',
+              icon: <MetricsIcon />
+            },
+            {
+              label: 'Logs',
+              path: '/observability/logs',
+              icon: <LogsIcon />
+            },]
+        },
+        {
+          label: 'Projects',
+          path: '/projects',
+          icon: <ProjectsIcon />
+        },
+        {
+          label: 'Components',
+          path: '/components',
+          icon: <ComponentsIcon />
+        },
+        {
+          label: 'Runtimes',
+          path: '/runtimes',
+          icon: <RuntimesIcon />
+        },
+        {
+            label: 'Overview',
+            path: '/environment-overview',
+            icon: <OverviewIcon />
+        },
+        {
+            label: 'Users',
+            path: '/users',
+            icon: <PeopleIcon />
+        },
+    ];
 
   // Auto-expand parent if child route is active
   useEffect(() => {

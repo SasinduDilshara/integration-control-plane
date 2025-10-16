@@ -37,8 +37,17 @@ class ICPApiClient {
                 'Content-Type': 'application/json',
             };
 
-            if (this.token) {
-                headers['Authorization'] = `Bearer ${this.token}`;
+            // Dynamically retrieve token from localStorage (where AuthContext stores it)
+            const storedUser = localStorage.getItem('icp_auth_user');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.token) {
+                        headers['Authorization'] = `Bearer ${parsedUser.token}`;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth header', e);
+                }
             }
 
             const response = await fetch(this.endpoint, {
@@ -108,6 +117,40 @@ class ICPApiClient {
         }
     }
 
+    async refreshToken(): Promise<any> {
+        try {
+            // Get current token from localStorage
+            const storedUser = localStorage.getItem('icp_auth_user');
+            if (!storedUser) {
+                throw new Error('No authentication token found');
+            }
+
+            const parsedUser = JSON.parse(storedUser);
+            if (!parsedUser.token) {
+                throw new Error('No authentication token found');
+            }
+
+            const response = await fetch(`${this.authEndpoint}/refresh-token`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${parsedUser.token}`,
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Token refresh failed with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Token Refresh Error:', error);
+            throw error;
+        }
+    }
+
     // OIDC methods
     async getOIDCAuthorizationUrl(): Promise<{ authorizationUrl: string }> {
         try {
@@ -147,6 +190,212 @@ class ICPApiClient {
             return data;
         } catch (error) {
             console.error('OIDC Login Error:', error);
+            throw error;
+        }
+    }
+
+    // User management methods
+    async getUsers(): Promise<any> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            // Get token from localStorage (same as AuthContext)
+            const storedUser = localStorage.getItem('icp_auth_user');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.token) {
+                        headers['Authorization'] = `Bearer ${parsedUser.token}`;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth header', e);
+                }
+            }
+
+            const response = await fetch(`${this.authEndpoint}/users`, {
+                method: 'GET',
+                headers,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to fetch users with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Get Users Error:', error);
+            throw error;
+        }
+    }
+
+    async createUser(username: string, displayName: string, password: string): Promise<any> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (this.token) {
+                headers['Authorization'] = `Bearer ${this.token}`;
+            }
+
+            const response = await fetch(`${this.authEndpoint}/users`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    username,
+                    displayName,
+                    password,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to create user with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Create User Error:', error);
+            throw error;
+        }
+    }
+
+    async deleteUser(userId: string): Promise<void> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (this.token) {
+                headers['Authorization'] = `Bearer ${this.token}`;
+            }
+
+            const response = await fetch(`${this.authEndpoint}/users/${userId}`, {
+                method: 'DELETE',
+                headers,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to delete user with status: ${response.status}`);
+            }
+        } catch (error) {
+            console.error('Delete User Error:', error);
+            throw error;
+        }
+    }
+
+    async updateUserRoles(userId: string, roles: Array<{
+        projectId: string;
+        environmentType: 'prod' | 'non-prod';
+        privilegeLevel: string;
+    }>): Promise<any> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            if (this.token) {
+                headers['Authorization'] = `Bearer ${this.token}`;
+            }
+
+            const response = await fetch(`${this.authEndpoint}/users/${userId}/roles`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(roles),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to update user roles with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Update User Roles Error:', error);
+            throw error;
+        }
+    }
+
+    // Profile management methods
+    async updateProfile(displayName: string): Promise<any> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            // Get token from localStorage (same as AuthContext)
+            const storedUser = localStorage.getItem('icp_auth_user');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.token) {
+                        headers['Authorization'] = `Bearer ${parsedUser.token}`;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth header', e);
+                }
+            }
+
+            const response = await fetch(`${this.authEndpoint}/profile`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ displayName }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to update profile with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Update Profile Error:', error);
+            throw error;
+        }
+    }
+
+    async changePassword(currentPassword: string, newPassword: string): Promise<any> {
+        try {
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            // Get token from localStorage (same as AuthContext)
+            const storedUser = localStorage.getItem('icp_auth_user');
+            if (storedUser) {
+                try {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (parsedUser.token) {
+                        headers['Authorization'] = `Bearer ${parsedUser.token}`;
+                    }
+                } catch (e) {
+                    console.error('Failed to parse stored user for auth header', e);
+                }
+            }
+
+            const response = await fetch(`${this.authEndpoint}/password`, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify({ currentPassword, newPassword }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to change password with status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Change Password Error:', error);
             throw error;
         }
     }

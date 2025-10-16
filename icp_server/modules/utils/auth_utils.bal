@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.storage;
 import icp_server.types;
 
 import ballerina/http;
@@ -340,5 +341,376 @@ isolated function stripEmailDomain(string email) returns string {
         return parts[0];
     }
     return email;
+}
+
+// === RBAC User Context Extraction ===
+
+// Extract UserContext from Authorization header (JWT token)
+// This function decodes the JWT and extracts user identity and roles for RBAC
+public isolated function extractUserContext(string authorizationHeader) returns types:UserContext|error {
+    // Remove "Bearer " prefix if present
+    string token = authorizationHeader;
+    if authorizationHeader.toLowerAscii().startsWith("bearer ") {
+        token = authorizationHeader.substring(7);
+    }
+    
+    // Decode JWT token (validation already done by GraphQL auth interceptor)
+    [jwt:Header, jwt:Payload]|jwt:Error decodeResult = jwt:decode(token);
+    if decodeResult is jwt:Error {
+        log:printError("Failed to decode JWT token for user context", decodeResult);
+        return error("Invalid JWT token");
+    }
+    
+    jwt:Payload payload = decodeResult[1];
+    
+    // Extract user ID (sub claim)
+    string|error userId = payload.sub.ensureType();
+    if userId is error {
+        log:printError("JWT token missing 'sub' claim");
+        return error("Invalid token: missing user ID");
+    }
+    
+    // Extract username from custom claims
+    anydata usernameData = payload["username"];
+    json|error usernameJson = usernameData.ensureType();
+    string username = usernameJson is string ? usernameJson : userId;
+    
+    // Extract display name from custom claims
+    anydata displayNameData = payload["displayName"];
+    json|error displayNameJson = displayNameData.ensureType();
+    string displayName = displayNameJson is string ? displayNameJson : username;
+    
+    // Extract super admin flag from custom claims
+    anydata superAdminData = payload["isSuperAdmin"];
+    json|error superAdminJson = superAdminData.ensureType();
+    boolean isSuperAdmin = superAdminJson is boolean ? superAdminJson : false;
+    
+    // Extract project author flag from custom claims
+    anydata projectAuthorData = payload["isProjectAuthor"];
+    json|error projectAuthorJson = projectAuthorData.ensureType();
+    boolean isProjectAuthor = projectAuthorJson is boolean ? projectAuthorJson : false;
+    
+    // Extract roles from custom claims
+    anydata rolesData = payload["roles"];
+    json|error rolesJson = rolesData.ensureType();
+    if rolesJson is error || rolesJson is () {
+        log:printWarn("JWT token missing 'roles' claim", userId = userId, isSuperAdmin = isSuperAdmin, isProjectAuthor = isProjectAuthor);
+        // Return user context with empty roles (but global flags are set if applicable)
+        return {
+            userId: userId,
+            username: username,
+            displayName: displayName,
+            roles: [],
+            isSuperAdmin: isSuperAdmin,
+            isProjectAuthor: isProjectAuthor
+        };
+    }
+    
+    // Parse roles array from JWT
+    types:RoleInfo[]|error roles = parseRolesFromJWT(rolesJson);
+    if roles is error {
+        log:printError("Failed to parse roles from JWT", roles, userId = userId);
+        return error("Invalid token: malformed roles claim");
+    }
+    
+    log:printInfo("Successfully extracted user context", 
+                  userId = userId, 
+                  username = username, 
+                  roleCount = roles.length(), 
+                  isSuperAdmin = isSuperAdmin,
+                  isProjectAuthor = isProjectAuthor);
+    
+    return {
+        userId: userId,
+        username: username,
+        displayName: displayName,
+        roles: roles,
+        isSuperAdmin: isSuperAdmin,
+        isProjectAuthor: isProjectAuthor
+    };
+}
+
+// Parse roles from JWT payload (roles claim is an array of role objects)
+isolated function parseRolesFromJWT(json rolesJson) returns types:RoleInfo[]|error {
+    json[] rolesArray = check rolesJson.ensureType();
+    types:RoleInfo[] roles = [];
+    
+    foreach json roleJson in rolesArray {
+        // Extract role fields (only what's needed for authorization)
+        map<json> roleMap = check roleJson.ensureType();
+        
+        string projectId = check roleMap["projectId"].ensureType();
+        string environmentTypeStr = check roleMap["environmentType"].ensureType();
+        string privilegeLevelStr = check roleMap["privilegeLevel"].ensureType();
+        
+        // Parse environment type and privilege level enums
+        types:EnvironmentType environmentType = check environmentTypeStr.ensureType();
+        types:PrivilegeLevel privilegeLevel = check privilegeLevelStr.ensureType();
+        
+        roles.push({
+            projectId: projectId,
+            environmentType: environmentType,
+            privilegeLevel: privilegeLevel
+        });
+    }
+    
+    return roles;
+}
+
+// Helper function to extract Authorization header from GraphQL context
+public isolated function extractAuthHeader(anydata context) returns string|error {
+    // The context parameter in GraphQL resolvers has the Authorization header
+    // stored using context.set("Authorization", ...) in contextInit
+    return check context.ensureType();
+}
+
+// === RBAC Authorization Helper Methods ===
+
+// Check if user has access to a specific project
+public isolated function hasAccessToProject(types:UserContext userContext, string projectId) returns boolean {
+    // Super admins have access to all projects
+    if userContext.isSuperAdmin {
+        return true;
+    }
+    return userContext.roles.some(role => role.projectId == projectId);
+}
+
+// Check if user has access to a specific environment in a project
+public isolated function hasAccessToEnvironment(types:UserContext userContext, string projectId, string environmentId) returns boolean {
+    // Super admins have access to all environments
+    if userContext.isSuperAdmin {
+        return true;
+    }
+    
+    // Get environment details to determine type
+    types:Environment|error environment = storage:getEnvironmentById(environmentId);
+    if environment is error {
+        return false;
+    }
+    
+    final types:EnvironmentType environmentType = environment.isProduction ? types:PROD : types:NON_PROD;
+    
+    return userContext.roles.some(isolated function (types:RoleInfo role) returns boolean {
+        return role.projectId == projectId && role.environmentType == environmentType;
+    });
+}
+
+// Check if user has admin access to a specific project and environment
+public isolated function hasAdminAccess(types:UserContext userContext, string projectId, string environmentId) returns boolean {
+    // Super admins have admin access to all environments
+    if userContext.isSuperAdmin {
+        return true;
+    }
+    
+    // Get environment details to determine type
+    types:Environment|error environment = storage:getEnvironmentById(environmentId);
+    if environment is error {
+        return false;
+    }
+    
+    final types:EnvironmentType environmentType = environment.isProduction ? types:PROD : types:NON_PROD;
+    
+    return userContext.roles.some(isolated function (types:RoleInfo role) returns boolean {
+        return role.projectId == projectId && 
+        role.environmentType == environmentType && 
+        role.privilegeLevel == types:ADMIN;
+    });
+}
+
+// Check if user is an admin in any environment of a specific project
+public isolated function isAdminInProject(types:UserContext userContext, string projectId) returns boolean {
+    // Super admins are admin in all projects
+    if userContext.isSuperAdmin {
+        return true;
+    }
+    return userContext.roles.some(role => 
+        role.projectId == projectId && 
+        role.privilegeLevel == types:ADMIN
+    );
+}
+
+// Get list of all project IDs the user has access to
+public isolated function getAccessibleProjectIds(types:UserContext userContext) returns string[] {
+    // Super admins have access to all projects
+    if userContext.isSuperAdmin {
+        types:Project[]|error allProjects = storage:getProjects();
+        if allProjects is error {
+            log:printError("Super admin failed to fetch all projects", allProjects);
+            return [];
+        }
+        return from types:Project project in allProjects select project.projectId;
+    }
+    
+    string[] projectIds = [];
+    foreach types:RoleInfo role in userContext.roles {
+        // Add project ID if not already in list (avoid duplicates)
+        boolean exists = false;
+        foreach string id in projectIds {
+            if id == role.projectId {
+                exists = true;
+                break;
+            }
+        }
+        if !exists {
+            projectIds.push(role.projectId);
+        }
+    }
+    return projectIds;
+}
+
+// Get list of all environment IDs the user has access to within a specific project
+public isolated function getAccessibleEnvironmentIds(types:UserContext userContext, string projectId) returns string[] {
+    // Super admins have access to all environments
+    if userContext.isSuperAdmin {
+        types:Environment[]|error allEnvironments = storage:getEnvironments();
+        if allEnvironments is error {
+            log:printError("Super admin failed to fetch all environments", allEnvironments);
+            return [];
+        }
+        return from types:Environment env in allEnvironments select env.environmentId;
+    }
+    
+    // Get all environments and filter by user's access to project and environment types
+    types:Environment[]|error allEnvironments = storage:getEnvironments();
+    if allEnvironments is error {
+        log:printError("Failed to fetch environments for access check", allEnvironments);
+        return [];
+    }
+    
+    string[] environmentIds = [];
+    foreach types:Environment env in allEnvironments {
+        final types:EnvironmentType envType = env.isProduction ? types:PROD : types:NON_PROD;
+        boolean hasAccess = userContext.roles.some(isolated function (types:RoleInfo role) returns boolean { 
+            return role.projectId == projectId && role.environmentType == envType;
+        });
+        
+        if hasAccess {
+            environmentIds.push(env.environmentId);
+        }
+    }
+    
+    return environmentIds;
+}
+
+// Get list of all project IDs where the user has admin access
+public isolated function getAdminProjectIds(types:UserContext userContext) returns string[] {
+    // Super admins have admin access to all projects - fetch from database
+    if userContext.isSuperAdmin {
+        types:Project[]|error allProjects = storage:getProjects();
+        if allProjects is error {
+            log:printError("Super admin failed to fetch all projects", allProjects);
+            return [];
+        }
+        return from types:Project project in allProjects select project.projectId;
+    }
+    
+    string[] adminProjectIds = [];
+    foreach types:RoleInfo role in userContext.roles {
+        if role.privilegeLevel == types:ADMIN {
+            // Add project ID if not already in list (avoid duplicates)
+            boolean exists = false;
+            foreach string id in adminProjectIds {
+                if id == role.projectId {
+                    exists = true;
+                    break;
+                }
+            }
+            if !exists {
+                adminProjectIds.push(role.projectId);
+            }
+        }
+    }
+    return adminProjectIds;
+}
+
+// Get list of environment IDs where the user has admin access based on environment types
+public isolated function getAdminEnvironmentIdsByType(types:UserContext userContext) returns string[] {
+    // Super admins have admin access to all environments - fetch from database
+    if userContext.isSuperAdmin {
+        types:Environment[]|error allEnvironments = storage:getEnvironments();
+        if allEnvironments is error {
+            log:printError("Super admin failed to fetch all environments", allEnvironments);
+            return [];
+        }
+        return from types:Environment env in allEnvironments select env.environmentId;
+    }
+    
+    string[] adminEnvironmentIds = [];
+    types:Environment[]|error allEnvironments = storage:getEnvironments();
+    if allEnvironments is error {
+        log:printError("Failed to fetch environments for admin check", allEnvironments);
+        return [];
+    }
+    
+    // For each environment, check if user has admin access to its type
+    foreach types:Environment env in allEnvironments {
+        final types:EnvironmentType envType = env.isProduction ? types:PROD : types:NON_PROD;
+        boolean hasAdminAccess = userContext.roles.some(isolated function (types:RoleInfo role) returns boolean {
+            return role.environmentType == envType && role.privilegeLevel == types:ADMIN;
+        });
+        
+        if hasAdminAccess {
+            adminEnvironmentIds.push(env.environmentId);
+        }
+    }
+    
+    return adminEnvironmentIds;
+}
+
+// Generate JWT token with user details and roles
+public isolated function generateJWTToken(
+    types:User userDetails,
+    types:Role[] userRoles,
+    string jwtIssuer,
+    int tokenExpiryTime,
+    string jwtAudience,
+    jwt:IssuerSignatureConfig signatureConfig
+) returns string|error {
+    log:printDebug("Generating JWT token", username = userDetails.username, roleCount = userRoles.length());
+    
+    // Convert roles to RoleInfo format for JWT
+    types:RoleInfo[] roleInfos = from types:Role role in userRoles
+        select {
+            projectId: role.projectId,
+            environmentType: role.environmentType,
+            privilegeLevel: role.privilegeLevel
+        };
+    
+    // Generate JWT token with updated roles
+    // Note: IssuerConfig.username sets the 'sub' claim, which should be the userId (UUID)
+    jwt:IssuerConfig issuerConfig = {
+        username: userDetails.userId,
+        issuer: jwtIssuer,
+        expTime: <decimal>tokenExpiryTime,
+        audience: jwtAudience,
+        signatureConfig: signatureConfig
+    };
+    
+    issuerConfig.customClaims["roles"] = roleInfos.toJson();
+    issuerConfig.customClaims["username"] = userDetails.username;
+    issuerConfig.customClaims["displayName"] = userDetails.displayName;
+    issuerConfig.customClaims["isSuperAdmin"] = userDetails.isSuperAdmin;
+    issuerConfig.customClaims["isProjectAuthor"] = userDetails.isProjectAuthor;
+    
+    string|jwt:Error jwtToken = jwt:issue(issuerConfig);
+    if jwtToken is jwt:Error {
+        log:printError("Error generating JWT token", jwtToken, username = userDetails.username);
+        return error("Failed to generate JWT token", jwtToken);
+    }
+    
+    log:printInfo("JWT token generated successfully", username = userDetails.username, roleCount = userRoles.length());
+    return jwtToken;
+}
+
+// Check if user is admin in a project (in ANY environment)
+public isolated function isAdminInAnyEnvironment(types:UserContext userContext, string projectId) returns boolean {
+    if userContext.isSuperAdmin {
+        return true;
+    }
+    
+    return userContext.roles.some(role => 
+        role.projectId == projectId && 
+        role.privilegeLevel == types:ADMIN
+    );
 }
 

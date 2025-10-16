@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
     Box,
     Button,
@@ -13,7 +14,6 @@ import {
     Snackbar,
     Tooltip,
     Grid,
-    Paper,
     Accordion,
     AccordionSummary,
     AccordionDetails,
@@ -24,6 +24,10 @@ import {
     Card,
     CardContent,
     CardHeader,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
 } from '@mui/material';
 import { Alert } from '@mui/lab';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -39,14 +43,27 @@ import {
 import {
     useRuntimes,
     useDeleteRuntime,
+    useEnvironments,
+    useProjects,
+    useComponents,
 } from '../services/hooks';
 import {
     Runtime,
 } from '../types';
 
 const RuntimesPage: React.FC = () => {
+    const [searchParams] = useSearchParams();
+
+    // Filter state
+    const [selectedEnvironmentId, setSelectedEnvironmentId] = useState<string>('');
+    const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+    const [selectedComponentId, setSelectedComponentId] = useState<string>('');
+
     // Data hooks
     const { loading, error, value: runtimes, retry } = useRuntimes();
+    const { loading: environmentsLoading, value: environments } = useEnvironments();
+    const { loading: projectsLoading, value: projects } = useProjects();
+    const { loading: componentsLoading, value: allComponents } = useComponents();
 
     // Action hooks
     const { deleteRuntime, loading: deleting } = useDeleteRuntime();
@@ -62,6 +79,93 @@ const RuntimesPage: React.FC = () => {
         message: '',
         severity: 'success' as 'success' | 'error'
     });
+
+    // Set filters from URL parameters
+    useEffect(() => {
+        const environmentId = searchParams.get('environmentId');
+        const projectId = searchParams.get('projectId');
+        const componentId = searchParams.get('componentId');
+
+        if (environmentId) {
+            setSelectedEnvironmentId(environmentId);
+        }
+        if (projectId) {
+            setSelectedProjectId(projectId);
+        }
+        if (componentId) {
+            setSelectedComponentId(componentId);
+        }
+    }, [searchParams]);
+
+    // Validate and reapply component filter once data is loaded
+    useEffect(() => {
+        const componentId = searchParams.get('componentId');
+        if (componentId && !componentsLoading && allComponents.length > 0) {
+            // Ensure the component from URL exists and is set
+            const componentExists = allComponents.some(comp => comp.componentId === componentId);
+            if (componentExists && selectedComponentId !== componentId) {
+                setSelectedComponentId(componentId);
+            }
+        }
+    }, [componentsLoading, allComponents, searchParams, selectedComponentId]);
+
+    // Filter available components based on selected project
+    const availableComponents = useMemo(() => {
+        if (!selectedProjectId) return allComponents;
+        return allComponents.filter(comp => comp.project.projectId === selectedProjectId);
+    }, [allComponents, selectedProjectId]);
+
+    // Filter runtimes based on selected filters
+    const filteredRuntimes = useMemo(() => {
+        let filtered = [...runtimes];
+
+        if (selectedEnvironmentId) {
+            filtered = filtered.filter(runtime =>
+                runtime.environment?.environmentId === selectedEnvironmentId
+            );
+        }
+
+        if (selectedProjectId) {
+            filtered = filtered.filter(runtime =>
+                runtime.component?.project?.projectId === selectedProjectId
+            );
+        }
+
+        if (selectedComponentId) {
+            filtered = filtered.filter(runtime =>
+                runtime.component?.componentId === selectedComponentId
+            );
+        }
+
+        return filtered;
+    }, [runtimes, selectedEnvironmentId, selectedProjectId, selectedComponentId]);
+
+    // Reset component filter when project changes (but not on initial URL load)
+    const isInitialMount = React.useRef(true);
+    const prevProjectId = React.useRef(selectedProjectId);
+
+    React.useEffect(() => {
+        // Skip on initial mount to allow URL parameters to work
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            prevProjectId.current = selectedProjectId;
+            return;
+        }
+
+        // Only reset if project actually changed (user interaction)
+        if (prevProjectId.current !== selectedProjectId) {
+            if (selectedProjectId && selectedComponentId) {
+                // Check if current component belongs to the selected project
+                const componentExists = availableComponents.some(
+                    comp => comp.componentId === selectedComponentId
+                );
+                if (!componentExists) {
+                    setSelectedComponentId('');
+                }
+            }
+            prevProjectId.current = selectedProjectId;
+        }
+    }, [selectedProjectId, availableComponents, selectedComponentId]);
 
     // Material React Table columns configuration
     const columns = useMemo<MRT_ColumnDef<Runtime>[]>(
@@ -273,7 +377,7 @@ const RuntimesPage: React.FC = () => {
     // Material React Table configuration
     const tableConfig = {
         columns,
-        data: runtimes,
+        data: filteredRuntimes,
         enableColumnFilters: true,
         enableGlobalFilter: true,
         enableSorting: true,
@@ -297,7 +401,97 @@ const RuntimesPage: React.FC = () => {
             sx: { cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } },
         }),
         renderTopToolbarCustomActions: () => (
-            <Box sx={{ display: 'flex', gap: '1rem', p: '0.5rem', alignItems: 'center' }}>
+            <Box sx={{ display: 'flex', gap: '1rem', p: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+
+
+                <FormControl sx={{ minWidth: 200 }} size="small">
+                    <InputLabel shrink>Project</InputLabel>
+                    <Select
+                        value={selectedProjectId}
+                        onChange={(e) => setSelectedProjectId(e.target.value)}
+                        label="Project"
+                        disabled={projectsLoading}
+                        displayEmpty
+                        notched
+                    >
+                        <MenuItem value="">
+                            <em>All Projects</em>
+                        </MenuItem>
+                        {projects.map((project) => (
+                            <MenuItem key={project.projectId} value={project.projectId}>
+                                📁 {project.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+
+                <FormControl sx={{ minWidth: 200 }} size="small">
+                    <InputLabel shrink>Component</InputLabel>
+                    <Select
+                        value={selectedComponentId}
+                        onChange={(e) => setSelectedComponentId(e.target.value)}
+                        label="Component"
+                        disabled={componentsLoading}
+                        displayEmpty
+                        notched
+                    >
+                        <MenuItem value="">
+                            <em>All Components</em>
+                        </MenuItem>
+                        {/* Show current selection even when data is loading or filtered */}
+                        {componentsLoading && selectedComponentId && !availableComponents.some(comp => comp.componentId === selectedComponentId) && (
+                            <MenuItem value={selectedComponentId} disabled>
+                                Loading...
+                            </MenuItem>
+                        )}
+                        {!componentsLoading && availableComponents.length === 0 && selectedProjectId && (
+                            <MenuItem disabled>
+                                <em>No components in this project</em>
+                            </MenuItem>
+                        )}
+                        {availableComponents.map((component) => (
+                            <MenuItem key={component.componentId} value={component.componentId}>
+                                🧩 {component.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+
+                <FormControl sx={{ minWidth: 200 }} size="small">
+                    <InputLabel shrink>Environment</InputLabel>
+                    <Select
+                        value={selectedEnvironmentId}
+                        onChange={(e) => setSelectedEnvironmentId(e.target.value)}
+                        label="Environment"
+                        disabled={environmentsLoading}
+                        displayEmpty
+                        notched
+                    >
+                        <MenuItem value="">
+                            <em>All Environments</em>
+                        </MenuItem>
+                        {environments.map((env) => (
+                            <MenuItem key={env.environmentId} value={env.environmentId}>
+                                {env.name}
+                            </MenuItem>
+                        ))}
+                    </Select>
+                </FormControl>
+
+                {(selectedEnvironmentId || selectedProjectId || selectedComponentId) && (
+                    <Button
+                        variant="text"
+                        size="small"
+                        onClick={() => {
+                            setSelectedEnvironmentId('');
+                            setSelectedProjectId('');
+                            setSelectedComponentId('');
+                        }}
+                    >
+                        Clear Filters
+                    </Button>
+                )}
+
                 <Button
                     variant="outlined"
                     startIcon={<RefreshIcon />}
@@ -335,9 +529,23 @@ const RuntimesPage: React.FC = () => {
 
     return (
         <Box sx={{ p: 3 }}>
-            <Typography variant="h4" gutterBottom>
-                Runtimes ({runtimes.length})
-            </Typography>
+            <Box sx={{ mb: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                    <Typography variant="h4">
+                        Runtimes
+                    </Typography>
+                    <Chip
+                        label={`${filteredRuntimes.length}${filteredRuntimes.length !== runtimes.length ? ` of ${runtimes.length}` : ''}`}
+                        color="primary"
+                        variant="outlined"
+                    />
+                </Box>
+                {(selectedEnvironmentId || selectedProjectId || selectedComponentId) && (
+                    <Typography variant="body2" color="text.secondary">
+                        Filters active - Use the dropdowns above the table to adjust or clear filters
+                    </Typography>
+                )}
+            </Box>
 
             <MaterialReactTable {...tableConfig} />
 

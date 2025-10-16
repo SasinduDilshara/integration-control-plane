@@ -12,7 +12,6 @@ import {
     Alert,
     CircularProgress,
     CardActions,
-    Chip,
 } from '@mui/material';
 import {
     Folder as ProjectsIcon,
@@ -21,49 +20,27 @@ import {
     AccessTime as TimeIcon,
 } from '@mui/icons-material';
 import { useProjects } from '../services/hooks';
+import { useAuth } from '../contexts/AuthContext';
 
-const ICPLogo: React.FC<{ size?: number }> = ({ size = 100 }) => (
-    <img
-        src="/favicon.svg"
-        alt="WSO2 ICP Logo"
-        width={size}
-        height={size}
-        style={{ display: 'block' }}
-    />
-);
 
 const HomePage: React.FC = () => {
     const navigate = useNavigate();
+    const { user } = useAuth(); // Get current user to check project author role
     const { loading, error, value: projects, retry } = useProjects();
 
 
     return (
         <Container maxWidth="xl" sx={{ py: 4 }}>
 
-            <Box sx={{ mt: 1 }}>
+            <Box sx={{ mt: 0 }}>
                 <Paper elevation={1} sx={{ p: 4, backgroundColor: 'primary.light', color: 'primary.contrastText' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                        <Typography variant="h5" textAlign="left">
-                            All Projects
-                        </Typography>
-                        <Button
-                            variant="contained"
-                            startIcon={<AddIcon />}
-                            onClick={() => navigate('/projects')}
-                            sx={{
-                                backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                                '&:hover': {
-                                    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-                                }
-                            }}
-                        >
-                            Create New Project
-                        </Button>
-                    </Box>
-                    <Typography variant="body1" textAlign="left">
+                    <Typography variant="h5" textAlign="left">
+                        All Projects
+                    </Typography>
+                    {/* <Typography variant="body1" textAlign="left">
                         Manage your integration projects, components, and runtimes from this central dashboard.
                         Click on any project to view its components or use the sidebar navigation to explore other sections.
-                    </Typography>
+                    </Typography> */}
                 </Paper>
             </Box>
 
@@ -88,29 +65,110 @@ const HomePage: React.FC = () => {
             )}
 
             {!loading && !error && projects.length === 0 && (
-                <Box textAlign="center" py={4}>
-                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                <Box py={4}>
+                    <Typography variant="h6" color="text.secondary" gutterBottom textAlign="center">
                         No projects found
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" mb={3}>
-                        Create your first project to get started
+                    <Typography variant="body2" color="text.secondary" mb={4} textAlign="center">
+                        {(user?.isSuperAdmin || user?.isProjectAuthor)
+                            ? 'Create your first project to get started'
+                            : 'No projects available. Contact your administrator to get started.'}
                     </Typography>
-                    <Button
-                        variant="contained"
-                        startIcon={<AddIcon />}
-                        onClick={() => navigate('/projects')}
-                    >
-                        Create Project
-                    </Button>
+                    {/* Only show Create card for super admins and project authors */}
+                    {(user?.isSuperAdmin || user?.isProjectAuthor) && (
+                        <Grid container spacing={3} justifyContent="center">
+                            <Grid item xs={12} sm={6} md={4} lg={3}>
+                                <Card
+                                    elevation={3}
+                                    onClick={() => navigate('/projects?create=true')}
+                                    sx={{
+                                        height: '100%',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        transition: 'transform 0.2s ease-in-out',
+                                        cursor: 'pointer',
+                                        border: '2px dashed',
+                                        borderColor: 'primary.main',
+                                        backgroundColor: 'action.hover',
+                                        '&:hover': {
+                                            transform: 'translateY(-4px)',
+                                            boxShadow: 6,
+                                            backgroundColor: 'action.selected',
+                                        }
+                                    }}
+                                >
+                                    <CardContent sx={{
+                                        flexGrow: 1,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        minHeight: 200
+                                    }}>
+                                        <AddIcon sx={{ fontSize: '4rem', color: 'primary.main', mb: 2 }} />
+                                        <Typography variant="h6" component="h3" color="primary" textAlign="center">
+                                            Create New Project
+                                        </Typography>
+                                        <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 1 }}>
+                                            Click to add a new project
+                                        </Typography>
+                                    </CardContent>
+                                </Card>
+                            </Grid>
+                        </Grid>
+                    )}
                 </Box>
             )}
 
             {!loading && !error && projects.length > 0 && (
                 <Grid container spacing={3} sx={{ mt: 4 }}>
+                    {/* Create New Project Card - Only for super admins and project authors */}
+                    {(user?.isSuperAdmin || user?.isProjectAuthor) && (
+                        <Grid item xs={12} sm={6} md={4} lg={3}>
+                            <Card
+                                elevation={3}
+                                onClick={() => navigate('/projects?create=true')}
+                                sx={{
+                                    height: '100%',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    transition: 'transform 0.2s ease-in-out',
+                                    cursor: 'pointer',
+                                    border: '2px dashed',
+                                    borderColor: 'primary.main',
+                                    backgroundColor: 'action.hover',
+                                    '&:hover': {
+                                        transform: 'translateY(-4px)',
+                                        boxShadow: 6,
+                                        backgroundColor: 'action.selected',
+                                    }
+                                }}
+                            >
+                                <CardContent sx={{
+                                    flexGrow: 1,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    minHeight: 200
+                                }}>
+                                    <AddIcon sx={{ fontSize: '4rem', color: 'primary.main', mb: 2 }} />
+                                    <Typography variant="h6" component="h3" color="primary" textAlign="center">
+                                        Create New Project
+                                    </Typography>
+                                    <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ mt: 1 }}>
+                                        Click to add a new project
+                                    </Typography>
+                                </CardContent>
+                            </Card>
+                        </Grid>
+                    )}
+
                     {projects.map((project) => (
                         <Grid item xs={12} sm={6} md={4} lg={3} key={project.projectId}>
                             <Card
                                 elevation={3}
+                                onClick={() => navigate(`/components?projectId=${project.projectId}`)}
                                 sx={{
                                     height: '100%',
                                     display: 'flex',
@@ -189,17 +247,7 @@ const HomePage: React.FC = () => {
                 </Grid>
             )}
 
-            <Box sx={{ mt: 6 }}>
-                <Paper elevation={1} sx={{ p: 4 }}>
-                    <Typography variant="h6" textAlign="left" gutterBottom>
-                        Get Started
-                    </Typography>
-                    <Typography variant="body1" textAlign="left">
-                        Navigate through the sidebar to explore different sections of the Integration Control Plane.
-                        Start by setting up your environments and projects, then add components and monitor your runtimes.
-                    </Typography>
-                </Paper>
-            </Box>
+
 
         </Container >
     );
