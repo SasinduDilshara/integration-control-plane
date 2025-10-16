@@ -13,6 +13,8 @@ import EnvironmentsPage from './components/EnvironmentsPage';
 import EnvironmentOverview from './components/EnvironmentOverview';
 import ComponentsPage from './components/ComponentsPage';
 import ProjectsPage from './components/ProjectsPage';
+import LogsPage from './components/LogsPage';
+import MetricsPage from './components/MetricsPage';
 import UsersPage from './components/UsersPage';
 import ProfilePage from './components/ProfilePage';
 import LoginPage from './components/LoginPage';
@@ -173,6 +175,8 @@ function AppContent({ darkMode, onThemeToggle }: { darkMode: boolean; onThemeTog
                     <Route path="/runtimes" element={<RuntimesPage />} />
                     <Route path="/environments" element={<EnvironmentsPage />} />
                     <Route path="/environment-overview" element={<EnvironmentOverview />} />
+                    <Route path="/observability/metrics" element={<MetricsPage />} />
+                    <Route path="/observability/logs" element={<LogsPage />} />
                     <Route path="/components" element={<ComponentsPage />} />
                     <Route path="/projects" element={<ProjectsPage />} />
                     <Route path="/users" element={<UsersPage />} />

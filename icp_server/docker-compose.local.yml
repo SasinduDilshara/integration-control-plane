@@ -44,3 +44,4 @@ services:
             mysql-db:
                 condition: service_healthy
         command: bal run
+        

@@ -423,6 +423,58 @@ public type ComponentInDB record {
     string project_updated_by?;
 };
 
+// === Observability Related Types ===
+public type LogRequest record {
+    decimal duration;
+    int logLimit;
+    string? runtime = ();
+    string? component = ();
+    string? environment = ();
+    string? project = ();
+    string? logLevel = ();
+};
+
+public type LogEntry record {
+    string timestamp;
+    string level;
+    string module;
+    string runtime;
+    string component;
+    string project;
+    string environment;
+    string message;
+    map<anydata> additionalTags;
+};
+
+public type OpenSearchHit record {
+    string _index;
+    string _id;
+    json? _score;
+    map<string> _source;
+    json[]? sort;
+};
+
+public type OpenSearchHits record {
+    record {
+        int value;
+        string relation;
+    } total;
+    json? max_score;
+    OpenSearchHit[] hits;
+};
+
+public type OpenSearchResponse record {
+    int took;
+    boolean timed_out;
+    record {
+        int total;
+        int successful;
+        int skipped;
+        int failed;
+    } _shards;
+    OpenSearchHits hits;
+};
+
 // === Auth Related Types ===
 
 public type Credentials record {

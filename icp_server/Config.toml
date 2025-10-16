@@ -109,4 +109,14 @@ dbType = "mysql"  # Options: mysql, postgresql
 name = "wso2/icp_server"
 level = "DEBUG"
 
+# =============================================================================
+# OBSERVABILITY CONFIGURATION
+# =============================================================================
+# observabilityEnabled = true
 
+# =============================================================================
+# OPENSEARCH CONFIGURATION
+# =============================================================================
+# opensearchUrl = "https://localhost:9200"
+# opensearchUsername = "admin"
+# opensearchPassword = "Ballerina@123"
