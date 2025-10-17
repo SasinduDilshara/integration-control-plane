@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -27,6 +27,11 @@ import {
   Button,
   ToggleButtonGroup,
   ToggleButton,
+  Pagination,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormLabel,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -39,14 +44,24 @@ import {
   KeyboardArrowUp as ExpandLessIcon,
   Refresh as RefreshIcon,
   BugReport as DebugIcon,
+  AccessTime as TimeIcon,
+  DateRange as DateRangeIcon,
 } from '@mui/icons-material';
 import { useLogs } from '../services/hooks';
 import { useProjects, useComponents, useEnvironments, useRuntimes } from '../services/hooks';
 import { LogEntry } from '../types';
 
 const LogsPage: React.FC = () => {
-  // Duration in seconds
+  // Time range mode: 'preset' or 'custom'
+  const [timeRangeMode, setTimeRangeMode] = useState<'preset' | 'custom'>('preset');
+
+  // Preset duration in seconds
   const [duration, setDuration] = useState(3600); // Default 1 hour
+
+  // Custom time range
+  const [customStartTime, setCustomStartTime] = useState('');
+  const [customEndTime, setCustomEndTime] = useState('');
+
   const [logLimit] = useState(100);
   const [searchTerm, setSearchTerm] = useState('');
   const [levelFilter, setLevelFilter] = useState('ALL');
@@ -56,21 +71,54 @@ const LogsPage: React.FC = () => {
   const [runtimeFilter, setRuntimeFilter] = useState('ALL');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const logsPerPage = 50;
+
   // Fetch filter options
   const { value: projects } = useProjects();
   const { value: components } = useComponents();
   const { value: environments } = useEnvironments();
   const { value: runtimes } = useRuntimes();
 
+  // Initialize custom time range with default values (last 1 hour)
+  useEffect(() => {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 3600000);
+
+    setCustomEndTime(formatDateTimeLocal(now));
+    setCustomStartTime(formatDateTimeLocal(oneHourAgo));
+  }, []);
+
+  // Format date for datetime-local input
+  const formatDateTimeLocal = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  // Calculate duration from custom time range
+  const getCustomDuration = (): number => {
+    if (!customStartTime || !customEndTime) return 3600;
+    const start = new Date(customStartTime).getTime();
+    const end = new Date(customEndTime).getTime();
+    return Math.floor((end - start) / 1000); // Convert to seconds
+  };
+
   // Prepare request
   const logRequest = {
-    duration,
+    duration: timeRangeMode === 'preset' ? duration : getCustomDuration(),
     logLimit,
     ...(projectFilter !== 'ALL' && { project: projectFilter }),
     ...(componentFilter !== 'ALL' && { component: componentFilter }),
     ...(environmentFilter !== 'ALL' && { environment: environmentFilter }),
     ...(runtimeFilter !== 'ALL' && { runtime: runtimeFilter }),
     ...(levelFilter !== 'ALL' && { logLevel: levelFilter }),
+    ...(timeRangeMode === 'custom' && customStartTime && { startTime: new Date(customStartTime).toISOString() }),
+    ...(timeRangeMode === 'custom' && customEndTime && { endTime: new Date(customEndTime).toISOString() }),
   };
 
   // Fetch logs
@@ -145,6 +193,25 @@ const LogsPage: React.FC = () => {
     return matchesSearch;
   });
 
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
+  const startIndex = (currentPage - 1) * logsPerPage;
+  const endIndex = startIndex + logsPerPage;
+  const paginatedLogs = filteredLogs.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    setExpandedRows(new Set());
+  }, [searchTerm, levelFilter, projectFilter, componentFilter, environmentFilter, runtimeFilter, duration, timeRangeMode, customStartTime, customEndTime]);
+
+  const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
+    setCurrentPage(value);
+    setExpandedRows(new Set());
+    // Scroll to top of the page
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const formatTimestamp = (timestamp: string) => {
     try {
       const date = new Date(timestamp);
@@ -162,6 +229,12 @@ const LogsPage: React.FC = () => {
     }
   };
 
+  // Validate custom time range
+  const isCustomTimeRangeValid = (): boolean => {
+    if (!customStartTime || !customEndTime) return false;
+    return new Date(customStartTime) < new Date(customEndTime);
+  };
+
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
@@ -170,39 +243,122 @@ const LogsPage: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Duration Filter */}
+      {/* Time Range Filter */}
       <Paper elevation={2} sx={{ p: 3, mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Time Range:
-          </Typography>
-          <ToggleButtonGroup
-            value={duration}
-            exclusive
-            onChange={(e, newDuration) => {
-              if (newDuration !== null) {
-                setDuration(newDuration);
+        <Box sx={{ mb: 2 }}>
+          <RadioGroup
+            row
+            value={timeRangeMode}
+            onChange={(e) => setTimeRangeMode(e.target.value as 'preset' | 'custom')}
+          >
+            <FormControlLabel
+              value="preset"
+              control={<Radio />}
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <TimeIcon sx={{ fontSize: 20 }} />
+                  <Typography>Quick Select</Typography>
+                </Box>
               }
-            }}
-            size="small"
-            color="primary"
-          >
-            {durationOptions.map((option) => (
-              <ToggleButton key={option.value} value={option.value}>
-                {option.label}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-          <Button
-            variant="outlined"
-            startIcon={<RefreshIcon />}
-            onClick={refetch}
-            disabled={loading}
-            sx={{ ml: 'auto' }}
-          >
-            Refresh
-          </Button>
+            />
+            <FormControlLabel
+              value="custom"
+              control={<Radio />}
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  <DateRangeIcon sx={{ fontSize: 20 }} />
+                  <Typography>Custom Range</Typography>
+                </Box>
+              }
+            />
+          </RadioGroup>
         </Box>
+
+        {timeRangeMode === 'preset' ? (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              Time Range:
+            </Typography>
+            <ToggleButtonGroup
+              value={duration}
+              exclusive
+              onChange={(e, newDuration) => {
+                if (newDuration !== null) {
+                  setDuration(newDuration);
+                }
+              }}
+              size="small"
+              color="primary"
+            >
+              {durationOptions.map((option) => (
+                <ToggleButton key={option.value} value={option.value}>
+                  {option.label}
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={refetch}
+              disabled={loading}
+              sx={{ ml: 'auto' }}
+            >
+              Refresh
+            </Button>
+          </Box>
+        ) : (
+          <Box>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} sm={5}>
+                <TextField
+                  fullWidth
+                  label="Start Time"
+                  type="datetime-local"
+                  value={customStartTime}
+                  onChange={(e) => setCustomStartTime(e.target.value)}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                  inputProps={{
+                    max: customEndTime || undefined,
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={5}>
+                <TextField
+                  fullWidth
+                  label="End Time"
+                  type="datetime-local"
+                  value={customEndTime}
+                  onChange={(e) => setCustomEndTime(e.target.value)}
+                  InputLabelProps={{
+                    shrink: true,
+                  }}
+                  inputProps={{
+                    min: customStartTime || undefined,
+                  }}
+                />
+              </Grid>
+              <Grid item xs={12} sm={2}>
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  startIcon={<RefreshIcon />}
+                  onClick={refetch}
+                  disabled={loading || !isCustomTimeRangeValid()}
+                  sx={{ height: '56px' }}
+                >
+                  Refresh
+                </Button>
+              </Grid>
+            </Grid>
+            {!isCustomTimeRangeValid() && customStartTime && customEndTime && (
+              <Alert severity="warning" sx={{ mt: 2 }}>
+                End time must be after start time
+              </Alert>
+            )}
+          </Box>
+        )}
       </Paper>
 
       {/* Log Statistics */}
@@ -358,120 +514,152 @@ const LogsPage: React.FC = () => {
 
       {/* Logs Table */}
       {!loading && !error && (
-        <TableContainer component={Paper} elevation={3}>
-          <Table>
-            <TableHead>
-              <TableRow sx={{ backgroundColor: 'primary.light' }}>
-                <TableCell sx={{ width: 50 }} />
-                <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
-                  Timestamp
-                </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
-                  Level
-                </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
-                  Module
-                </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
-                  Project
-                </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
-                  Component
-                </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
-                  Environment
-                </TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
-                  Message
-                </TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {filteredLogs.map((log, index) => (
-                <React.Fragment key={index}>
-                  <TableRow
-                    sx={{
-                      '&:hover': {
-                        backgroundColor: 'action.hover',
-                      },
-                      borderLeft: `3px solid ${getLevelColor(log.level)}`,
-                    }}
-                  >
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        onClick={() => toggleRowExpansion(index)}
-                        disabled={Object.keys(log.additionalTags).length === 0}
-                      >
-                        {expandedRows.has(index) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-                      </IconButton>
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                      {formatTimestamp(log.timestamp)}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        icon={getLevelIcon(log.level)}
-                        label={log.level.toUpperCase()}
-                        size="small"
-                        sx={{
-                          backgroundColor: `${getLevelColor(log.level)}20`,
-                          color: getLevelColor(log.level),
-                          fontWeight: 600,
-                          '& .MuiChip-icon': {
+        <>
+          {/* Pagination Info */}
+          {filteredLogs.length > 0 && (
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="body2" color="text.secondary">
+                Showing {startIndex + 1} - {Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} logs
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Page {currentPage} of {totalPages}
+              </Typography>
+            </Box>
+          )}
+
+          <TableContainer component={Paper} elevation={3}>
+            <Table>
+              <TableHead>
+                <TableRow sx={{ backgroundColor: 'primary.light' }}>
+                  <TableCell sx={{ width: 50 }} />
+                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
+                    Timestamp
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
+                    Level
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
+                    Project
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
+                    Component
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
+                    Environment
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
+                    Runtime
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: 'primary.contrastText' }}>
+                    Message
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {paginatedLogs.map((log, index) => (
+                  <React.Fragment key={startIndex + index}>
+                    <TableRow
+                      sx={{
+                        '&:hover': {
+                          backgroundColor: 'action.hover',
+                        },
+                        borderLeft: `3px solid ${getLevelColor(log.level)}`,
+                      }}
+                    >
+                      <TableCell>
+                        <IconButton
+                          size="small"
+                          onClick={() => toggleRowExpansion(startIndex + index)}
+                        >
+                          {expandedRows.has(startIndex + index) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                        </IconButton>
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                        {formatTimestamp(log.timestamp)}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={getLevelIcon(log.level)}
+                          label={log.level.toUpperCase()}
+                          size="small"
+                          sx={{
+                            backgroundColor: `${getLevelColor(log.level)}20`,
                             color: getLevelColor(log.level),
-                          },
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ fontWeight: 500 }}>{log.module}</TableCell>
-                    <TableCell>{log.project}</TableCell>
-                    <TableCell>{log.component}</TableCell>
-                    <TableCell>
-                      <Chip label={log.environment} size="small" color="primary" variant="outlined" />
-                    </TableCell>
-                    <TableCell sx={{ maxWidth: 400 }}>{log.message}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
-                      <Collapse in={expandedRows.has(index)} timeout="auto" unmountOnExit>
-                        <Box sx={{ margin: 2 }}>
-                          <Typography variant="h6" gutterBottom component="div">
-                            Additional Information
-                          </Typography>
-                          <Grid container spacing={2}>
-                            <Grid item xs={12} md={6}>
-                              <Paper variant="outlined" sx={{ p: 2 }}>
-                                <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                  Runtime ID
-                                </Typography>
-                                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                                  {log.runtime}
-                                </Typography>
-                              </Paper>
-                            </Grid>
-                            {Object.entries(log.additionalTags).map(([key, value]) => (
-                              <Grid item xs={12} md={6} key={key}>
+                            fontWeight: 600,
+                            '& .MuiChip-icon': {
+                              color: getLevelColor(log.level),
+                            },
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>{log.project}</TableCell>
+                      <TableCell>{log.component}</TableCell>
+                      <TableCell>
+                        <Chip label={log.environment} size="small" color="primary" variant="outlined" />
+                      </TableCell>
+                      <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                        {log.runtime}
+                      </TableCell>
+                      <TableCell sx={{ maxWidth: 400 }}>{log.message}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
+                        <Collapse in={expandedRows.has(startIndex + index)} timeout="auto" unmountOnExit>
+                          <Box sx={{ margin: 2 }}>
+                            <Typography variant="h6" gutterBottom component="div">
+                              Additional Information
+                            </Typography>
+                            <Grid container spacing={2}>
+                              <Grid item xs={12} md={6}>
                                 <Paper variant="outlined" sx={{ p: 2 }}>
                                   <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                    {key}
+                                    Module
                                   </Typography>
                                   <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                                    {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                    {log.module}
                                   </Typography>
                                 </Paper>
                               </Grid>
-                            ))}
-                          </Grid>
-                        </Box>
-                      </Collapse>
-                    </TableCell>
-                  </TableRow>
-                </React.Fragment>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                              {Object.entries(log.additionalTags).map(([key, value]) => (
+                                <Grid item xs={12} md={6} key={key}>
+                                  <Paper variant="outlined" sx={{ p: 2 }}>
+                                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                                      {key}
+                                    </Typography>
+                                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                                      {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                                    </Typography>
+                                  </Paper>
+                                </Grid>
+                              ))}
+                            </Grid>
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>
+                  </React.Fragment>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+
+          {/* Pagination Controls */}
+          {filteredLogs.length > logsPerPage && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
+              <Pagination
+                count={totalPages}
+                page={currentPage}
+                onChange={handlePageChange}
+                color="primary"
+                size="large"
+                showFirstButton
+                showLastButton
+                siblingCount={1}
+                boundaryCount={1}
+              />
+            </Box>
+          )}
+        </>
       )}
 
       {!loading && !error && filteredLogs.length === 0 && (
