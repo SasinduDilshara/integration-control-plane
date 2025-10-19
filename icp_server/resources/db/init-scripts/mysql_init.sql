@@ -636,4 +636,3 @@ VALUES (
         'developer',
         'sample_project_2:prod:developer'
     );
-   
