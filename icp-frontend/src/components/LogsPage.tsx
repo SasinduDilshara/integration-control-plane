@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -47,8 +47,11 @@ import {
 } from '@mui/icons-material';
 import { useLogs } from '../services/hooks';
 import { useProjects, useComponents, useEnvironments, useRuntimes } from '../services/hooks';
+import { useAuth } from '../contexts/AuthContext';
 
 const LogsPage: React.FC = () => {
+  const { user } = useAuth();
+
   // Time range mode: 'preset' or 'custom'
   const [timeRangeMode, setTimeRangeMode] = useState<'preset' | 'custom'>('preset');
 
@@ -86,11 +89,165 @@ const LogsPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const logsPerPage = 50;
 
-  // Fetch filter options
-  const { value: projects } = useProjects();
-  const { value: components } = useComponents();
-  const { value: environments } = useEnvironments();
-  const { value: runtimes } = useRuntimes();
+  // Fetch all filter options
+  const { value: allProjects } = useProjects();
+  const { value: allComponents } = useComponents();
+  const { value: allEnvironments } = useEnvironments();
+  const { value: allRuntimes } = useRuntimes();
+
+  // Get accessible project IDs based on user roles
+  const accessibleProjectIds = useMemo(() => {
+    if (!user) return [];
+
+    // Super admin has access to all projects
+    if (user.isSuperAdmin) {
+      return allProjects.map(p => p.projectId);
+    }
+
+    // Get unique project IDs from user roles
+    const projectIds = new Set<string>();
+    user.roles.forEach(role => {
+      projectIds.add(role.projectId);
+    });
+
+    return Array.from(projectIds);
+  }, [user, allProjects]);
+
+  // Filter projects based on user access
+  const accessibleProjects = useMemo(() => {
+    if (!user) return [];
+
+    // Super admin sees all projects
+    if (user.isSuperAdmin) {
+      return allProjects;
+    }
+
+    // Filter projects based on roles
+    return allProjects.filter(project =>
+      accessibleProjectIds.includes(project.projectId)
+    );
+  }, [user, allProjects, accessibleProjectIds]);
+
+  // Check if user has access to production environments for a project
+  const hasProdAccess = useCallback((projectId: string): boolean => {
+    if (!user) return false;
+
+    // Super admin has access to everything
+    if (user.isSuperAdmin) return true;
+
+    // Check if user has any role for this project with prod access
+    return user.roles.some(role =>
+      role.projectId === projectId && role.environmentType === 'prod'
+    );
+  }, [user]);
+
+  // Check if user has access to non-production environments for a project
+  const hasNonProdAccess = useCallback((projectId: string): boolean => {
+    if (!user) return false;
+
+    // Super admin has access to everything
+    if (user.isSuperAdmin) return true;
+
+    // Check if user has any role for this project with non-prod access
+    return user.roles.some(role =>
+      role.projectId === projectId && role.environmentType === 'non-prod'
+    );
+  }, [user]);
+
+  // Filter environments based on user access and selected project
+  const accessibleEnvironments = useMemo(() => {
+    if (!user) return [];
+
+    // Super admin sees all environments
+    if (user.isSuperAdmin) {
+      return allEnvironments;
+    }
+
+    // If a specific project is selected, filter by that project's permissions
+    if (projectFilter !== 'ALL') {
+      const project = allProjects.find(p => p.name === projectFilter);
+      if (!project) return [];
+
+      const hasProd = hasProdAccess(project.projectId);
+      const hasNonProd = hasNonProdAccess(project.projectId);
+
+      return allEnvironments.filter(env => {
+        if (env.isProduction) {
+          return hasProd;
+        } else {
+          return hasNonProd;
+        }
+      });
+    }
+
+    // If no project selected, show all environments user has access to across all their projects
+    const accessibleEnvs = new Set<string>();
+
+    accessibleProjectIds.forEach(projectId => {
+      const hasProd = hasProdAccess(projectId);
+      const hasNonProd = hasNonProdAccess(projectId);
+
+      allEnvironments.forEach(env => {
+        if (env.isProduction && hasProd) {
+          accessibleEnvs.add(env.environmentId);
+        } else if (!env.isProduction && hasNonProd) {
+          accessibleEnvs.add(env.environmentId);
+        }
+      });
+    });
+
+    return allEnvironments.filter(env => accessibleEnvs.has(env.environmentId));
+  }, [user, allEnvironments, projectFilter, allProjects, accessibleProjectIds, hasProdAccess, hasNonProdAccess]);
+
+  // Filter components based on accessible projects
+  const accessibleComponents = useMemo(() => {
+    if (!user) return [];
+
+    // Super admin sees all components
+    if (user.isSuperAdmin) {
+      return allComponents;
+    }
+
+    // If a specific project is selected, filter by that project
+    if (projectFilter !== 'ALL') {
+      const project = allProjects.find(p => p.name === projectFilter);
+      if (!project) return [];
+
+      return allComponents.filter(component =>
+        component.project.projectId === project.projectId
+      );
+    }
+
+    // Filter components based on accessible projects
+    return allComponents.filter(component =>
+      accessibleProjectIds.includes(component.project.projectId)
+    );
+  }, [user, allComponents, projectFilter, allProjects, accessibleProjectIds]);
+
+  // Filter runtimes based on accessible components and environments
+  const accessibleRuntimes = useMemo(() => {
+    if (!user) return [];
+
+    // Super admin sees all runtimes
+    if (user.isSuperAdmin) {
+      return allRuntimes;
+    }
+
+    // Filter runtimes based on accessible components and environments
+    return allRuntimes.filter(runtime => {
+      const componentAccessible = accessibleProjectIds.includes(runtime.component.project.projectId);
+
+      if (!componentAccessible) return false;
+
+      // Check environment access
+      const env = runtime.environment;
+      if (env.isProduction) {
+        return hasProdAccess(runtime.component.project.projectId);
+      } else {
+        return hasNonProdAccess(runtime.component.project.projectId);
+      }
+    });
+  }, [user, allRuntimes, accessibleProjectIds, hasProdAccess, hasNonProdAccess]);
 
   // Format date for datetime-local input (YYYY-MM-DDTHH:mm)
   const formatDateTimeLocal = (date: Date): string => {
@@ -128,6 +285,18 @@ const LogsPage: React.FC = () => {
       setApiTimeRange(calculatePresetTimeRange());
     }
   }, [duration, timeRangeMode, calculatePresetTimeRange]);
+
+  // Reset dependent filters when project changes
+  useEffect(() => {
+    setComponentFilter('ALL');
+    setEnvironmentFilter('ALL');
+    setRuntimeFilter('ALL');
+  }, [projectFilter]);
+
+  // Reset runtime filter when component or environment changes
+  useEffect(() => {
+    setRuntimeFilter('ALL');
+  }, [componentFilter, environmentFilter]);
 
   // Calculate log start index for pagination
   const logStartIndex = (currentPage - 1) * logsPerPage;
@@ -486,7 +655,7 @@ const LogsPage: React.FC = () => {
                 onChange={(e) => setProjectFilter(e.target.value)}
               >
                 <MenuItem value="ALL">All Projects</MenuItem>
-                {projects.map((project) => (
+                {accessibleProjects.map((project) => (
                   <MenuItem key={project.projectId} value={project.name}>
                     {project.name}
                   </MenuItem>
@@ -503,7 +672,7 @@ const LogsPage: React.FC = () => {
                 onChange={(e) => setComponentFilter(e.target.value)}
               >
                 <MenuItem value="ALL">All Components</MenuItem>
-                {components.map((component) => (
+                {accessibleComponents.map((component) => (
                   <MenuItem key={component.componentId} value={component.name}>
                     {component.name}
                   </MenuItem>
@@ -520,9 +689,9 @@ const LogsPage: React.FC = () => {
                 onChange={(e) => setEnvironmentFilter(e.target.value)}
               >
                 <MenuItem value="ALL">All Environments</MenuItem>
-                {environments.map((env) => (
+                {accessibleEnvironments.map((env) => (
                   <MenuItem key={env.environmentId} value={env.name}>
-                    {env.name}
+                    {env.name} {env.isProduction && '(Prod)'}
                   </MenuItem>
                 ))}
               </Select>
@@ -537,7 +706,7 @@ const LogsPage: React.FC = () => {
                 onChange={(e) => setRuntimeFilter(e.target.value)}
               >
                 <MenuItem value="ALL">All Runtimes</MenuItem>
-                {runtimes.map((runtime) => (
+                {accessibleRuntimes.map((runtime) => (
                   <MenuItem key={runtime.runtimeId} value={runtime.runtimeId}>
                     {runtime.runtimeId}
                   </MenuItem>
