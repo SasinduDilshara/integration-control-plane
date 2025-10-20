@@ -1,6 +1,38 @@
-interface ObservabilityResponse<T = any> {
-  data?: T;
-  error?: string;
+// TypeScript interfaces matching the Ballerina backend types
+export interface LogEntryRequest {
+  startTime: string;
+  endTime: string;
+  logStartIndex: number;
+  logCount: number;
+  runtime?: string;
+  component?: string;
+  environment?: string;
+  project?: string;
+  logLevel?: string;
+}
+
+export interface LogEntry {
+  time: string;
+  level: string;
+  runtime: string;
+  component: string;
+  project: string;
+  environment: string;
+  message: string;
+  additionalTags: Record<string, any>;
+}
+
+export interface LogCount {
+  total: number;
+  info: number;
+  debug: number;
+  warn: number;
+  error: number;
+}
+
+export interface LogEntriesResponse {
+  logs: LogEntry[];
+  logCounts: LogCount;
 }
 
 class ObservabilityApiClient {
@@ -55,17 +87,13 @@ class ObservabilityApiClient {
     }
   }
 
-  // Fetch logs based on filters
-  async getLogs(request: {
-    duration: number;
-    logLimit: number;
-    runtimeId?: string;
-    component?: string;
-    environment?: string;
-    project?: string;
-    logLevel?: string;
-  }): Promise<any[]> {
-    return this.executeRequest('/logs', 'POST', request);
+  /**
+   * Fetch logs and log counts based on time range and filters with pagination support
+   * @param request - Log entry request with time range and pagination parameters
+   * @returns Log entries and counts for the requested page
+   */
+  async getLogs(request: LogEntryRequest): Promise<LogEntriesResponse> {
+    return this.executeRequest<LogEntriesResponse>('/logs', 'POST', request);
   }
 }
 

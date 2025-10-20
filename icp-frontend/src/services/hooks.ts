@@ -408,21 +408,21 @@ export function useDeleteProject() {
     return { deleteProject, loading, error };
 }
 
-// Add these imports at the top
+// Add these imports at the top if not already present
 import { observabilityApiClient } from './ObservabilityApiClient';
-import { LogEntry, LogRequest, LogStats } from '../types';
+import { LogEntry, LogEntryRequest, LogCount } from '../types';
 
-// Logs hook
-export function useLogs(request: LogRequest) {
+// Replace both useLogs and useLogCount with this single hook
+export function useLogs(request: LogEntryRequest) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
     const [data, setData] = useState<LogEntry[]>([]);
-    const [stats, setStats] = useState<LogStats>({
+    const [logCount, setLogCount] = useState<LogCount>({
         total: 0,
-        errors: 0,
-        warnings: 0,
         info: 0,
         debug: 0,
+        warn: 0,
+        error: 0,
     });
 
     const fetchLogs = useCallback(async () => {
@@ -430,21 +430,12 @@ export function useLogs(request: LogRequest) {
         setError(null);
         try {
             const result = await observabilityApiClient.getLogs(request);
-            setData(result);
-
-            // Calculate stats
-            const calculatedStats: LogStats = {
-                total: result.length,
-                errors: result.filter(log => log.level.toUpperCase() === 'ERROR').length,
-                warnings: result.filter(log => log.level.toUpperCase() === 'WARN' || log.level.toUpperCase() === 'WARNING').length,
-                info: result.filter(log => log.level.toUpperCase() === 'INFO').length,
-                debug: result.filter(log => log.level.toUpperCase() === 'DEBUG').length,
-            };
-            setStats(calculatedStats);
+            setData(result.logs);
+            setLogCount(result.logCounts);
         } catch (err) {
             setError(err as Error);
             setData([]);
-            setStats({ total: 0, errors: 0, warnings: 0, info: 0, debug: 0 });
+            setLogCount({ total: 0, info: 0, debug: 0, warn: 0, error: 0 });
         } finally {
             setLoading(false);
         }
@@ -454,7 +445,7 @@ export function useLogs(request: LogRequest) {
         fetchLogs();
     }, [fetchLogs]);
 
-    return { data, loading, error, stats, refetch: fetchLogs };
+    return { data, logCount, loading, error, refetch: fetchLogs };
 }
 
 // User management hooks

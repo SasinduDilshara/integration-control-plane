@@ -121,9 +121,8 @@ export interface UpdateProjectRequest {
 // Add these types to the existing src/types/index.ts file
 
 export interface LogEntry {
-    timestamp: string;
+    time: string;
     level: string;
-    module: string;
     runtime: string;
     component: string;
     project: string;
@@ -132,9 +131,11 @@ export interface LogEntry {
     additionalTags: Record<string, any>;
 }
 
-export interface LogRequest {
-    duration: number; // in seconds
-    logLimit: number;
+export interface LogEntryRequest {
+    startTime: string;
+    endTime: string;
+    logStartIndex: number;
+    logCount: number;
     runtime?: string;
     component?: string;
     environment?: string;
@@ -142,12 +143,17 @@ export interface LogRequest {
     logLevel?: string;
 }
 
-export interface LogStats {
+export interface LogCount {
     total: number;
-    errors: number;
-    warnings: number;
+    error: number;
+    warn: number;
     info: number;
     debug: number;
+}
+
+export interface LogEntriesResponse {
+    logs: LogEntry[];
+    logCounts: LogCount;
 }
 
 // Authentication types

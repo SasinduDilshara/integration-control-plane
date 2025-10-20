@@ -424,9 +424,12 @@ public type ComponentInDB record {
 };
 
 // === Observability Related Types ===
-public type LogRequest record {
-    decimal duration;
-    int logLimit;
+
+public type LogEntryRequest record {
+    string startTime;
+    string endTime;
+    int logStartIndex;
+    int logCount;
     string? runtime = ();
     string? component = ();
     string? environment = ();
@@ -435,15 +438,27 @@ public type LogRequest record {
 };
 
 public type LogEntry record {
-    string timestamp;
+    string time;
     string level;
-    string module;
     string runtime;
     string component;
     string project;
     string environment;
     string message;
     map<anydata> additionalTags;
+};
+
+public type LogCount record {
+    int total;
+    int debug;
+    int info;
+    int warn;
+    int 'error;
+};
+
+public type LogEntriesResponse record {
+    LogEntry[] logs;
+    LogCount logCounts;
 };
 
 public type OpenSearchHit record {

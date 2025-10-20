@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -31,14 +31,12 @@ import {
   Radio,
   RadioGroup,
   FormControlLabel,
-  FormLabel,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
   Info as InfoIcon,
-  CheckCircle as SuccessIcon,
   Description as LogIcon,
   KeyboardArrowDown as ExpandMoreIcon,
   KeyboardArrowUp as ExpandLessIcon,
@@ -49,7 +47,6 @@ import {
 } from '@mui/icons-material';
 import { useLogs } from '../services/hooks';
 import { useProjects, useComponents, useEnvironments, useRuntimes } from '../services/hooks';
-import { LogEntry } from '../types';
 
 const LogsPage: React.FC = () => {
   // Time range mode: 'preset' or 'custom'
@@ -62,7 +59,12 @@ const LogsPage: React.FC = () => {
   const [customStartTime, setCustomStartTime] = useState('');
   const [customEndTime, setCustomEndTime] = useState('');
 
-  const [logLimit] = useState(100);
+  // Stored time range for API calls (only updated when needed)
+  const [apiTimeRange, setApiTimeRange] = useState<{ startTime: string; endTime: string }>({
+    startTime: '',
+    endTime: '',
+  });
+
   const [searchTerm, setSearchTerm] = useState('');
   const [levelFilter, setLevelFilter] = useState('ALL');
   const [projectFilter, setProjectFilter] = useState('ALL');
@@ -81,16 +83,7 @@ const LogsPage: React.FC = () => {
   const { value: environments } = useEnvironments();
   const { value: runtimes } = useRuntimes();
 
-  // Initialize custom time range with default values (last 1 hour)
-  useEffect(() => {
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 3600000);
-
-    setCustomEndTime(formatDateTimeLocal(now));
-    setCustomStartTime(formatDateTimeLocal(oneHourAgo));
-  }, []);
-
-  // Format date for datetime-local input
+  // Format date for datetime-local input (YYYY-MM-DDTHH:mm)
   const formatDateTimeLocal = (date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -100,29 +93,72 @@ const LogsPage: React.FC = () => {
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   };
 
-  // Calculate duration from custom time range
-  const getCustomDuration = (): number => {
-    if (!customStartTime || !customEndTime) return 3600;
-    const start = new Date(customStartTime).getTime();
-    const end = new Date(customEndTime).getTime();
-    return Math.floor((end - start) / 1000); // Convert to seconds
-  };
+  // Calculate start and end times for preset duration
+  const calculatePresetTimeRange = useCallback((): { startTime: string; endTime: string } => {
+    const endTime = new Date();
+    const startTime = new Date(endTime.getTime() - duration * 1000);
 
-  // Prepare request
-  const logRequest = {
-    duration: timeRangeMode === 'preset' ? duration : getCustomDuration(),
-    logLimit,
+    return {
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+    };
+  }, [duration]);
+
+  // Calculate time range based on mode
+  const calculateTimeRange = useCallback((): { startTime: string; endTime: string } => {
+    if (timeRangeMode === 'preset') {
+      return calculatePresetTimeRange();
+    } else {
+      return {
+        startTime: new Date(customStartTime).toISOString(),
+        endTime: new Date(customEndTime).toISOString(),
+      };
+    }
+  }, [timeRangeMode, calculatePresetTimeRange, customStartTime, customEndTime]);
+
+  // Initialize time range on mount
+  useEffect(() => {
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 3600000);
+
+    setCustomStartTime(formatDateTimeLocal(oneHourAgo));
+    setCustomEndTime(formatDateTimeLocal(now));
+
+    // Set initial API time range
+    setApiTimeRange(calculatePresetTimeRange());
+  }, []); // Only on mount
+
+  // Update API time range when duration or mode changes
+  useEffect(() => {
+    if (timeRangeMode === 'preset') {
+      setApiTimeRange(calculatePresetTimeRange());
+    }
+  }, [duration, timeRangeMode, calculatePresetTimeRange]);
+
+  // Calculate log start index for pagination
+  const logStartIndex = (currentPage - 1) * logsPerPage;
+
+  // Base request parameters for logs
+  const logsRequest = {
+    startTime: apiTimeRange.startTime,
+    endTime: apiTimeRange.endTime,
+    logStartIndex,
+    logCount: logsPerPage,
     ...(projectFilter !== 'ALL' && { project: projectFilter }),
     ...(componentFilter !== 'ALL' && { component: componentFilter }),
     ...(environmentFilter !== 'ALL' && { environment: environmentFilter }),
     ...(runtimeFilter !== 'ALL' && { runtime: runtimeFilter }),
     ...(levelFilter !== 'ALL' && { logLevel: levelFilter }),
-    ...(timeRangeMode === 'custom' && customStartTime && { startTime: new Date(customStartTime).toISOString() }),
-    ...(timeRangeMode === 'custom' && customEndTime && { endTime: new Date(customEndTime).toISOString() }),
   };
 
-  // Fetch logs
-  const { data: logs, loading, error, stats, refetch } = useLogs(logRequest);
+  // Fetch logs and counts in a single call
+  const {
+    data: logs,
+    logCount,
+    loading,
+    error,
+    refetch
+  } = useLogs(logsRequest);
 
   const durationOptions = [
     { label: '5m', value: 300 },
@@ -136,11 +172,11 @@ const LogsPage: React.FC = () => {
   ];
 
   const logStats = [
-    { label: 'Total Logs', value: stats.total.toLocaleString(), color: '#2196f3', icon: <LogIcon /> },
-    { label: 'Errors', value: stats.errors.toLocaleString(), color: '#f44336', icon: <ErrorIcon /> },
-    { label: 'Warnings', value: stats.warnings.toLocaleString(), color: '#ff9800', icon: <WarningIcon /> },
-    { label: 'Info', value: stats.info.toLocaleString(), color: '#4caf50', icon: <InfoIcon /> },
-    { label: 'Debug', value: stats.debug.toLocaleString(), color: '#9c27b0', icon: <DebugIcon /> },
+    { label: 'Total Logs', value: logCount.total.toLocaleString(), color: '#2196f3', icon: <LogIcon /> },
+    { label: 'Errors', value: logCount.error.toLocaleString(), color: '#f44336', icon: <ErrorIcon /> },
+    { label: 'Warnings', value: logCount.warn.toLocaleString(), color: '#ff9800', icon: <WarningIcon /> },
+    { label: 'Info', value: logCount.info.toLocaleString(), color: '#4caf50', icon: <InfoIcon /> },
+    { label: 'Debug', value: logCount.debug.toLocaleString(), color: '#9c27b0', icon: <DebugIcon /> },
   ];
 
   const getLevelIcon = (level: string) => {
@@ -183,33 +219,44 @@ const LogsPage: React.FC = () => {
     setExpandedRows(newExpanded);
   };
 
+  // Client-side search on current page only
   const filteredLogs = logs.filter((log) => {
     const matchesSearch =
       searchTerm === '' ||
       log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      log.module.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.runtime.toLowerCase().includes(searchTerm.toLowerCase());
 
     return matchesSearch;
   });
 
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
-  const startIndex = (currentPage - 1) * logsPerPage;
-  const endIndex = startIndex + logsPerPage;
-  const paginatedLogs = filteredLogs.slice(startIndex, endIndex);
+  // Calculate total pages based on total count from backend
+  const totalPages = Math.ceil(logCount.total / logsPerPage);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
     setExpandedRows(new Set());
-  }, [searchTerm, levelFilter, projectFilter, componentFilter, environmentFilter, runtimeFilter, duration, timeRangeMode, customStartTime, customEndTime]);
+  }, [levelFilter, projectFilter, componentFilter, environmentFilter, runtimeFilter]);
 
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     setCurrentPage(value);
     setExpandedRows(new Set());
     // Scroll to top of the page
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleRefresh = () => {
+    // Update time range to current time for preset mode
+    if (timeRangeMode === 'preset') {
+      setApiTimeRange(calculatePresetTimeRange());
+    } else {
+      // For custom mode, update with the selected custom times
+      setApiTimeRange({
+        startTime: new Date(customStartTime).toISOString(),
+        endTime: new Date(customEndTime).toISOString(),
+      });
+    }
+    // Refetch will be triggered automatically by the state change
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -234,6 +281,10 @@ const LogsPage: React.FC = () => {
     if (!customStartTime || !customEndTime) return false;
     return new Date(customStartTime) < new Date(customEndTime);
   };
+
+  // Calculate display range
+  const startIndex = logStartIndex + 1;
+  const endIndex = Math.min(logStartIndex + filteredLogs.length, logCount.total);
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
@@ -299,7 +350,7 @@ const LogsPage: React.FC = () => {
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
-              onClick={refetch}
+              onClick={handleRefresh}
               disabled={loading}
               sx={{ ml: 'auto' }}
             >
@@ -344,7 +395,7 @@ const LogsPage: React.FC = () => {
                   fullWidth
                   variant="outlined"
                   startIcon={<RefreshIcon />}
-                  onClick={refetch}
+                  onClick={handleRefresh}
                   disabled={loading || !isCustomTimeRangeValid()}
                   sx={{ height: '56px' }}
                 >
@@ -399,7 +450,7 @@ const LogsPage: React.FC = () => {
             <TextField
               fullWidth
               variant="outlined"
-              placeholder="Search logs by message, module, or runtime..."
+              placeholder="Search logs by message or runtime (current page only)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               InputProps={{
@@ -410,6 +461,11 @@ const LogsPage: React.FC = () => {
                 ),
               }}
             />
+            {searchTerm && (
+              <Alert severity="info" sx={{ mt: 1 }}>
+                Search is applied only to the current page ({logsPerPage} logs). Use filters for global search.
+              </Alert>
+            )}
           </Grid>
           <Grid item xs={12} sm={6} md={2.4}>
             <FormControl fullWidth size="small">
@@ -516,10 +572,10 @@ const LogsPage: React.FC = () => {
       {!loading && !error && (
         <>
           {/* Pagination Info */}
-          {filteredLogs.length > 0 && (
+          {logCount.total > 0 && (
             <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                Showing {startIndex + 1} - {Math.min(endIndex, filteredLogs.length)} of {filteredLogs.length} logs
+                Showing {startIndex} - {endIndex} of {logCount.total.toLocaleString()} logs
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 Page {currentPage} of {totalPages}
@@ -556,8 +612,8 @@ const LogsPage: React.FC = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {paginatedLogs.map((log, index) => (
-                  <React.Fragment key={startIndex + index}>
+                {filteredLogs.map((log, index) => (
+                  <React.Fragment key={index}>
                     <TableRow
                       sx={{
                         '&:hover': {
@@ -569,13 +625,13 @@ const LogsPage: React.FC = () => {
                       <TableCell>
                         <IconButton
                           size="small"
-                          onClick={() => toggleRowExpansion(startIndex + index)}
+                          onClick={() => toggleRowExpansion(index)}
                         >
-                          {expandedRows.has(startIndex + index) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                          {expandedRows.has(index) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                         </IconButton>
                       </TableCell>
                       <TableCell sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                        {formatTimestamp(log.timestamp)}
+                        {formatTimestamp(log.time)}
                       </TableCell>
                       <TableCell>
                         <Chip
@@ -604,22 +660,12 @@ const LogsPage: React.FC = () => {
                     </TableRow>
                     <TableRow>
                       <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={8}>
-                        <Collapse in={expandedRows.has(startIndex + index)} timeout="auto" unmountOnExit>
+                        <Collapse in={expandedRows.has(index)} timeout="auto" unmountOnExit>
                           <Box sx={{ margin: 2 }}>
                             <Typography variant="h6" gutterBottom component="div">
                               Additional Information
                             </Typography>
                             <Grid container spacing={2}>
-                              <Grid item xs={12} md={6}>
-                                <Paper variant="outlined" sx={{ p: 2 }}>
-                                  <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                                    Module
-                                  </Typography>
-                                  <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                                    {log.module}
-                                  </Typography>
-                                </Paper>
-                              </Grid>
                               {Object.entries(log.additionalTags).map(([key, value]) => (
                                 <Grid item xs={12} md={6} key={key}>
                                   <Paper variant="outlined" sx={{ p: 2 }}>
@@ -644,7 +690,7 @@ const LogsPage: React.FC = () => {
           </TableContainer>
 
           {/* Pagination Controls */}
-          {filteredLogs.length > logsPerPage && (
+          {totalPages > 1 && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4, mb: 2 }}>
               <Pagination
                 count={totalPages}
