@@ -259,6 +259,11 @@
             </dependency>
             <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-core</artifactId>
+                <version>${jackson.core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-databind</artifactId>
                 <version>${jackson.core.version}</version>
             </dependency>
@@ -271,6 +276,11 @@
                 <groupId>com.fasterxml.jackson.dataformat</groupId>
                 <artifactId>jackson-dataformat-yaml</artifactId>
                 <version>${jackson.dataformat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-jdk8</artifactId>
+                <version>${jackson.core.version}</version>
             </dependency>
             <dependency>
                 <groupId>commons-logging</groupId>
@@ -421,6 +431,16 @@
                 <artifactId>antlr4-runtime</artifactId>
                 <version>${antlr4.runtime.version}</version>
             </dependency>
+               <dependency>
+                <groupId>com.fasterxml.jackson.datatype</groupId>
+                <artifactId>jackson-datatype-jdk8</artifactId>
+                <version>${fasterxml.jackson.datatype.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.hubspot.immutables</groupId>
+                <artifactId>immutables-exceptions</artifactId>
+                <version>${com.hubspot.immutables.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -506,27 +526,28 @@
         <javax.activation.version>1.1</javax.activation.version>
         <io.swagger.version>1.6.5</io.swagger.version>
         <io.swagger.core.v3.version>2.1.12</io.swagger.core.v3.version>
-        <jackson.core.version>2.13.5</jackson.core.version>
+        <jackson.core.version>2.15.0</jackson.core.version>
         <jackson.dataformat.version>${jackson.core.version}</jackson.dataformat.version>
         <commons-logging.version>1.2</commons-logging.version>
-        <commons.lang3.version>3.1</commons.lang3.version>
+        <commons.lang3.version>3.18.0</commons.lang3.version>
         <commons-codec.orbit.version>1.15</commons-codec.orbit.version>
         <hikari.cp.version>3.4.5</hikari.cp.version>
         <httpcomponents.version>4.5.13</httpcomponents.version>
         <code.gson.version>2.11.0</code.gson.version>
-        <config.mapper.version>1.0.20</config.mapper.version>
+        <config.mapper.version>1.0.26</config.mapper.version>
         <asgardeo.java.oidc.sdk.version>0.1.27</asgardeo.java.oidc.sdk.version>
         <net.minidev.asm.version>2.4.8</net.minidev.asm.version>
-        <net.minidev.json-smart.version>2.5.1</net.minidev.json-smart.version>
+        <net.minidev.json-smart.version>2.5.2</net.minidev.json-smart.version>
         <guava.version>33.2.0-jre</guava.version>
         <nimbusds.version>9.39.1</nimbusds.version>
         <axiom.version>1.2.11-wso2v17</axiom.version>
         <cipher.tool.version>1.1.24</cipher.tool.version>
         <maven.war.plugin.version>3.3.2</maven.war.plugin.version>
         <mi.user.core.version>4.2.0</mi.user.core.version>
+        <com.hubspot.immutables.version>1.11.2</com.hubspot.immutables.version>
         
         <!-- Jetty -->
-        <jetty.version>9.4.50.v20221201</jetty.version>
+        <jetty.version>9.4.58.v20250814</jetty.version>
         
         <!-- Other missing dependencies -->
         <cava.toml.version>0.5.0</cava.toml.version>
