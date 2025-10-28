@@ -56,7 +56,7 @@ CREATE TABLE user_credentials (
 CREATE TABLE refresh_tokens (
     token_id CHAR(36) NOT NULL PRIMARY KEY,
     user_id CHAR(36) NOT NULL,
-    token_hash VARCHAR(255) NOT NULL UNIQUE,  -- SHA256 hash of token
+    token_hash VARCHAR(255) NOT NULL UNIQUE, -- SHA256 hash of token
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -64,7 +64,7 @@ CREATE TABLE refresh_tokens (
     revoked_at TIMESTAMP NULL,
     user_agent VARCHAR(500) NULL,
     ip_address VARCHAR(50) NULL,
-    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
     INDEX idx_user_id (user_id),
     INDEX idx_token_hash (token_hash),
     INDEX idx_expires_at (expires_at),
@@ -498,11 +498,7 @@ ORDER BY cc.issued_at ASC;
 
 -- Insert default organization
 INSERT INTO
-    organizations (
-        org_id,
-        org_name,
-        org_handle
-    )
+    organizations (org_id, org_name, org_handle)
 VALUES (
         1,
         'Default Organization',

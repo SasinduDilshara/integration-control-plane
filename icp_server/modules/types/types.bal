@@ -299,6 +299,8 @@ public type Listener record {
 // === Project & Component Types ===
 
 public type Project record {
+    string? id?; // Alias for projectId to support queries requesting 'id'
+
     @sql:Column {
         name: "project_id"
     }
@@ -318,8 +320,21 @@ public type Project record {
     string? createdDate?;
 
     string handler;
+
+    @sql:Column {
+        name: "extended_handler"
+    }
+    string? extendedHandler?;
+
     string? region?;
     string? description?;
+
+    @sql:Column {
+        name: "owner_id"
+    }
+    string? owner?;
+
+    string[]? labels?;
 
     @sql:Column {
         name: "default_deployment_pipeline_id"

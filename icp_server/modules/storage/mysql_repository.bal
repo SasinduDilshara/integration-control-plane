@@ -1287,15 +1287,19 @@ public isolated function getProjectById(string projectId) returns types:Project|
         deploymentPipelineIds = check pipelineIdsJsonParsed.cloneWithType();
     }
 
-    return {
+    types:Project project = {
         projectId: <string>projectRecord["project_id"],
+        id: <string>projectRecord["project_id"], // Set id as alias for projectId
         orgId: <int>projectRecord["org_id"],
         name: <string>projectRecord["name"],
         version: <string?>projectRecord["version"],
         createdDate: <string?>projectRecord["created_date"],
         handler: <string>projectRecord["handler"],
+        extendedHandler: (), // Not available in database schema
         region: <string?>projectRecord["region"],
         description: <string?>projectRecord["description"],
+        owner: getDisplayNameById(<string?>projectRecord["owner_id"]), // Get owner display name
+        labels: (), // Not available in database schema
         defaultDeploymentPipelineId: <string?>projectRecord["default_deployment_pipeline_id"],
         deploymentPipelineIds: deploymentPipelineIds,
         'type: <string?>projectRecord["type"],
@@ -1309,6 +1313,8 @@ public isolated function getProjectById(string projectId) returns types:Project|
         updatedAt: <string?>projectRecord["updated_at"],
         updatedBy: <string?>projectRecord["updated_by"]
     };
+
+    return project;
 }
 
 // Update project name and/or description

@@ -46,23 +46,23 @@ isolated function contextInit(http:RequestContext reqCtx, http:Request request) 
 
 // GraphQL service for runtime details
 
-// @graphql:ServiceConfig {
-//     contextInit,
-//     cors: {
-//         allowOrigins: ["*"]
-//     },
-//     auth: [
-//         {
-//             jwtValidatorConfig: {
-//                 issuer: frontendJwtIssuer,
-//                 audience: frontendJwtAudience,
-//                 signatureConfig: {
-//                     secret: defaultJwtHMACSecret
-//                 }
-//             }
-//         }
-//     ]
-// }
+@graphql:ServiceConfig {
+    contextInit,
+    cors: {
+        allowOrigins: ["*"]
+    },
+    auth: [
+        {
+            jwtValidatorConfig: {
+                issuer: frontendJwtIssuer,
+                audience: frontendJwtAudience,
+                signatureConfig: {
+                    secret: defaultJwtHMACSecret
+                }
+            }
+        }
+    ]
+}
 service /graphql on graphqlListener {
 
     function init() {
@@ -343,6 +343,7 @@ service /graphql on graphqlListener {
     // Create a new project
     isolated remote function createProject(graphql:Context context, types:ProjectInput project) returns types:Project|error? {
         // Extract user context to get the creating user's information
+        // value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -409,8 +410,8 @@ service /graphql on graphqlListener {
         return check storage:getProjectsByIds(adminProjectIds);
     }
 
-    // Get a specific project by ID
-    isolated resource function get project(graphql:Context context, string projectId) returns types:Project?|error {
+    // Get a specific project by ID with optional orgId filter
+    isolated resource function get project(graphql:Context context, int? orgId, string projectId) returns types:Project?|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -424,7 +425,18 @@ service /graphql on graphqlListener {
             return error("Access denied to project");
         }
 
-        return check storage:getProjectById(projectId);
+        types:Project? project = check storage:getProjectById(projectId);
+
+        if project is () {
+            return (); // Project not found
+        }
+
+        // If orgId is specified, verify it matches the project's orgId
+        if orgId is int && project.orgId != orgId {
+            return (); // Project doesn't belong to the specified organization
+        }
+
+        return project;
     }
 
     // Delete a project
