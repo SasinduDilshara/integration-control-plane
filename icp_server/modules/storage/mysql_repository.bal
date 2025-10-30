@@ -495,10 +495,8 @@ public isolated function getProxyServicesForRuntime(string runtimeId) returns ty
         do {
             // Parse transports JSON string to array
             string[]? transports = ();
-            if proxyRecord.transports is string {
-                json transportsJson = check proxyRecord.transports.fromJsonString();
-                transports = check transportsJson.cloneWithType();
-            }
+            json transportsJson = check proxyRecord.transports.fromJsonString();
+            transports = check transportsJson.cloneWithType();
 
             types:ProxyService proxy = {
                 name: proxyRecord.proxy_name,
@@ -874,22 +872,22 @@ public isolated function mapToRuntime(types:RuntimeDBRecord runtimeRecord) retur
         artifacts: {
             listeners: listenerList,
             services: serviceList,
-            apis: apiList.length() > 0 ? apiList : (),
-            proxyServices: proxyList.length() > 0 ? proxyList : (),
-            endpoints: endpointList.length() > 0 ? endpointList : (),
-            inboundEndpoints: inboundList.length() > 0 ? inboundList : (),
-            sequences: sequenceList.length() > 0 ? sequenceList : (),
-            tasks: taskList.length() > 0 ? taskList : (),
-            templates: templateList.length() > 0 ? templateList : (),
-            messageStores: storeList.length() > 0 ? storeList : (),
-            messageProcessors: processorList.length() > 0 ? processorList : (),
-            localEntries: entryList.length() > 0 ? entryList : (),
-            dataServices: dataServiceList.length() > 0 ? dataServiceList : (),
-            carbonApps: appList.length() > 0 ? appList : (),
-            dataSources: sourceList.length() > 0 ? sourceList : (),
-            connectors: connectorList.length() > 0 ? connectorList : (),
-            registryResources: resourceList.length() > 0 ? resourceList : (),
-            systemInfo: infoList.length() > 0 ? infoList : ()
+            apis: apiList,
+            proxyServices: proxyList,
+            endpoints: endpointList,
+            inboundEndpoints: inboundList,
+            sequences: sequenceList,
+            tasks: taskList,
+            templates: templateList,
+            messageStores: storeList,
+            messageProcessors: processorList,
+            localEntries: entryList,
+            dataServices: dataServiceList,
+            carbonApps: appList,
+            dataSources: sourceList,
+            connectors: connectorList,
+            registryResources: resourceList,
+            systemInfo: infoList
         }
     };
 }
@@ -1305,9 +1303,8 @@ isolated function deleteExistingArtifacts(string runtimeId) returns error? {
 // Helper function to insert MI artifacts
 isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
     // Insert MI artifacts if present
-    if heartbeat.artifacts.apis is types:RestApi[] {
-        foreach types:RestApi api in <types:RestApi[]>heartbeat.artifacts.apis {
-            _ = check dbClient->execute(`
+    foreach types:RestApi api in <types:RestApi[]>heartbeat.artifacts.apis {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_apis (
                     runtime_id, api_name, url, context, version, state
                 ) VALUES (
@@ -1315,13 +1312,11 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${api.context}, ${api.version}, ${api.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.proxyServices is types:ProxyService[] {
-        foreach types:ProxyService proxy in <types:ProxyService[]>heartbeat.artifacts.proxyServices {
-            string? transportsJson = proxy.transports is string[] ? (<string[]>proxy.transports).toJsonString() : ();
-            _ = check dbClient->execute(`
+    foreach types:ProxyService proxy in <types:ProxyService[]>heartbeat.artifacts.proxyServices {
+        string? transportsJson = proxy.transports is string[] ? (<string[]>proxy.transports).toJsonString() : ();
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_proxy_services (
                     runtime_id, proxy_name, wsdl, transports, state
                 ) VALUES (
@@ -1329,12 +1324,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${transportsJson}, ${proxy.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.endpoints is types:Endpoint[] {
-        foreach types:Endpoint endpoint in <types:Endpoint[]>heartbeat.artifacts.endpoints {
-            _ = check dbClient->execute(`
+    foreach types:Endpoint endpoint in <types:Endpoint[]>heartbeat.artifacts.endpoints {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_endpoints (
                     runtime_id, endpoint_name, endpoint_type, address, state
                 ) VALUES (
@@ -1342,12 +1335,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${endpoint.address}, ${endpoint.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.inboundEndpoints is types:InboundEndpoint[] {
-        foreach types:InboundEndpoint inbound in <types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints {
-            _ = check dbClient->execute(`
+    foreach types:InboundEndpoint inbound in <types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_inbound_endpoints (
                     runtime_id, inbound_name, protocol, sequence, state
                 ) VALUES (
@@ -1355,12 +1346,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${inbound.sequence}, ${inbound.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.sequences is types:Sequence[] {
-        foreach types:Sequence sequence in <types:Sequence[]>heartbeat.artifacts.sequences {
-            _ = check dbClient->execute(`
+    foreach types:Sequence sequence in <types:Sequence[]>heartbeat.artifacts.sequences {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_sequences (
                     runtime_id, sequence_name, sequence_type, container, state
                 ) VALUES (
@@ -1368,12 +1357,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${sequence.container}, ${sequence.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.tasks is types:Task[] {
-        foreach types:Task task in <types:Task[]>heartbeat.artifacts.tasks {
-            _ = check dbClient->execute(`
+    foreach types:Task task in <types:Task[]>heartbeat.artifacts.tasks {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_tasks (
                     runtime_id, task_name, task_class, task_group, state
                 ) VALUES (
@@ -1381,24 +1368,20 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${task.group}, ${task.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.templates is types:Template[] {
-        foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
-            _ = check dbClient->execute(`
+    foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_templates (
                     runtime_id, template_name, template_type, state
                 ) VALUES (
                     ${heartbeat.runtime}, ${template.name}, ${template.'type}, ${template.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.messageStores is types:MessageStore[] {
-        foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
-            _ = check dbClient->execute(`
+    foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_message_stores (
                     runtime_id, store_name, store_type, store_class, state
                 ) VALUES (
@@ -1406,12 +1389,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${store.'class}, ${store.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.messageProcessors is types:MessageProcessor[] {
-        foreach types:MessageProcessor processor in <types:MessageProcessor[]>heartbeat.artifacts.messageProcessors {
-            _ = check dbClient->execute(`
+    foreach types:MessageProcessor processor in <types:MessageProcessor[]>heartbeat.artifacts.messageProcessors {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_message_processors (
                     runtime_id, processor_name, processor_type, processor_class, state
                 ) VALUES (
@@ -1419,12 +1400,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${processor.'class}, ${processor.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.localEntries is types:LocalEntry[] {
-        foreach types:LocalEntry entry in <types:LocalEntry[]>heartbeat.artifacts.localEntries {
-            _ = check dbClient->execute(`
+    foreach types:LocalEntry entry in <types:LocalEntry[]>heartbeat.artifacts.localEntries {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_local_entries (
                     runtime_id, entry_name, entry_type, entry_value, state
                 ) VALUES (
@@ -1432,12 +1411,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${entry.value}, ${entry.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.dataServices is types:DataService[] {
-        foreach types:DataService dataService in <types:DataService[]>heartbeat.artifacts.dataServices {
-            _ = check dbClient->execute(`
+    foreach types:DataService dataService in <types:DataService[]>heartbeat.artifacts.dataServices {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_data_services (
                     runtime_id, service_name, description, wsdl, state
                 ) VALUES (
@@ -1445,12 +1422,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${dataService.wsdl}, ${dataService.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.carbonApps is types:CarbonApp[] {
-        foreach types:CarbonApp app in <types:CarbonApp[]>heartbeat.artifacts.carbonApps {
-            _ = check dbClient->execute(`
+    foreach types:CarbonApp app in <types:CarbonApp[]>heartbeat.artifacts.carbonApps {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_carbon_apps (
                     runtime_id, app_name, version, deployment_status, state
                 ) VALUES (
@@ -1458,12 +1433,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${app.deploymentStatus}, ${app.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.dataSources is types:DataSource[] {
-        foreach types:DataSource ds in <types:DataSource[]>heartbeat.artifacts.dataSources {
-            _ = check dbClient->execute(`
+    foreach types:DataSource ds in <types:DataSource[]>heartbeat.artifacts.dataSources {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_datasources (
                     runtime_id, datasource_name, driver, url, state
                 ) VALUES (
@@ -1471,12 +1444,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${ds.url}, ${ds.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.connectors is types:Connector[] {
-        foreach types:Connector connector in <types:Connector[]>heartbeat.artifacts.connectors {
-            _ = check dbClient->execute(`
+    foreach types:Connector connector in <types:Connector[]>heartbeat.artifacts.connectors {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_connectors (
                     runtime_id, connector_name, connector_package, version, state
                 ) VALUES (
@@ -1484,12 +1455,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${connector.version}, ${connector.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.registryResources is types:RegistryResource[] {
-        foreach types:RegistryResource registryResource in <types:RegistryResource[]>heartbeat.artifacts.registryResources {
-            _ = check dbClient->execute(`
+    foreach types:RegistryResource registryResource in <types:RegistryResource[]>heartbeat.artifacts.registryResources {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_registry_resources (
                     runtime_id, resource_name, path, resource_type, state
                 ) VALUES (
@@ -1497,20 +1466,18 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${registryResource.'type}, ${registryResource.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.systemInfo is types:SystemInfo[] {
-        foreach types:SystemInfo info in <types:SystemInfo[]>heartbeat.artifacts.systemInfo {
-            _ = check dbClient->execute(`
+    foreach types:SystemInfo info in <types:SystemInfo[]>heartbeat.artifacts.systemInfo {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_system_info (
                     runtime_id, info_key, info_value
                 ) VALUES (
                     ${heartbeat.runtime}, ${info.key}, ${info.value}
                 )
             `);
-        }
     }
+
 }
 
 // Upsert runtime record (insert new or update existing)
@@ -1605,9 +1572,8 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
 
 // Insert additional MI artifacts (inboundEndpoints, sequences, tasks, etc.)
 isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns error? {
-    if heartbeat.artifacts.inboundEndpoints is types:InboundEndpoint[] {
-        foreach types:InboundEndpoint inbound in <types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints {
-            _ = check dbClient->execute(`
+    foreach types:InboundEndpoint inbound in <types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_inbound_endpoints (
                     runtime_id, inbound_name, protocol, sequence, state
                 ) VALUES (
@@ -1615,12 +1581,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${inbound.sequence}, ${inbound.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.sequences is types:Sequence[] {
-        foreach types:Sequence sequence in <types:Sequence[]>heartbeat.artifacts.sequences {
-            _ = check dbClient->execute(`
+    foreach types:Sequence sequence in <types:Sequence[]>heartbeat.artifacts.sequences {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_sequences (
                     runtime_id, sequence_name, sequence_type, container, state
                 ) VALUES (
@@ -1628,12 +1592,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${sequence.container}, ${sequence.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.tasks is types:Task[] {
-        foreach types:Task task in <types:Task[]>heartbeat.artifacts.tasks {
-            _ = check dbClient->execute(`
+    foreach types:Task task in <types:Task[]>heartbeat.artifacts.tasks {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_tasks (
                     runtime_id, task_name, task_class, task_group, state
                 ) VALUES (
@@ -1641,24 +1603,20 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${task.group}, ${task.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.templates is types:Template[] {
-        foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
-            _ = check dbClient->execute(`
+    foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_templates (
                     runtime_id, template_name, template_type, state
                 ) VALUES (
                     ${heartbeat.runtime}, ${template.name}, ${template.'type}, ${template.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.messageStores is types:MessageStore[] {
-        foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
-            _ = check dbClient->execute(`
+    foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_message_stores (
                     runtime_id, store_name, store_type, store_class, state
                 ) VALUES (
@@ -1666,12 +1624,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${store.'class}, ${store.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.messageProcessors is types:MessageProcessor[] {
-        foreach types:MessageProcessor processor in <types:MessageProcessor[]>heartbeat.artifacts.messageProcessors {
-            _ = check dbClient->execute(`
+    foreach types:MessageProcessor processor in <types:MessageProcessor[]>heartbeat.artifacts.messageProcessors {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_message_processors (
                     runtime_id, processor_name, processor_type, processor_class, state
                 ) VALUES (
@@ -1679,12 +1635,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${processor.'class}, ${processor.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.localEntries is types:LocalEntry[] {
-        foreach types:LocalEntry entry in <types:LocalEntry[]>heartbeat.artifacts.localEntries {
-            _ = check dbClient->execute(`
+    foreach types:LocalEntry entry in <types:LocalEntry[]>heartbeat.artifacts.localEntries {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_local_entries (
                     runtime_id, entry_name, entry_type, entry_value, state
                 ) VALUES (
@@ -1692,12 +1646,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${entry.value}, ${entry.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.dataServices is types:DataService[] {
-        foreach types:DataService dataService in <types:DataService[]>heartbeat.artifacts.dataServices {
-            _ = check dbClient->execute(`
+    foreach types:DataService dataService in <types:DataService[]>heartbeat.artifacts.dataServices {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_data_services (
                     runtime_id, service_name, description, wsdl, state
                 ) VALUES (
@@ -1705,12 +1657,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${dataService.wsdl}, ${dataService.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.carbonApps is types:CarbonApp[] {
-        foreach types:CarbonApp app in <types:CarbonApp[]>heartbeat.artifacts.carbonApps {
-            _ = check dbClient->execute(`
+    foreach types:CarbonApp app in <types:CarbonApp[]>heartbeat.artifacts.carbonApps {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_carbon_apps (
                     runtime_id, app_name, version, deployment_status, state
                 ) VALUES (
@@ -1718,12 +1668,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${app.deploymentStatus}, ${app.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.dataSources is types:DataSource[] {
-        foreach types:DataSource dataSource in <types:DataSource[]>heartbeat.artifacts.dataSources {
-            _ = check dbClient->execute(`
+    foreach types:DataSource dataSource in <types:DataSource[]>heartbeat.artifacts.dataSources {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_data_sources (
                     runtime_id, datasource_name, driver, url, state
                 ) VALUES (
@@ -1731,12 +1679,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${dataSource.url}, ${dataSource.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.connectors is types:Connector[] {
-        foreach types:Connector connector in <types:Connector[]>heartbeat.artifacts.connectors {
-            _ = check dbClient->execute(`
+    foreach types:Connector connector in <types:Connector[]>heartbeat.artifacts.connectors {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_connectors (
                     runtime_id, connector_name, package, version, state
                 ) VALUES (
@@ -1744,12 +1690,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${connector.version}, ${connector.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.registryResources is types:RegistryResource[] {
-        foreach types:RegistryResource registryResource in <types:RegistryResource[]>heartbeat.artifacts.registryResources {
-            _ = check dbClient->execute(`
+    foreach types:RegistryResource registryResource in <types:RegistryResource[]>heartbeat.artifacts.registryResources {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_registry_resources (
                     runtime_id, resource_name, path, resource_type, state
                 ) VALUES (
@@ -1757,20 +1701,18 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                     ${registryResource.'type}, ${registryResource.state}
                 )
             `);
-        }
     }
 
-    if heartbeat.artifacts.systemInfo is types:SystemInfo[] {
-        foreach types:SystemInfo info in <types:SystemInfo[]>heartbeat.artifacts.systemInfo {
-            _ = check dbClient->execute(`
+    foreach types:SystemInfo info in <types:SystemInfo[]>heartbeat.artifacts.systemInfo {
+        _ = check dbClient->execute(`
                 INSERT INTO runtime_system_info (
                     runtime_id, info_key, value
                 ) VALUES (
                     ${heartbeat.runtime}, ${info.key}, ${info.value}
                 )
             `);
-        }
     }
+
 }
 
 // Retrieve and mark control commands as sent (within transaction)
@@ -1808,54 +1750,39 @@ isolated function retrieveAndMarkCommandsAsSent(string runtimeId) returns types:
 // Count total artifacts in heartbeat
 isolated function countTotalArtifacts(types:Artifacts artifacts) returns int {
     int totalArtifacts = artifacts.services.length() + artifacts.listeners.length();
-    if artifacts.apis is types:RestApi[] {
-        totalArtifacts += (<types:RestApi[]>artifacts.apis).length();
-    }
-    if artifacts.proxyServices is types:ProxyService[] {
-        totalArtifacts += (<types:ProxyService[]>artifacts.proxyServices).length();
-    }
-    if artifacts.endpoints is types:Endpoint[] {
-        totalArtifacts += (<types:Endpoint[]>artifacts.endpoints).length();
-    }
-    if artifacts.inboundEndpoints is types:InboundEndpoint[] {
-        totalArtifacts += (<types:InboundEndpoint[]>artifacts.inboundEndpoints).length();
-    }
-    if artifacts.sequences is types:Sequence[] {
-        totalArtifacts += (<types:Sequence[]>artifacts.sequences).length();
-    }
-    if artifacts.tasks is types:Task[] {
-        totalArtifacts += (<types:Task[]>artifacts.tasks).length();
-    }
-    if artifacts.templates is types:Template[] {
-        totalArtifacts += (<types:Template[]>artifacts.templates).length();
-    }
-    if artifacts.messageStores is types:MessageStore[] {
-        totalArtifacts += (<types:MessageStore[]>artifacts.messageStores).length();
-    }
-    if artifacts.messageProcessors is types:MessageProcessor[] {
-        totalArtifacts += (<types:MessageProcessor[]>artifacts.messageProcessors).length();
-    }
-    if artifacts.localEntries is types:LocalEntry[] {
-        totalArtifacts += (<types:LocalEntry[]>artifacts.localEntries).length();
-    }
-    if artifacts.dataServices is types:DataService[] {
-        totalArtifacts += (<types:DataService[]>artifacts.dataServices).length();
-    }
-    if artifacts.carbonApps is types:CarbonApp[] {
-        totalArtifacts += (<types:CarbonApp[]>artifacts.carbonApps).length();
-    }
-    if artifacts.dataSources is types:DataSource[] {
-        totalArtifacts += (<types:DataSource[]>artifacts.dataSources).length();
-    }
-    if artifacts.connectors is types:Connector[] {
-        totalArtifacts += (<types:Connector[]>artifacts.connectors).length();
-    }
-    if artifacts.registryResources is types:RegistryResource[] {
-        totalArtifacts += (<types:RegistryResource[]>artifacts.registryResources).length();
-    }
-    if artifacts.systemInfo is types:SystemInfo[] {
-        totalArtifacts += (<types:SystemInfo[]>artifacts.systemInfo).length();
-    }
+
+    totalArtifacts += (<types:RestApi[]>artifacts.apis).length();
+
+    totalArtifacts += (<types:ProxyService[]>artifacts.proxyServices).length();
+
+    totalArtifacts += (<types:Endpoint[]>artifacts.endpoints).length();
+
+    totalArtifacts += (<types:InboundEndpoint[]>artifacts.inboundEndpoints).length();
+
+    totalArtifacts += (<types:Sequence[]>artifacts.sequences).length();
+
+    totalArtifacts += (<types:Task[]>artifacts.tasks).length();
+
+    totalArtifacts += (<types:Template[]>artifacts.templates).length();
+
+    totalArtifacts += (<types:MessageStore[]>artifacts.messageStores).length();
+
+    totalArtifacts += (<types:MessageProcessor[]>artifacts.messageProcessors).length();
+
+    totalArtifacts += (<types:LocalEntry[]>artifacts.localEntries).length();
+
+    totalArtifacts += (<types:DataService[]>artifacts.dataServices).length();
+
+    totalArtifacts += (<types:CarbonApp[]>artifacts.carbonApps).length();
+
+    totalArtifacts += (<types:DataSource[]>artifacts.dataSources).length();
+
+    totalArtifacts += (<types:Connector[]>artifacts.connectors).length();
+
+    totalArtifacts += (<types:RegistryResource[]>artifacts.registryResources).length();
+
+    totalArtifacts += (<types:SystemInfo[]>artifacts.systemInfo).length();
+
     return totalArtifacts;
 }
 
@@ -1881,10 +1808,8 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
         // Insert all runtime artifacts (services, listeners, MI artifacts, etc.)
         check insertRuntimeArtifacts(heartbeat);
 
-
-        if heartbeat.artifacts.inboundEndpoints is types:InboundEndpoint[] {
-            foreach types:InboundEndpoint inbound in <types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints {
-                _ = check dbClient->execute(`
+        foreach types:InboundEndpoint inbound in <types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_inbound_endpoints (
                         runtime_id, inbound_name, protocol, sequence, state
                     ) VALUES (
@@ -1892,12 +1817,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${inbound.sequence}, ${inbound.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.sequences is types:Sequence[] {
-            foreach types:Sequence sequence in <types:Sequence[]>heartbeat.artifacts.sequences {
-                _ = check dbClient->execute(`
+        foreach types:Sequence sequence in <types:Sequence[]>heartbeat.artifacts.sequences {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_sequences (
                         runtime_id, sequence_name, sequence_type, container, state
                     ) VALUES (
@@ -1905,12 +1828,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${sequence.container}, ${sequence.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.tasks is types:Task[] {
-            foreach types:Task task in <types:Task[]>heartbeat.artifacts.tasks {
-                _ = check dbClient->execute(`
+        foreach types:Task task in <types:Task[]>heartbeat.artifacts.tasks {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_tasks (
                         runtime_id, task_name, task_class, task_group, state
                     ) VALUES (
@@ -1918,24 +1839,20 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${task.group}, ${task.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.templates is types:Template[] {
-            foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
-                _ = check dbClient->execute(`
+        foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_templates (
                         runtime_id, template_name, template_type, state
                     ) VALUES (
                         ${heartbeat.runtime}, ${template.name}, ${template.'type}, ${template.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.messageStores is types:MessageStore[] {
-            foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
-                _ = check dbClient->execute(`
+        foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_message_stores (
                         runtime_id, store_name, store_type, store_class, state
                     ) VALUES (
@@ -1943,12 +1860,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${store.'class}, ${store.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.messageProcessors is types:MessageProcessor[] {
-            foreach types:MessageProcessor processor in <types:MessageProcessor[]>heartbeat.artifacts.messageProcessors {
-                _ = check dbClient->execute(`
+        foreach types:MessageProcessor processor in <types:MessageProcessor[]>heartbeat.artifacts.messageProcessors {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_message_processors (
                         runtime_id, processor_name, processor_type, processor_class, state
                     ) VALUES (
@@ -1956,12 +1871,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${processor.'class}, ${processor.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.localEntries is types:LocalEntry[] {
-            foreach types:LocalEntry entry in <types:LocalEntry[]>heartbeat.artifacts.localEntries {
-                _ = check dbClient->execute(`
+        foreach types:LocalEntry entry in <types:LocalEntry[]>heartbeat.artifacts.localEntries {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_local_entries (
                         runtime_id, entry_name, entry_type, entry_value, state
                     ) VALUES (
@@ -1969,12 +1882,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${entry.value}, ${entry.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.dataServices is types:DataService[] {
-            foreach types:DataService dataService in <types:DataService[]>heartbeat.artifacts.dataServices {
-                _ = check dbClient->execute(`
+        foreach types:DataService dataService in <types:DataService[]>heartbeat.artifacts.dataServices {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_data_services (
                         runtime_id, service_name, description, wsdl, state
                     ) VALUES (
@@ -1982,12 +1893,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${dataService.wsdl}, ${dataService.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.carbonApps is types:CarbonApp[] {
-            foreach types:CarbonApp app in <types:CarbonApp[]>heartbeat.artifacts.carbonApps {
-                _ = check dbClient->execute(`
+        foreach types:CarbonApp app in <types:CarbonApp[]>heartbeat.artifacts.carbonApps {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_carbon_apps (
                         runtime_id, app_name, version, deployment_status, state
                     ) VALUES (
@@ -1995,12 +1904,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${app.deploymentStatus}, ${app.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.dataSources is types:DataSource[] {
-            foreach types:DataSource dataSource in <types:DataSource[]>heartbeat.artifacts.dataSources {
-                _ = check dbClient->execute(`
+        foreach types:DataSource dataSource in <types:DataSource[]>heartbeat.artifacts.dataSources {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_data_sources (
                         runtime_id, datasource_name, driver, url, state
                     ) VALUES (
@@ -2008,12 +1915,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${dataSource.url}, ${dataSource.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.connectors is types:Connector[] {
-            foreach types:Connector connector in <types:Connector[]>heartbeat.artifacts.connectors {
-                _ = check dbClient->execute(`
+        foreach types:Connector connector in <types:Connector[]>heartbeat.artifacts.connectors {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_connectors (
                         runtime_id, connector_name, connector_package, version, state
                     ) VALUES (
@@ -2021,12 +1926,10 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${connector.version}, ${connector.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.registryResources is types:RegistryResource[] {
-            foreach types:RegistryResource registryResource in <types:RegistryResource[]>heartbeat.artifacts.registryResources {
-                _ = check dbClient->execute(`
+        foreach types:RegistryResource registryResource in <types:RegistryResource[]>heartbeat.artifacts.registryResources {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_registry_resources (
                         runtime_id, resource_name, path, resource_type, state
                     ) VALUES (
@@ -2034,19 +1937,16 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
                         ${registryResource.'type}, ${registryResource.state}
                     )
                 `);
-            }
         }
 
-        if heartbeat.artifacts.systemInfo is types:SystemInfo[] {
-            foreach types:SystemInfo info in <types:SystemInfo[]>heartbeat.artifacts.systemInfo {
-                _ = check dbClient->execute(`
+        foreach types:SystemInfo info in <types:SystemInfo[]>heartbeat.artifacts.systemInfo {
+            _ = check dbClient->execute(`
                     INSERT INTO runtime_system_info (
                         runtime_id, info_key, value
                     ) VALUES (
                         ${heartbeat.runtime}, ${info.key}, ${info.value}
                     )
                 `);
-            }
         }
 
         // Validate runtime consistency within component (only for new registrations)
@@ -2084,57 +1984,40 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
 
         // Create audit log entry
         string action = isNewRegistration ? "REGISTER" : "HEARTBEAT";
-        
+
         // Count all artifacts
         int totalArtifacts = heartbeat.artifacts.services.length() + heartbeat.artifacts.listeners.length();
-        if heartbeat.artifacts.apis is types:RestApi[] {
-            totalArtifacts += (<types:RestApi[]>heartbeat.artifacts.apis).length();
-        }
-        if heartbeat.artifacts.proxyServices is types:ProxyService[] {
-            totalArtifacts += (<types:ProxyService[]>heartbeat.artifacts.proxyServices).length();
-        }
-        if heartbeat.artifacts.endpoints is types:Endpoint[] {
-            totalArtifacts += (<types:Endpoint[]>heartbeat.artifacts.endpoints).length();
-        }
-        if heartbeat.artifacts.inboundEndpoints is types:InboundEndpoint[] {
-            totalArtifacts += (<types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints).length();
-        }
-        if heartbeat.artifacts.sequences is types:Sequence[] {
-            totalArtifacts += (<types:Sequence[]>heartbeat.artifacts.sequences).length();
-        }
-        if heartbeat.artifacts.tasks is types:Task[] {
-            totalArtifacts += (<types:Task[]>heartbeat.artifacts.tasks).length();
-        }
-        if heartbeat.artifacts.templates is types:Template[] {
-            totalArtifacts += (<types:Template[]>heartbeat.artifacts.templates).length();
-        }
-        if heartbeat.artifacts.messageStores is types:MessageStore[] {
-            totalArtifacts += (<types:MessageStore[]>heartbeat.artifacts.messageStores).length();
-        }
-        if heartbeat.artifacts.messageProcessors is types:MessageProcessor[] {
-            totalArtifacts += (<types:MessageProcessor[]>heartbeat.artifacts.messageProcessors).length();
-        }
-        if heartbeat.artifacts.localEntries is types:LocalEntry[] {
-            totalArtifacts += (<types:LocalEntry[]>heartbeat.artifacts.localEntries).length();
-        }
-        if heartbeat.artifacts.dataServices is types:DataService[] {
-            totalArtifacts += (<types:DataService[]>heartbeat.artifacts.dataServices).length();
-        }
-        if heartbeat.artifacts.carbonApps is types:CarbonApp[] {
-            totalArtifacts += (<types:CarbonApp[]>heartbeat.artifacts.carbonApps).length();
-        }
-        if heartbeat.artifacts.dataSources is types:DataSource[] {
-            totalArtifacts += (<types:DataSource[]>heartbeat.artifacts.dataSources).length();
-        }
-        if heartbeat.artifacts.connectors is types:Connector[] {
-            totalArtifacts += (<types:Connector[]>heartbeat.artifacts.connectors).length();
-        }
-        if heartbeat.artifacts.registryResources is types:RegistryResource[] {
-            totalArtifacts += (<types:RegistryResource[]>heartbeat.artifacts.registryResources).length();
-        }
-        if heartbeat.artifacts.systemInfo is types:SystemInfo[] {
-            totalArtifacts += (<types:SystemInfo[]>heartbeat.artifacts.systemInfo).length();
-        }
+        totalArtifacts += heartbeat.artifacts.apis.length();
+
+        totalArtifacts += heartbeat.artifacts.proxyServices.length();
+
+        totalArtifacts += heartbeat.artifacts.endpoints.length();
+
+        totalArtifacts += heartbeat.artifacts.inboundEndpoints.length();
+
+        totalArtifacts += heartbeat.artifacts.sequences.length();
+
+        totalArtifacts += heartbeat.artifacts.tasks.length();
+
+        totalArtifacts += heartbeat.artifacts.templates.length();
+
+        totalArtifacts += heartbeat.artifacts.messageStores.length();
+
+        totalArtifacts += heartbeat.artifacts.messageProcessors.length();
+
+        totalArtifacts += heartbeat.artifacts.localEntries.length();
+
+        totalArtifacts += heartbeat.artifacts.dataServices.length();
+
+        totalArtifacts += heartbeat.artifacts.carbonApps.length();
+
+        totalArtifacts += heartbeat.artifacts.dataSources.length();
+
+        totalArtifacts += heartbeat.artifacts.connectors.length();
+
+        totalArtifacts += heartbeat.artifacts.registryResources.length();
+
+        totalArtifacts += heartbeat.artifacts.systemInfo.length();
 
         _ = check dbClient->execute(`
             INSERT INTO audit_logs (
@@ -3088,26 +2971,26 @@ public isolated function updateUserProfile(string userId, string displayName) re
 
 // Store a new refresh token in the database
 public isolated function storeRefreshToken(
-    string tokenId,
-    string userId,
-    string tokenHash,
-    int expirySeconds,
-    string? userAgent,
-    string? ipAddress
+        string tokenId,
+        string userId,
+        string tokenHash,
+        int expirySeconds,
+        string? userAgent,
+        string? ipAddress
 ) returns error? {
     log:printDebug(string `Storing refresh token for user: ${userId}`);
-    
+
     // Use MySQL DATE_ADD to calculate expiry time directly in the database
     sql:ExecutionResult|sql:Error result = dbClient->execute(
         `INSERT INTO refresh_tokens (token_id, user_id, token_hash, expires_at, user_agent, ip_address) 
          VALUES (${tokenId}, ${userId}, ${tokenHash}, DATE_ADD(NOW(), INTERVAL ${expirySeconds} SECOND), ${userAgent}, ${ipAddress})`
     );
-    
+
     if result is sql:Error {
         log:printError(string `Failed to store refresh token for user ${userId}`, result);
         return result;
     }
-    
+
     log:printInfo(string `Successfully stored refresh token for user ${userId}`);
     return ();
 }
@@ -3116,7 +2999,7 @@ public isolated function storeRefreshToken(
 // Returns error if token is invalid, expired, or revoked
 public isolated function validateRefreshToken(string tokenHash) returns types:User|error {
     log:printDebug("Validating refresh token");
-    
+
     // Query for the refresh token with epoch timestamp for expiry
     record {|
         string token_id;
@@ -3128,47 +3011,47 @@ public isolated function validateRefreshToken(string tokenHash) returns types:Us
          FROM refresh_tokens 
          WHERE token_hash = ${tokenHash}`
     );
-    
+
     if refreshToken is sql:Error {
         log:printWarn("Refresh token not found in database");
         return error("Invalid refresh token");
     }
-    
+
     // Check if token is revoked
     if refreshToken.revoked {
         log:printWarn("Refresh token has been revoked", tokenId = refreshToken.token_id);
         return error("Refresh token has been revoked");
     }
-    
+
     // Check if token has expired (compare epoch timestamps)
     time:Utc currentTime = time:utcNow();
     decimal currentEpoch = <decimal>currentTime[0];
     decimal expiryEpoch = <decimal>refreshToken.expires_at_epoch;
-    
+
     if expiryEpoch <= currentEpoch {
         log:printWarn("Refresh token has expired", tokenId = refreshToken.token_id);
         return error("Refresh token has expired");
     }
-    
+
     // Update last_used_at timestamp
     sql:ExecutionResult|sql:Error updateResult = dbClient->execute(
         `UPDATE refresh_tokens 
          SET last_used_at = CURRENT_TIMESTAMP 
          WHERE token_hash = ${tokenHash}`
     );
-    
+
     if updateResult is sql:Error {
         log:printWarn("Failed to update last_used_at for refresh token", updateResult);
         // Don't fail the validation, just log the warning
     }
-    
+
     // Fetch and return user details
     types:User|error user = getUserDetailsById(refreshToken.user_id);
     if user is error {
         log:printError(string `Failed to get user details for token validation`, user);
         return error("User not found for refresh token");
     }
-    
+
     log:printInfo("Refresh token validated successfully", userId = user.userId);
     return user;
 }
@@ -3176,25 +3059,25 @@ public isolated function validateRefreshToken(string tokenHash) returns types:Us
 // Revoke a refresh token (logout)
 public isolated function revokeRefreshToken(string tokenHash) returns error? {
     log:printDebug("Revoking refresh token");
-    
+
     sql:ExecutionResult|sql:Error result = dbClient->execute(
         `UPDATE refresh_tokens 
          SET revoked = TRUE, revoked_at = CURRENT_TIMESTAMP 
          WHERE token_hash = ${tokenHash}`
     );
-    
+
     if result is sql:Error {
         log:printError("Failed to revoke refresh token", result);
         return result;
     }
-    
+
     // Check if any rows were affected
     int? affectedRows = result.affectedRowCount;
     if affectedRows is () || affectedRows == 0 {
         log:printWarn("No refresh token found to revoke");
         return error("Refresh token not found");
     }
-    
+
     log:printInfo("Successfully revoked refresh token");
     return ();
 }
@@ -3202,18 +3085,18 @@ public isolated function revokeRefreshToken(string tokenHash) returns error? {
 // Revoke all refresh tokens for a specific user
 public isolated function revokeAllUserRefreshTokens(string userId) returns error? {
     log:printDebug(string `Revoking all refresh tokens for user: ${userId}`);
-    
+
     sql:ExecutionResult|sql:Error result = dbClient->execute(
         `UPDATE refresh_tokens 
          SET revoked = TRUE, revoked_at = CURRENT_TIMESTAMP 
          WHERE user_id = ${userId} AND revoked = FALSE`
     );
-    
+
     if result is sql:Error {
         log:printError(string `Failed to revoke refresh tokens for user ${userId}`, result);
         return result;
     }
-    
+
     int? affectedRows = result.affectedRowCount;
     log:printInfo(string `Successfully revoked ${affectedRows ?: 0} refresh tokens for user ${userId}`);
     return ();
@@ -3222,17 +3105,17 @@ public isolated function revokeAllUserRefreshTokens(string userId) returns error
 // Clean up expired refresh tokens (called by scheduled job)
 public isolated function cleanupExpiredRefreshTokens() returns error? {
     log:printDebug("Cleaning up expired refresh tokens");
-    
+
     sql:ExecutionResult|sql:Error result = dbClient->execute(
         `DELETE FROM refresh_tokens 
          WHERE expires_at < CURRENT_TIMESTAMP OR revoked = TRUE`
     );
-    
+
     if result is sql:Error {
         log:printError("Failed to cleanup expired refresh tokens", result);
         return result;
     }
-    
+
     int? deletedCount = result.affectedRowCount;
     log:printInfo(string `Successfully cleaned up ${deletedCount ?: 0} expired/revoked refresh tokens`);
     return ();

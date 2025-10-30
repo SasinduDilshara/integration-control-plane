@@ -77,22 +77,22 @@ public type Artifacts record {
     Listener[] listeners = [];
     Service[] services = [];
     // MI-specific artifact types that may be present in heartbeat payloads
-    RestApi[]? apis = ();
-    ProxyService[]? proxyServices = ();
-    Endpoint[]? endpoints = ();
-    InboundEndpoint[]? inboundEndpoints = ();
-    Sequence[]? sequences = ();
-    Task[]? tasks = ();
-    Template[]? templates = ();
-    MessageStore[]? messageStores = ();
-    MessageProcessor[]? messageProcessors = ();
-    LocalEntry[]? localEntries = ();
-    DataService[]? dataServices = ();
-    CarbonApp[]? carbonApps = ();
-    DataSource[]? dataSources = ();
-    Connector[]? connectors = ();
-    RegistryResource[]? registryResources = ();
-    SystemInfo[]? systemInfo = ();
+    RestApi[] apis = [];
+    ProxyService[] proxyServices = [];
+    Endpoint[] endpoints = [];
+    InboundEndpoint[] inboundEndpoints = [];
+    Sequence[] sequences = [];
+    Task[] tasks = [];
+    Template[] templates = [];
+    MessageStore[] messageStores = [];
+    MessageProcessor[] messageProcessors = [];
+    LocalEntry[] localEntries = [];
+    DataService[] dataServices = [];
+    CarbonApp[] carbonApps = [];
+    DataSource[] dataSources = [];
+    Connector[] connectors = [];
+    RegistryResource[] registryResources = [];
+    SystemInfo[] systemInfo = [];
 };
 
 public type Node record {
@@ -286,10 +286,10 @@ public type ListenerRecordInDB record {
     string listener_package;
     string protocol;
     ArtifactState state;
-    string? port?;
-    string? destination?;
-    string? queue?;
-    string? path?;
+    string port?;
+    string destination?;
+    string queue?;
+    string path?;
 };
 
 // Database record types for MI artifacts
