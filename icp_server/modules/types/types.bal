@@ -62,7 +62,7 @@ public type Resource record {
     }
     string path = ""; // "/unittest", "/", "/send", etc.
     @sql:Column {
-        name: "resource_method" 
+        name: "resource_method"
     }
     string method = ""; // "GET", "POST", "PUT", "DELETE"
     // Legacy fields for backward compatibility
@@ -725,36 +725,13 @@ public type Project record {
     string? updatedBy?;
 };
 
-// ProjectResponse type that matches frontend expectations (Choreo-compatible)
-// This type is returned by GraphQL queries to ensure frontend compatibility
-public type ProjectResponse record {|
-    string id; // Maps from projectId
-    string orgId; // String version of orgId (frontend expects string)
-    string name;
-    string version; // Required by frontend
-    string stage; // Default empty string for ICP
-    string owner; // Maps from ownerId or createdBy
-    string 'group; // Default empty string for ICP (reserved keyword, use tick)
-    string createdDate; // Required by frontend
-    string updatedAt; // Required by frontend
-    string handler;
-    string region; // Required by frontend
-    string? description?;
-    string? 'type?;
-    string? gitProvider?;
-    string? repository?;
-    string? gitOrganization?;
-    string? branch?;
-    string? secretRef?;
-    string? defaultDeploymentPipelineId?;
-    string[]? deploymentPipelineIds?;
-|};
-
 public type ProjectInput record {
     int orgId;
+    string orgHandler;
     string name;
     string? version?;
-    string handler;
+    string projectHandler;
+    string? handler?;
     string? region?;
     string? description?;
     string? defaultDeploymentPipelineId?;
@@ -1185,7 +1162,7 @@ public type RefreshTokenRequest record {
 
 // Request type for revoke token endpoint
 public type RevokeTokenRequest record {
-    string? refreshToken?;  // If provided, revokes specific token. If omitted, revokes all user's tokens
+    string? refreshToken?; // If provided, revokes specific token. If omitted, revokes all user's tokens
 };
 
 // Types for the /authenticate endpoint
@@ -1397,4 +1374,17 @@ public type ChangePasswordRequest record {
     string userId?;
     string currentPassword;
     string newPassword;
+};
+
+// === Project Creation Eligibility ===
+
+public type ProjectCreationEligibility record {
+    boolean isProjectCreationAllowed;
+};
+
+// === Project Handler Availability ===
+
+public type ProjectHandlerAvailability record {
+    boolean handlerUnique;
+    string? alternateHandlerCandidate;
 };
