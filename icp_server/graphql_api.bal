@@ -466,7 +466,7 @@ service /graphql on graphqlListener {
     }
 
     // Delete a project
-    isolated remote function deleteProject(graphql:Context context, string projectId) returns boolean|error {
+    isolated remote function deleteProject(graphql:Context context, int orgId, string projectId) returns types:DeleteResponse|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -479,12 +479,25 @@ service /graphql on graphqlListener {
             return error("Project author access required to delete projects");
         }
 
+        // Check if the project has any components
+        boolean hasComponents = check storage:hasProjectComponents(projectId);
+        if hasComponents {
+            return {
+                status: "failed",
+                details: "Cannot delete project. Project contains components that must be deleted first."
+            };
+        }
+
+        // Proceed with deletion if no components exist
         check storage:deleteProject(projectId);
-        return true;
+        return {
+            status: "success",
+            details: string `Deleted project with ID: ${projectId}`
+        };
     }
 
     // Update project name and/or description
-    isolated remote function updateProject(graphql:Context context, string projectId, string? name, string? description) returns types:Project?|error {
+    isolated remote function updateProject(graphql:Context context, types:ProjectUpdateInput project) returns types:Project?|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -497,8 +510,8 @@ service /graphql on graphqlListener {
             return error("Project author access required to update projects");
         }
 
-        check storage:updateProject(projectId, name, description);
-        return check storage:getProjectById(projectId);
+        check storage:updateProjectWithInput(project);
+        return check storage:getProjectById(project.id);
     }
 
     // ----------- Component Resources

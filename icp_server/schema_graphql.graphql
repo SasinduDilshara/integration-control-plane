@@ -161,8 +161,8 @@ type Mutation {
   updateEnvironment(environmentId: String!, name: String, description: String): Environment
   updateEnvironmentProductionStatus(environmentId: String!, isProduction: Boolean!): Environment
   createProject(project: ProjectInput!): Project
-  deleteProject(projectId: String!): Boolean!
-  updateProject(projectId: String!, name: String, description: String): Project
+  deleteProject(orgId: Int!, projectId: String!): DeleteResponse!
+  updateProject(project: ProjectUpdateInput!): Project
   createComponent(component: ComponentInput!): Component
   deleteComponent(componentId: String!): Boolean!
   updateComponent(componentId: String!, name: String, description: String): Component!
@@ -191,6 +191,14 @@ input ProjectInput {
   repository: String
   branch: String
   secretRef: String
+}
+
+input ProjectUpdateInput {
+  id: String!
+  orgId: Int
+  name: String
+  version: String
+  description: String
 }
 
 input ComponentInput {
@@ -423,4 +431,12 @@ type ProjectCreationEligibility {
 type ProjectHandlerAvailability {
   handlerUnique: Boolean!
   alternateHandlerCandidate: String
+}
+
+# ============================================
+# Delete Response Type
+# ============================================
+type DeleteResponse {
+  status: String!
+  details: String!
 }

@@ -2364,6 +2364,65 @@ public isolated function updateProject(string projectId, string? name, string? d
     return ();
 }
 
+// Update project with ProjectUpdateInput
+public isolated function updateProjectWithInput(types:ProjectUpdateInput project) returns error? {
+    sql:ParameterizedQuery whereClause = ` WHERE project_id = ${project.id} `;
+    sql:ParameterizedQuery updateFields = ` SET updated_at = CURRENT_TIMESTAMP `;
+    boolean hasUpdates = false;
+
+    if project?.name is string {
+        updateFields = sql:queryConcat(updateFields, `, name = ${project?.name} `);
+        hasUpdates = true;
+    }
+    if project?.description is string {
+        updateFields = sql:queryConcat(updateFields, `, description = ${project?.description} `);
+        hasUpdates = true;
+    }
+    if project?.version is string {
+        updateFields = sql:queryConcat(updateFields, `, version = ${project?.version} `);
+        hasUpdates = true;
+    }
+    if project?.orgId is int {
+        updateFields = sql:queryConcat(updateFields, `, org_id = ${project?.orgId} `);
+        hasUpdates = true;
+    }
+
+    if !hasUpdates {
+        return error("No fields to update");
+    }
+
+    transaction {
+        // Update the project
+        sql:ParameterizedQuery updateQuery = sql:queryConcat(`UPDATE projects `, updateFields, whereClause);
+        sql:ExecutionResult _ = check dbClient->execute(updateQuery);
+
+        // If project name is being updated, update all associated role names
+        if project?.name is string {
+            // Replace spaces with underscores in project name for role naming
+            string projectName = re `\s+`.replaceAll(project?.name ?: "", "_");
+
+            // Update role names for all roles associated with this project
+            // Role name format: <project_name>:<env_type>:<privilege_level>
+            sql:ExecutionResult _ = check dbClient->execute(`
+                UPDATE roles 
+                SET role_name = CONCAT(${projectName}, ':', environment_type, ':', privilege_level),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE project_id = ${project.id}
+            `);
+
+            log:printInfo(string `Updated role names for project ${project.id} with new name: ${project?.name ?: "unknown"}`);
+        }
+
+        check commit;
+        log:printInfo(string `Successfully updated project ${project.id}`);
+    } on fail error e {
+        log:printError(string `Failed to update project ${project.id}`, e);
+        return error(string `Failed to update project ${project.id}`, e);
+    }
+
+    return ();
+}
+
 // Delete a project by ID (this will cascade delete all components, runtimes, roles, and user role assignments)
 public isolated function deleteProject(string projectId) returns error? {
     sql:ParameterizedQuery deleteQuery = `DELETE FROM projects WHERE project_id = ${projectId}`;
@@ -2387,6 +2446,20 @@ public isolated function createComponent(types:ComponentInput component) returns
     }
     return getComponentById(componentId);
 
+}
+
+// Check if a project has any components
+public isolated function hasProjectComponents(string projectId) returns boolean|error {
+    sql:ParameterizedQuery query = `SELECT COUNT(*) as component_count FROM components WHERE project_id = ${projectId}`;
+    stream<record {int component_count;}, sql:Error?> resultStream = dbClient->query(query);
+
+    record {|record {int component_count;} value;|}? streamResult = check resultStream.next();
+    check resultStream.close();
+
+    if streamResult is record {|record {int component_count;} value;|} {
+        return streamResult.value.component_count > 0;
+    }
+    return false;
 }
 
 // Get all components with optional project filter

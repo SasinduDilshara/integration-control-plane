@@ -197,6 +197,11 @@ public type ApiResponse record {
     string[] errors?;
 };
 
+public type DeleteResponse record {
+    string status;
+    string details;
+};
+
 public type AccessTokenResponse record {|
     string AccessToken;
 |};
@@ -742,6 +747,14 @@ public type ProjectInput record {
     string? repository?;
     string? branch?;
     string? secretRef?;
+};
+
+public type ProjectUpdateInput record {
+    string id;
+    int? orgId?;
+    string? name?;
+    string? version?;
+    string? description?;
 };
 
 public type Component record {
