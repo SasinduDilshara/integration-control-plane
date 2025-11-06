@@ -228,7 +228,9 @@ service /graphql on graphqlListener {
     }
 
     // Get all environments (filtered by user's accessible environments via RBAC)
-    isolated resource function get environments(graphql:Context context) returns types:Environment[]|error {
+    // Note: orgUuid, type, and projectId parameters are accepted for frontend compatibility
+    // but ignored since environments are global (not org-specific)
+    isolated resource function get environments(graphql:Context context, string? orgUuid, string? 'type, string? projectId) returns types:Environment[]|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -238,6 +240,7 @@ service /graphql on graphqlListener {
         types:UserContext userContext = check utils:extractUserContext(authHeader);
 
         // Get all environment IDs where user has any role (across all projects)
+        // Note: Parameters orgUuid, type, projectId are ignored - environments are global
         string[]|error accessibleEnvironmentIds = utils:getAccessibleEnvironmentIdsByType(userContext);
         if accessibleEnvironmentIds is error {
             log:printError("Failed to get accessible environment IDs", accessibleEnvironmentIds);
@@ -250,7 +253,17 @@ service /graphql on graphqlListener {
         }
 
         // Fetch environments by accessible environment IDs
-        return check storage:getEnvironmentsByIds(accessibleEnvironmentIds);
+        types:Environment[] environments = check storage:getEnvironmentsByIds(accessibleEnvironmentIds);
+
+        // Populate extended fields with default values (since they're not in DB)
+        foreach var env in environments {
+            env.id = env.environmentId; // Set id alias
+            env.templateId = ""; // Required field, default to empty
+            env.scaleToZeroEnabled = false; // Required field, default to false
+            // All other optional fields will remain null/unset
+        }
+
+        return environments;
     }
 
     // Get all environments where user has admin access (for permission management)
@@ -573,8 +586,8 @@ service /graphql on graphqlListener {
         return check storage:getComponentsByProjectIds(accessibleProjectIds, options);
     }
 
-    // Get a specific component by ID
-    isolated resource function get component(graphql:Context context, string componentId) returns types:Component?|error {
+    // Get a specific component by ID or by projectId + componentHandler
+    isolated resource function get component(graphql:Context context, string? componentId, string? projectId, string? componentHandler) returns types:Component?|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -583,8 +596,16 @@ service /graphql on graphqlListener {
         // Extract user context for RBAC
         types:UserContext userContext = check utils:extractUserContext(authHeader);
 
-        // First, fetch the component to get its parent project ID
-        types:Component? component = check storage:getComponentById(componentId);
+        types:Component? component = ();
+
+        // Fetch component by ID or by projectId + componentHandler
+        if componentId is string {
+            component = check storage:getComponentById(componentId);
+        } else if projectId is string && componentHandler is string {
+            component = check storage:getComponentByProjectAndHandler(projectId, componentHandler);
+        } else {
+            return error("Either componentId or (projectId and componentHandler) must be provided");
+        }
 
         if component is () {
             return (); // Component not found
@@ -632,8 +653,96 @@ service /graphql on graphqlListener {
         return true;
     }
 
-    // Update component name and/or description
-    isolated remote function updateComponent(graphql:Context context, string componentId, string? name, string? description) returns types:Component|error {
+    // Delete a component V2 - with detailed response
+    isolated remote function deleteComponentV2(graphql:Context context, string orgHandler, string componentId, string projectId) returns types:DeleteComponentV2Response|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return {
+                status: "FAILED",
+                canDelete: false,
+                message: "Authorization header missing in request",
+                encodedData: ""
+            };
+        }
+
+        types:UserContext userContext = check utils:extractUserContext(authHeader);
+
+        // 1. Check if component exists and belongs to the specified project
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return {
+                status: "FAILED",
+                canDelete: false,
+                message: "Component not found",
+                encodedData: ""
+            };
+        }
+
+        // Verify the component belongs to the specified project
+        if component.projectId != projectId {
+            return {
+                status: "FAILED",
+                canDelete: false,
+                message: "Component does not belong to the specified project",
+                encodedData: ""
+            };
+        }
+
+        // 2. Check if user has admin access to the project
+        if !utils:isAdminInAnyEnvironment(userContext, component.projectId) {
+            return {
+                status: "FAILED",
+                canDelete: false,
+                message: "Admin access required in project to delete components",
+                encodedData: ""
+            };
+        }
+
+        // 3. Check for active runtimes/deployments
+        string[] environmentsWithRuntimes = check storage:getEnvironmentIdsWithRuntimes(componentId);
+
+        if environmentsWithRuntimes.length() > 0 {
+            // Check if user is admin in ALL environments where the component has runtimes
+            foreach string envId in environmentsWithRuntimes {
+                if !utils:hasAdminAccess(userContext, component.projectId, envId) {
+                    return {
+                        status: "FAILED",
+                        canDelete: false,
+                        message: string `Cannot delete component: it has runtimes in environment ${envId} where you don't have admin access`,
+                        encodedData: ""
+                    };
+                }
+            }
+
+            return {
+                status: "FAILED",
+                canDelete: false,
+                message: string `Cannot delete component: ${environmentsWithRuntimes.length()} active runtime(s) found. Please stop all runtimes before deleting.`,
+                encodedData: ""
+            };
+        }
+
+        // 4. Perform deletion
+        error? deleteResult = storage:deleteComponent(componentId);
+        if deleteResult is error {
+            return {
+                status: "FAILED",
+                canDelete: false,
+                message: string `Deletion failed: ${deleteResult.message()}`,
+                encodedData: ""
+            };
+        }
+
+        return {
+            status: "SUCCESS",
+            canDelete: true,
+            message: "Component deleted successfully",
+            encodedData: ""
+        };
+    }
+
+    // Update component - supports both legacy parameters and component object
+    isolated remote function updateComponent(graphql:Context context, string? componentId, string? name, string? description, types:ComponentUpdateInput? component) returns types:Component|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -641,18 +750,39 @@ service /graphql on graphqlListener {
 
         types:UserContext userContext = check utils:extractUserContext(authHeader);
 
+        // Determine which format is being used and extract values
+        string targetComponentId;
+        string? targetName;
+        string? targetDescription;
+
+        if component is types:ComponentUpdateInput {
+            // New format: using component object
+            targetComponentId = component.id;
+            targetName = component.name ?: component.displayName; // Use displayName if name is not provided
+            targetDescription = component.description;
+        } else {
+            // Legacy format: using individual parameters
+            if componentId is () {
+                return error("Either componentId or component object must be provided");
+            }
+            targetComponentId = componentId;
+            targetName = name;
+            targetDescription = description;
+        }
+
         // Get component to check project access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
+        types:Component? existingComponent = check storage:getComponentById(targetComponentId);
+        if existingComponent is () {
             return error("Component not found");
         }
 
         // Check if user is admin in the project (in any environment)
-        if !utils:isAdminInAnyEnvironment(userContext, component.projectId) {
+        if !utils:isAdminInAnyEnvironment(userContext, existingComponent.projectId) {
             return error("Admin access required in project to update components");
         }
 
-        check storage:updateComponent(componentId, name, description, userContext.userId);
-        return check storage:getComponentById(componentId);
+        // Call the existing backend method to maintain consistency
+        check storage:updateComponent(targetComponentId, targetName, targetDescription, userContext.userId);
+        return check storage:getComponentById(targetComponentId);
     }
 }

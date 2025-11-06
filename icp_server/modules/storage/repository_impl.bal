@@ -2616,7 +2616,116 @@ public isolated function getComponentById(string componentId) returns types:Comp
 
         // Classification
         componentSubType: (),
-        componentType: (),
+        componentType: "default", // Default component type
+        labels: (),
+
+        // System Component Flag
+        isSystemComponent: false,
+
+        // Nested Objects (empty for now)
+        repository: (),
+        apiVersions: [],
+        deploymentTracks: [],
+
+        // Git Integration
+        gitProvider: component.project_git_provider,
+        gitOrganization: component.project_git_organization,
+        gitRepository: component.project_repository,
+        branch: component.project_branch,
+
+        // Advanced Fields
+        endpoints: [],
+        environmentVariables: [],
+        secrets: [],
+
+        // Legacy fields for backward compatibility
+        componentId: component.component_id,
+        project: {
+            id: component.project_id,
+            orgId: component.project_org_id,
+            name: component.project_name,
+            version: <string>component.project_version,
+            createdDate: component.project_created_date,
+            handler: component.project_handler,
+            region: component.project_region,
+            description: component.project_description,
+            'type: component.project_type,
+            gitProvider: component.project_git_provider,
+            gitOrganization: component.project_git_organization,
+            repository: component.project_repository,
+            branch: component.project_branch,
+            secretRef: component.project_secret_ref,
+            createdBy: component.project_created_by,
+            updatedAt: component.project_updated_at,
+            updatedBy: component.project_updated_by
+        },
+        createdBy: getDisplayNameById(component.component_created_by),
+        updatedBy: getDisplayNameById(component.component_updated_by)
+    };
+}
+
+// Get a component by project ID and handler (component name)
+public isolated function getComponentByProjectAndHandler(string projectId, string handler) returns types:Component?|error {
+    stream<types:ComponentInDB, sql:Error?> componentStream =
+        dbClient->query(`SELECT c.component_id, c.project_id, c.name as component_name, c.description as component_description,
+                                c.created_by as component_created_by, c.created_at as component_created_at, c.updated_at as component_updated_at,
+                                c.updated_by as component_updated_by,
+                                p.org_id as project_org_id, p.name as project_name, p.version as project_version,
+                                p.created_date as project_created_date, p.handler as project_handler, p.region as project_region,
+                                p.description as project_description, p.default_deployment_pipeline_id as project_default_deployment_pipeline_id,
+                                p.deployment_pipeline_ids as project_deployment_pipeline_ids, p.type as project_type,
+                                p.git_provider as project_git_provider, p.git_organization as project_git_organization,
+                                p.repository as project_repository, p.branch as project_branch, p.secret_ref as project_secret_ref,
+                                p.created_by as project_created_by, p.updated_at as project_updated_at, p.updated_by as project_updated_by
+                         FROM components c
+                         JOIN projects p ON c.project_id = p.project_id
+                         WHERE c.project_id = ${projectId} AND c.name = ${handler}`);
+
+    types:ComponentInDB[] componentRecords =
+        check from types:ComponentInDB component in componentStream
+        select component;
+
+    if componentRecords.length() == 0 {
+        return (); // Component not found
+    }
+
+    types:ComponentInDB component = componentRecords[0];
+
+    // Parse deployment pipeline IDs from JSON if present
+    string[]? deploymentPipelineIds = ();
+    string? pipelineIdsJsonStr = component.project_deployment_pipeline_ids;
+    if pipelineIdsJsonStr is string {
+        json pipelineIdsJsonParsed = check pipelineIdsJsonStr.fromJsonString();
+        deploymentPipelineIds = check pipelineIdsJsonParsed.cloneWithType();
+    }
+
+    return {
+        // Basic Identity Fields
+        id: component.component_id,
+        projectId: component.project_id,
+        orgHandler: component.project_handler, // Using project handler as org handler
+        orgId: component.project_org_id,
+
+        // Component Metadata
+        name: component.component_name,
+        handler: component.component_name, // Using component name as handler
+        displayName: component.component_name, // Using component name as display name
+        displayType: "service", // Default to "service"
+        description: component.component_description,
+
+        // Status Fields
+        status: "active", // Default to "active"
+        initStatus: "completed", // Default to "completed"
+
+        // Version & Timestamps
+        version: "v1.0.0", // Default version
+        createdAt: component.component_created_at ?: "",
+        lastBuildDate: component.component_updated_at,
+        updatedAt: component.component_updated_at,
+
+        // Classification
+        componentSubType: (),
+        componentType: "default", // Default component type
         labels: (),
 
         // System Component Flag

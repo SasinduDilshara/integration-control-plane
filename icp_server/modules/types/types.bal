@@ -202,6 +202,13 @@ public type DeleteResponse record {
     string details;
 };
 
+public type DeleteComponentV2Response record {
+    string status; // "SUCCESS" | "FAILED"
+    boolean canDelete;
+    string message;
+    string encodedData;
+};
+
 public type AccessTokenResponse record {|
     string AccessToken;
 |};
@@ -780,6 +787,10 @@ public type Component record {
     }
     string displayType;
     string description?;
+    @sql:Column {
+        name: "owner_name"
+    }
+    string ownerName?;
 
     // Status Fields
     string status;
@@ -819,6 +830,36 @@ public type Component record {
         name: "is_system_component"
     }
     boolean isSystemComponent?;
+
+    // Component Configuration Flags
+    @sql:Column {
+        name: "api_id"
+    }
+    string apiId?;
+    @sql:Column {
+        name: "http_based"
+    }
+    boolean httpBased?;
+    @sql:Column {
+        name: "is_migration_completed"
+    }
+    boolean isMigrationCompleted?;
+    @sql:Column {
+        name: "skip_deploy"
+    }
+    boolean skipDeploy?;
+    @sql:Column {
+        name: "endpoint_short_url_enabled"
+    }
+    boolean endpointShortUrlEnabled?;
+    @sql:Column {
+        name: "is_unified_config_mapping"
+    }
+    boolean isUnifiedConfigMapping?;
+    @sql:Column {
+        name: "service_access_mode"
+    }
+    string serviceAccessMode?;
 
     // Nested Objects
     Repository repository?;
@@ -889,18 +930,60 @@ public type ComponentInput record {
     string createdBy?;
 };
 
+public type ComponentUpdateInput record {
+    // Required field - component ID to update
+    string id;
+
+    // Basic fields that can be updated
+    string name?;
+    string displayName?;
+    string description?;
+    string version?;
+    string labels?;
+    string serviceAccessMode?;
+
+    // Extended fields (accepted for compatibility but may not be persisted)
+    string apiId?;
+    boolean httpBased?;
+    boolean isMigrationCompleted?;
+    boolean skipDeploy?;
+    boolean endpointShortUrlEnabled?;
+    boolean isUnifiedConfigMapping?;
+    string componentSubType?;
+};
+
 // === Component Related Nested Types ===
 
 public type Repository record {
+    // Build Configurations
     BuildpackConfig buildpackConfig?;
     ByocWebAppBuildConfig byocWebAppBuildConfig?;
+    ByocBuildConfig byocBuildConfig?;
     DockerBuildConfig dockerBuildConfig?;
+    TestRunnerConfig testRunnerConfig?;
+
+    // Repository Source Information
     string repositoryType?;
     string repositoryBranch?;
     string repositorySubPath?;
     string repositoryUrl?;
-    string buildContext?;
-    string dockerContext?;
+
+    // Git Provider Information (not in DB, will be null)
+    string bitbucketServerUrl?;
+    string serverUrl?;
+    string gitProvider?;
+    string nameApp?;
+    string nameConfig?;
+    string branch?;
+    string branchApp?;
+    string organizationApp?;
+    string organizationConfig?;
+    string appSubPath?;
+
+    // Repository Flags (not in DB, will be null)
+    boolean isUserManage?;
+    boolean isAuthorizedRepo?;
+    boolean isBuildConfigurationMigrated?;
 };
 
 public type BuildpackConfig record {
@@ -909,7 +992,11 @@ public type BuildpackConfig record {
     string languageVersion?;
     string buildCommand?;
     string runCommand?;
+    boolean isUnitTestEnabled?;
+    boolean pullLatestSubmodules?;
+    boolean enableTrivyScan?;
     Buildpack buildpack?;
+    KeyValue[] keyValues?;
 };
 
 public type Buildpack record {
@@ -922,12 +1009,19 @@ public type Buildpack record {
 
 public type ByocWebAppBuildConfig record {
     string id?;
+    string containerId?;
+    string componentId?;
+    string repositoryId?;
     string dockerContext?;
     string webAppType?;
     int port?;
     string imageUrl?;
     string registryId?;
     string dockerfile?;
+    string buildCommand?;
+    string packageManagerVersion?;
+    string outputDirectory?;
+    boolean enableTrivyScan?;
 };
 
 public type DockerBuildConfig record {
@@ -939,9 +1033,33 @@ public type DockerBuildConfig record {
     string registryId?;
 };
 
+public type ByocBuildConfig record {
+    string id?;
+    boolean isMainContainer?;
+    string containerId?;
+    string componentId?;
+    string repositoryId?;
+    string dockerContext?;
+    string dockerfilePath?;
+    string oasFilePath?;
+};
+
+public type TestRunnerConfig record {
+    string dockerContext?;
+    string postmanDirectory?;
+    string testRunnerType?;
+};
+
+public type KeyValue record {
+    string id?;
+    string key;
+    string value?;
+};
+
 public type ApiVersion record {
     string id;
     string apiVersion;
+    string versionId?;
     string proxyName?;
     string proxyUrl?;
     string proxyId?;
@@ -950,12 +1068,32 @@ public type ApiVersion record {
     string branch?;
     string accessibility?;
     boolean autoDeployEnabled?;
+    AppEnvVersion[] appEnvVersions?;
     CellDiagram cellDiagram?;
     string openApiSpec?;
     string graphqlSchema?;
     string createdAt?;
     string updatedAt?;
     string description?;
+};
+
+public type AppEnvVersion record {
+    string environmentId;
+    string releaseId;
+    Release? release;
+};
+
+public type Release record {
+    string id;
+    ReleaseMetadata? metadata;
+    string environmentId?;
+    string environment?;
+    string gitHash?;
+    string gitOpsHash?;
+};
+
+public type ReleaseMetadata record {
+    string choreoEnv?;
 };
 
 public type CellDiagram record {
@@ -1033,10 +1171,12 @@ public type ComponentOptionsInput record {
 };
 
 public type Environment record {
+    // Core Identity (from DB)
     @sql:Column {
         name: "environment_id"
     }
     string environmentId;
+    string id?; // Alias for environmentId (set in resolver)
     string name;
     string description?;
 
@@ -1045,6 +1185,22 @@ public type Environment record {
     }
     boolean isProduction;
 
+    // Extended fields (not in DB, populated in resolver with defaults)
+    string choreoEnv?;
+    string vhost?;
+    string sandboxVhost?;
+    string apiEnvName?;
+    string apimEnvId?;
+    boolean isMigrating?;
+    string promoteFrom?;
+    string namespace?;
+    string dpId?;
+    string templateId?; // Required in schema, will default to empty string
+    boolean critical?;
+    boolean isPdp?;
+    boolean scaleToZeroEnabled?; // Required in schema, will default to false
+
+    // Audit Fields (from DB)
     @sql:Column {
         name: "created_at"
     }

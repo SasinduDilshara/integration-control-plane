@@ -9,7 +9,7 @@ type Query {
   listeners(runtimeId: String!): [Listener!]!
 
   # Environment Queries
-  environments: [Environment!]!
+  environments(orgUuid: String, type: String, projectId: String): [Environment!]!
   adminEnvironments: [Environment!]!
 
   # Project Queries
@@ -21,7 +21,7 @@ type Query {
 
   # Component Queries
   components(orgHandler: String!, projectId: String, options: ComponentOptionsInput): [Component!]!
-  component(componentId: String!): Component
+  component(componentId: String, projectId: String, componentHandler: String): Component
 }
 
 # ============================================
@@ -132,6 +132,7 @@ type Component {
   displayName: String!
   displayType: String!
   description: String
+  ownerName: String
 
   # Status Fields
   status: String!
@@ -150,6 +151,15 @@ type Component {
 
   # System Component Flag
   isSystemComponent: Boolean
+
+  # Component Configuration Flags
+  apiId: String
+  httpBased: Boolean
+  isMigrationCompleted: Boolean
+  skipDeploy: Boolean
+  endpointShortUrlEnabled: Boolean
+  isUnifiedConfigMapping: Boolean
+  serviceAccessMode: String
 
   # Nested Objects
   repository: Repository
@@ -207,10 +217,39 @@ type Project {
 # Environment Type - Deployment Environment
 # ============================================
 type Environment {
+  # Core Identity
   environmentId: String!
+  id: String!
   name: String!
   description: String
   isProduction: Boolean!
+
+  # Choreo Environment Configuration
+  choreoEnv: String
+
+  # Virtual Host Configuration
+  vhost: String
+  sandboxVhost: String
+
+  # API Management
+  apiEnvName: String
+  apimEnvId: String
+
+  # Migration & Deployment
+  isMigrating: Boolean
+  promoteFrom: String
+
+  # Infrastructure
+  namespace: String
+  dpId: String
+  templateId: String!
+
+  # Features & Flags
+  critical: Boolean
+  isPdp: Boolean
+  scaleToZeroEnabled: Boolean!
+
+  # Audit Fields
   createdAt: String
   updatedAt: String
   updatedBy: String
@@ -261,6 +300,7 @@ type Mutation {
   updateProject(project: ProjectUpdateInput!): Project
   createComponent(component: ComponentInput!): Component
   deleteComponent(componentId: String!): Boolean!
+  deleteComponentV2(orgHandler: String!, componentId: String!, projectId: String!): DeleteComponentV2Response!
   updateComponent(componentId: String!, name: String, description: String): Component!
 }
 
@@ -307,14 +347,12 @@ input ComponentInput {
 # Repository Type - Build & Deploy Configuration
 # ============================================
 type Repository {
-  # Buildpack Configuration (for source-based components)
+  # Build Configurations
   buildpackConfig: BuildpackConfig
-
-  # BYOC (Bring Your Own Container) Configuration
   byocWebAppBuildConfig: ByocWebAppBuildConfig
-
-  # Docker Configuration (alternative to BYOC)
+  byocBuildConfig: ByocBuildConfig
   dockerBuildConfig: DockerBuildConfig
+  testRunnerConfig: TestRunnerConfig
 
   # Repository Source Information
   repositoryType: String
@@ -322,9 +360,22 @@ type Repository {
   repositorySubPath: String
   repositoryUrl: String
 
-  # Build Settings
-  buildContext: String
-  dockerContext: String
+  # Git Provider Information
+  bitbucketServerUrl: String
+  serverUrl: String
+  gitProvider: String
+  nameApp: String
+  nameConfig: String
+  branch: String
+  branchApp: String
+  organizationApp: String
+  organizationConfig: String
+  appSubPath: String
+
+  # Repository Flags
+  isUserManage: Boolean
+  isAuthorizedRepo: Boolean
+  isBuildConfigurationMigrated: Boolean
 }
 
 # ============================================
@@ -336,7 +387,11 @@ type BuildpackConfig {
   languageVersion: String
   buildCommand: String
   runCommand: String
+  isUnitTestEnabled: Boolean
+  pullLatestSubmodules: Boolean
+  enableTrivyScan: Boolean
   buildpack: Buildpack
+  keyValues: [KeyValue!]
 }
 
 type Buildpack {
@@ -352,12 +407,19 @@ type Buildpack {
 # ============================================
 type ByocWebAppBuildConfig {
   id: String
+  containerId: String
+  componentId: String
+  repositoryId: String
   dockerContext: String
   webAppType: String
   port: Int
   imageUrl: String
   registryId: String
   dockerfile: String
+  buildCommand: String
+  packageManagerVersion: String
+  outputDirectory: String
+  enableTrivyScan: Boolean
 }
 
 # ============================================
@@ -373,12 +435,45 @@ type DockerBuildConfig {
 }
 
 # ============================================
+# BYOC Build Configuration
+# ============================================
+type ByocBuildConfig {
+  id: String
+  isMainContainer: Boolean
+  containerId: String
+  componentId: String
+  repositoryId: String
+  dockerContext: String
+  dockerfilePath: String
+  oasFilePath: String
+}
+
+# ============================================
+# Test Runner Configuration
+# ============================================
+type TestRunnerConfig {
+  dockerContext: String
+  postmanDirectory: String
+  testRunnerType: String
+}
+
+# ============================================
+# Key Value Pair
+# ============================================
+type KeyValue {
+  id: String
+  key: String!
+  value: String
+}
+
+# ============================================
 # API Version Type - API Management
 # ============================================
 type ApiVersion {
   # Identity
   id: String!
   apiVersion: String!
+  versionId: String
 
   # Proxy Configuration
   proxyName: String
@@ -398,6 +493,9 @@ type ApiVersion {
   # Deployment Settings
   autoDeployEnabled: Boolean
 
+  # Environment Versions
+  appEnvVersions: [AppEnvVersion!]
+
   # Observability
   cellDiagram: CellDiagram
 
@@ -409,6 +507,28 @@ type ApiVersion {
   createdAt: String
   updatedAt: String
   description: String
+}
+
+# ============================================
+# App Environment Version Type
+# ============================================
+type AppEnvVersion {
+  environmentId: String!
+  releaseId: String!
+  release: Release
+}
+
+type Release {
+  id: String!
+  metadata: ReleaseMetadata
+  environmentId: String
+  environment: String
+  gitHash: String
+  gitOpsHash: String
+}
+
+type ReleaseMetadata {
+  choreoEnv: String
 }
 
 # ============================================
@@ -597,4 +717,14 @@ type ProjectHandlerAvailability {
 type DeleteResponse {
   status: String!
   details: String!
+}
+
+# ============================================
+# Delete Component V2 Response Type
+# ============================================
+type DeleteComponentV2Response {
+  status: String!
+  canDelete: Boolean!
+  message: String!
+  encodedData: String!
 }
