@@ -14,8 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import icp_server.storage;
-
 import ballerina/log;
 import ballerina/task;
 
@@ -36,8 +34,8 @@ function init() returns error? {
         if (id is error) {
             log:printError("Failed to schedule refresh token cleanup job", id);
         } else {
-            log:printInfo("Refresh token cleanup job scheduled successfully", 
-                intervalSeconds = refreshTokenCleanupIntervalSeconds);
+            log:printInfo("Refresh token cleanup job scheduled successfully",
+                    intervalSeconds = refreshTokenCleanupIntervalSeconds);
         }
     }
 }
@@ -50,7 +48,7 @@ class Job {
     // Executes this function when the scheduled trigger fires.
     public function execute() {
         do {
-            check storage:markOfflineRuntimes();
+            check repoClient.markOfflineRuntimes();
             log:printDebug("Updated offline runtimes successfully");
         } on fail error e {
             log:printError("Failed to update offline runtimes", e);

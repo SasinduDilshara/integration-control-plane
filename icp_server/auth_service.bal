@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import icp_server.storage;
 import icp_server.types as types;
 import icp_server.utils;
 
@@ -95,19 +94,19 @@ service /auth on httpListener {
         // Use username from the original request credentials
         string username = credentials.username;
 
-        types:User|error userDetails = storage:getUserDetailsById(userId);
+        types:User|error userDetails = repoClient.getUserDetailsById(userId);
         if userDetails is error {
             if userDetails is sql:NoRowsError {
                 // New user
                 log:printInfo(string `User ${username} authenticated but not found in users table, creating user record`);
-                error? createResult = storage:createUser(userId, username, displayName);
+                error? createResult = repoClient.createUser(userId, username, displayName);
                 if createResult is error {
                     log:printError("Error creating user in database", createResult, username = username);
                     return utils:createInternalServerError("Error creating user record");
                 }
 
                 // Fetch the newly created user details
-                userDetails = storage:getUserDetailsById(userId);
+                userDetails = repoClient.getUserDetailsById(userId);
                 if userDetails is error {
                     log:printError("Error getting newly created user details", userDetails);
                     return utils:createInternalServerError("Error getting user details");
@@ -120,7 +119,7 @@ service /auth on httpListener {
             }
         }
 
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
+        types:Role[]|error userRoles = repoClient.getUserRoles(userDetails.userId);
         if userRoles is error {
             log:printError("Error getting user roles", userRoles);
             return utils:createInternalServerError("Error getting user roles");
@@ -128,14 +127,14 @@ service /auth on httpListener {
 
         // Generate JWT token using utility function
         string|error jwtToken = utils:generateJWTToken(
-            userDetails,
-            userRoles,
-            frontendJwtIssuer,
-            defaultTokenExpiryTime,
-            frontendJwtAudience,
-            jwtSignatureConfig
+                userDetails,
+                userRoles,
+                frontendJwtIssuer,
+                defaultTokenExpiryTime,
+                frontendJwtAudience,
+                jwtSignatureConfig
         );
-        
+
         if jwtToken is error {
             log:printError("Error generating JWT token", jwtToken);
             return utils:createInternalServerError("Error generating JWT token");
@@ -145,11 +144,11 @@ service /auth on httpListener {
         string refreshToken = utils:generateRefreshToken();
         string tokenId = utils:generateTokenId();
         string tokenHash = utils:hashRefreshToken(refreshToken);
-        
+
         // Extract user agent and IP address from request
         string|http:HeaderNotFoundError userAgentHeader = req.getHeader("User-Agent");
         string? userAgent = userAgentHeader is string ? userAgentHeader : ();
-        
+
         string|http:HeaderNotFoundError ipAddressHeader = req.getHeader("X-Forwarded-For");
         string? ipAddress = ipAddressHeader is string ? ipAddressHeader : ();
         if ipAddress is () {
@@ -157,9 +156,9 @@ service /auth on httpListener {
             string|http:HeaderNotFoundError realIpHeader = req.getHeader("X-Real-IP");
             ipAddress = realIpHeader is string ? realIpHeader : ();
         }
-        
+
         // Store refresh token in database
-        error? storeResult = storage:storeRefreshToken(
+        error? storeResult = repoClient.storeRefreshToken(
             tokenId,
             userId,
             tokenHash,
@@ -167,7 +166,7 @@ service /auth on httpListener {
             userAgent,
             ipAddress
         );
-        
+
         if storeResult is error {
             log:printError("Error storing refresh token", storeResult, userId = userId);
             return utils:createInternalServerError("Error storing refresh token");
@@ -212,46 +211,46 @@ service /auth on httpListener {
 
         // Exchange authorization code for tokens
         types:OIDCTokenResponse|http:Unauthorized|http:InternalServerError tokenResponse = utils:exchangeCodeForTokens(request.code, ssoConfig);
-        
+
         if tokenResponse is http:Unauthorized|http:InternalServerError {
             return tokenResponse;
         }
 
         log:printInfo("Successfully exchanged authorization code for tokens");
-        
+
         // Decode and validate ID token
-        types:OIDCIdTokenClaims|http:Unauthorized|http:InternalServerError claims = 
+        types:OIDCIdTokenClaims|http:Unauthorized|http:InternalServerError claims =
             utils:decodeAndValidateIdToken(tokenResponse.id_token, ssoConfig);
-        
+
         if claims is http:Unauthorized|http:InternalServerError {
             return claims;
         }
-        
+
         // Extract user information
         types:ExtractedUserInfo|http:InternalServerError userInfo = utils:extractUserInfo(claims, ssoConfig);
-        
+
         if userInfo is http:InternalServerError {
             return userInfo;
         }
-        
+
         // Check if user exists, create if new
-        types:User|error userDetails = storage:getUserDetailsById(userInfo.userId);
+        types:User|error userDetails = repoClient.getUserDetailsById(userInfo.userId);
         if userDetails is error {
             if userDetails is sql:NoRowsError {
                 // New OIDC user - create record
-                log:printInfo("New OIDC user, creating user record", 
-                    userId = userInfo.userId, 
-                    username = userInfo.username);
-                
-                error? createResult = storage:createUser(userInfo.userId, userInfo.username, userInfo.displayName);
-                if createResult is error {
-                    log:printError("Error creating OIDC user in database", createResult, 
+                log:printInfo("New OIDC user, creating user record",
+                        userId = userInfo.userId,
                         username = userInfo.username);
+
+                error? createResult = repoClient.createUser(userInfo.userId, userInfo.username, userInfo.displayName);
+                if createResult is error {
+                    log:printError("Error creating OIDC user in database", createResult,
+                            username = userInfo.username);
                     return utils:createInternalServerError("Error creating user record");
                 }
-                
+
                 // Fetch the newly created user details
-                userDetails = storage:getUserDetailsById(userInfo.userId);
+                userDetails = repoClient.getUserDetailsById(userInfo.userId);
                 if userDetails is error {
                     log:printError("Error getting newly created OIDC user details", userDetails);
                     return utils:createInternalServerError("Error getting user details");
@@ -261,38 +260,38 @@ service /auth on httpListener {
                 return utils:createInternalServerError("Error getting user details");
             }
         }
-        
+
         // Fetch user roles
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
+        types:Role[]|error userRoles = repoClient.getUserRoles(userDetails.userId);
         if userRoles is error {
             log:printError("Error getting user roles for OIDC user", userRoles);
             return utils:createInternalServerError("Error getting user roles");
         }
-        
+
         // Generate JWT token using utility function
         string|error jwtToken = utils:generateJWTToken(
-            userDetails,
-            userRoles,
-            frontendJwtIssuer,
-            defaultTokenExpiryTime,
-            frontendJwtAudience,
-            jwtSignatureConfig
+                userDetails,
+                userRoles,
+                frontendJwtIssuer,
+                defaultTokenExpiryTime,
+                frontendJwtAudience,
+                jwtSignatureConfig
         );
-        
+
         if jwtToken is error {
             log:printError("Error generating JWT token for OIDC user", jwtToken);
             return utils:createInternalServerError("Error generating JWT token");
         }
-        
+
         // Generate refresh token
         string refreshToken = utils:generateRefreshToken();
         string tokenId = utils:generateTokenId();
         string tokenHash = utils:hashRefreshToken(refreshToken);
-        
+
         // Extract user agent and IP address from request
         string|http:HeaderNotFoundError userAgentHeader = req.getHeader("User-Agent");
         string? userAgent = userAgentHeader is string ? userAgentHeader : ();
-        
+
         string|http:HeaderNotFoundError ipAddressHeader = req.getHeader("X-Forwarded-For");
         string? ipAddress = ipAddressHeader is string ? ipAddressHeader : ();
         if ipAddress is () {
@@ -300,9 +299,9 @@ service /auth on httpListener {
             string|http:HeaderNotFoundError realIpHeader = req.getHeader("X-Real-IP");
             ipAddress = realIpHeader is string ? realIpHeader : ();
         }
-        
+
         // Store refresh token in database
-        error? storeResult = storage:storeRefreshToken(
+        error? storeResult = repoClient.storeRefreshToken(
             tokenId,
             userDetails.userId,
             tokenHash,
@@ -310,12 +309,12 @@ service /auth on httpListener {
             userAgent,
             ipAddress
         );
-        
+
         if storeResult is error {
             log:printError("Error storing refresh token for OIDC user", storeResult, userId = userDetails.userId);
             return utils:createInternalServerError("Error storing refresh token");
         }
-        
+
         // Return login response
         log:printInfo("OIDC login successful", username = userInfo.username, isSuperAdmin = userDetails.isSuperAdmin, isProjectAuthor = userDetails.isProjectAuthor);
         return <http:Ok>{
@@ -351,47 +350,47 @@ service /auth on httpListener {
     }
     isolated resource function post 'renew\-token(@http:Header {name: http:AUTH_HEADER} string? authHeader) returns http:Ok|http:Unauthorized|http:InternalServerError {
         log:printInfo("Token renewal requested");
-        
+
         if authHeader is () {
             log:printError("Authorization header missing in token renewal request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         // Extract user context from current token
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context for token renewal", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         // Fetch latest user details and roles from database
-        types:User|error userDetails = storage:getUserDetailsById(userContext.userId);
+        types:User|error userDetails = repoClient.getUserDetailsById(userContext.userId);
         if userDetails is error {
             log:printError("Error fetching user details for token renewal", userDetails, userId = userContext.userId);
             return utils:createInternalServerError("Failed to fetch user details");
         }
-        
-        types:Role[]|error userRoles = storage:getUserRoles(userContext.userId);
+
+        types:Role[]|error userRoles = repoClient.getUserRoles(userContext.userId);
         if userRoles is error {
             log:printError("Error fetching user roles for token renewal", userRoles, userId = userContext.userId);
             return utils:createInternalServerError("Failed to fetch user roles");
         }
-        
+
         // Generate JWT token using utility function
         string|error jwtToken = utils:generateJWTToken(
-            userDetails,
-            userRoles,
-            frontendJwtIssuer,
-            defaultTokenExpiryTime,
-            frontendJwtAudience,
-            jwtSignatureConfig
+                userDetails,
+                userRoles,
+                frontendJwtIssuer,
+                defaultTokenExpiryTime,
+                frontendJwtAudience,
+                jwtSignatureConfig
         );
-        
+
         if jwtToken is error {
             log:printError("Error generating renewed JWT token", jwtToken);
             return utils:createInternalServerError("Error generating JWT token");
         }
-        
+
         log:printInfo("Token renewed successfully", username = userDetails.username, roleCount = userRoles.length());
         return <http:Ok>{
             body: {
@@ -410,50 +409,50 @@ service /auth on httpListener {
     // This endpoint does NOT require JWT authentication - uses refresh token instead
     isolated resource function post 'refresh\-token(types:RefreshTokenRequest request, http:Request req) returns http:Ok|http:Unauthorized|http:BadRequest|http:InternalServerError {
         log:printInfo("Token refresh requested using refresh token");
-        
+
         // Validate request
         if request.refreshToken.trim().length() == 0 {
             log:printWarn("Empty refresh token provided");
             return utils:createBadRequestError("Refresh token is required");
         }
-        
+
         // Hash the provided refresh token to compare with stored hash
         string tokenHash = utils:hashRefreshToken(request.refreshToken);
-        
+
         // Validate refresh token and get user details
-        types:User|error userDetails = storage:validateRefreshToken(tokenHash);
+        types:User|error userDetails = repoClient.validateRefreshToken(tokenHash);
         if userDetails is error {
             log:printWarn("Invalid or expired refresh token", userDetails);
             return utils:createUnauthorizedError("Invalid or expired refresh token");
         }
-        
+
         // Fetch user roles
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
+        types:Role[]|error userRoles = repoClient.getUserRoles(userDetails.userId);
         if userRoles is error {
             log:printError("Error fetching user roles for refresh token", userRoles, userId = userDetails.userId);
             return utils:createInternalServerError("Failed to fetch user roles");
         }
-        
+
         // Generate new JWT access token
         string|error jwtToken = utils:generateJWTToken(
-            userDetails,
-            userRoles,
-            frontendJwtIssuer,
-            defaultTokenExpiryTime,
-            frontendJwtAudience,
-            jwtSignatureConfig
+                userDetails,
+                userRoles,
+                frontendJwtIssuer,
+                defaultTokenExpiryTime,
+                frontendJwtAudience,
+                jwtSignatureConfig
         );
-        
+
         if jwtToken is error {
             log:printError("Error generating JWT token from refresh token", jwtToken);
             return utils:createInternalServerError("Error generating JWT token");
         }
-        
+
         // If rotation is disabled, return response with same refresh token
         if !enableRefreshTokenRotation {
-            log:printInfo("Token refreshed without rotation", 
-                username = userDetails.username, 
-                userId = userDetails.userId);
+            log:printInfo("Token refreshed without rotation",
+                    username = userDetails.username,
+                    userId = userDetails.userId);
             return <http:Ok>{
                 body: {
                     token: jwtToken,
@@ -468,16 +467,16 @@ service /auth on httpListener {
                 }
             };
         }
-        
+
         // Rotation is enabled - generate new refresh token
         string newRefreshToken = utils:generateRefreshToken();
         string newTokenId = utils:generateTokenId();
         string newTokenHash = utils:hashRefreshToken(newRefreshToken);
-        
+
         // Extract user agent and IP address from request
         string|http:HeaderNotFoundError userAgentHeader = req.getHeader("User-Agent");
         string? userAgent = userAgentHeader is string ? userAgentHeader : ();
-        
+
         string|http:HeaderNotFoundError ipAddressHeader = req.getHeader("X-Forwarded-For");
         string? ipAddress = ipAddressHeader is string ? ipAddressHeader : ();
         if ipAddress is () {
@@ -485,16 +484,16 @@ service /auth on httpListener {
             string|http:HeaderNotFoundError realIpHeader = req.getHeader("X-Real-IP");
             ipAddress = realIpHeader is string ? realIpHeader : ();
         }
-        
+
         // Revoke the old refresh token (used for rotation)
-        error? revokeResult = storage:revokeRefreshToken(tokenHash);
+        error? revokeResult = repoClient.revokeRefreshToken(tokenHash);
         if revokeResult is error {
             log:printWarn("Failed to revoke old refresh token", revokeResult, userId = userDetails.userId);
             // Continue anyway - this is not critical
         }
-        
+
         // Store new refresh token
-        error? storeResult = storage:storeRefreshToken(
+        error? storeResult = repoClient.storeRefreshToken(
             newTokenId,
             userDetails.userId,
             newTokenHash,
@@ -502,15 +501,15 @@ service /auth on httpListener {
             userAgent,
             ipAddress
         );
-        
+
         if storeResult is error {
             log:printError("Error storing new refresh token", storeResult, userId = userDetails.userId);
             return utils:createInternalServerError("Error storing refresh token");
         }
-        
-        log:printInfo("Token refreshed with rotation", 
-            username = userDetails.username, 
-            userId = userDetails.userId);
+
+        log:printInfo("Token refreshed with rotation",
+                username = userDetails.username,
+                userId = userDetails.userId);
         return <http:Ok>{
             body: {
                 token: jwtToken,
@@ -543,58 +542,58 @@ service /auth on httpListener {
     }
     isolated resource function post 'revoke\-token(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:RevokeTokenRequest request) returns http:Ok|http:Unauthorized|http:BadRequest|http:InternalServerError {
         log:printInfo("Token revocation requested");
-        
+
         if authHeader is () {
             log:printError("Authorization header missing in revoke token request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         // Extract user context from current JWT
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context for token revocation", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         // Check if a specific refresh token was provided
         if request?.refreshToken is string {
             string refreshToken = <string>request?.refreshToken;
-            
+
             if refreshToken.trim().length() == 0 {
                 log:printWarn("Empty refresh token provided for revocation", userId = userContext.userId);
                 return utils:createBadRequestError("Refresh token cannot be empty");
             }
-            
+
             // Hash the refresh token to match database storage
             string tokenHash = utils:hashRefreshToken(refreshToken);
-            
+
             // Revoke the specific refresh token
-            error? revokeResult = storage:revokeRefreshToken(tokenHash);
+            error? revokeResult = repoClient.revokeRefreshToken(tokenHash);
             if revokeResult is error {
                 log:printError("Error revoking specific refresh token", revokeResult, userId = userContext.userId);
                 return utils:createInternalServerError("Failed to revoke refresh token");
             }
-            
-            log:printInfo("Specific refresh token revoked successfully", 
-                userId = userContext.userId, 
-                username = userContext.username);
+
+            log:printInfo("Specific refresh token revoked successfully",
+                    userId = userContext.userId,
+                    username = userContext.username);
             return <http:Ok>{
                 body: {
                     message: "Refresh token revoked successfully"
                 }
             };
-        } 
+        }
 
         // No specific token provided - revoke ALL refresh tokens for this user (logout from all devices)
-        error? revokeAllResult = storage:revokeAllUserRefreshTokens(userContext.userId);
+        error? revokeAllResult = repoClient.revokeAllUserRefreshTokens(userContext.userId);
         if revokeAllResult is error {
             log:printError("Error revoking all refresh tokens for user", revokeAllResult, userId = userContext.userId);
             return utils:createInternalServerError("Failed to revoke refresh tokens");
         }
-        
-        log:printInfo("All refresh tokens revoked successfully for user", 
-            userId = userContext.userId, 
-            username = userContext.username);
+
+        log:printInfo("All refresh tokens revoked successfully for user",
+                userId = userContext.userId,
+                username = userContext.username);
         return <http:Ok>{
             body: {
                 message: "All refresh tokens revoked successfully. You have been logged out from all devices."
@@ -658,35 +657,35 @@ service /auth on httpListener {
             log:printError("Authorization header missing in request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         // Extract user context for RBAC
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         types:UserWithRoles[]|error users;
-        
+
         // Super admins can see ALL users (including those without any roles/projects)
         if userContext.isSuperAdmin {
             log:printInfo("Super admin fetching all users", userId = userContext.userId);
-            users = storage:getAllUsers();
+            users = repoClient.getAllUsers();
             if users is error {
                 log:printError("Error fetching all users for super admin", users);
                 return utils:createInternalServerError("Failed to fetch users");
             }
-            
-            log:printInfo(string `Successfully fetched ${users.length()} users for super admin`, 
-                          userId = userContext.userId);
+
+            log:printInfo(string `Successfully fetched ${users.length()} users for super admin`,
+                    userId = userContext.userId);
             return <http:Ok>{
                 body: users
             };
         }
-        
+
         // Get projects where the user is an admin (using utility function)
         string[] adminProjectIds = utils:getAdminProjectIds(userContext);
-        
+
         // If user is not admin in any project, return empty list
         if adminProjectIds.length() == 0 {
             log:printInfo("User is not admin in any project, returning empty user list", userId = userContext.userId);
@@ -694,22 +693,22 @@ service /auth on httpListener {
                 body: []
             };
         }
-        
+
         // Fetch users who have roles in projects where the caller is admin
-        users = storage:getUsersByProjectIds(adminProjectIds);
+        users = repoClient.getUsersByProjectIds(adminProjectIds);
         if users is error {
             log:printError("Error fetching users", users);
             return utils:createInternalServerError("Failed to fetch users");
         }
-        
-        log:printInfo(string `Successfully fetched ${users.length()} users for admin projects`, 
-                      userId = userContext.userId, 
-                      adminProjectCount = adminProjectIds.length());
+
+        log:printInfo(string `Successfully fetched ${users.length()} users for admin projects`,
+                userId = userContext.userId,
+                adminProjectCount = adminProjectIds.length());
         return <http:Ok>{
             body: users
         };
     }
-    
+
     // Create a new user with credentials
     @http:ResourceConfig {
         auth: [
@@ -726,27 +725,27 @@ service /auth on httpListener {
     }
     isolated resource function post users(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:CreateUserInput request) returns http:Created|http:BadRequest|http:Unauthorized|http:InternalServerError {
         log:printInfo("Creating new user", username = request.username);
-        
+
         // Extract user context for RBAC
         if authHeader is () {
             log:printError("Authorization header missing in request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         // Only super admins can create users
         if !userContext.isSuperAdmin {
-            log:printWarn("Non-super-admin attempted to create user", 
-                callingUser = userContext.userId,
-                targetUsername = request.username);
+            log:printWarn("Non-super-admin attempted to create user",
+                    callingUser = userContext.userId,
+                    targetUsername = request.username);
             return utils:createUnauthorizedError("Super admin access required to create users");
         }
-        
+
         // Validate input
         if request.username.trim().length() == 0 {
             return utils:createBadRequestError("Username is required");
@@ -757,7 +756,7 @@ service /auth on httpListener {
         if request.password.trim().length() == 0 {
             return utils:createBadRequestError("Password is required");
         }
-        
+
         // Call authentication backend to create user
         http:Response|error authResponse = authBackendClient->post("/users", request, {
             "X-API-Key": authBackendApiKey
@@ -796,34 +795,34 @@ service /auth on httpListener {
             json userIdJson = successPayload["userId"];
             json usernameJson = successPayload["username"];
             json displayNameJson = successPayload["displayName"];
-            
+
             if userIdJson is string && usernameJson is string && displayNameJson is string {
                 // Create user in users table (auth service manages users table)
-                error? createUserResult = storage:createUser(userIdJson, usernameJson, displayNameJson);
+                error? createUserResult = repoClient.createUser(userIdJson, usernameJson, displayNameJson);
                 if createUserResult is error {
                     log:printError("Error creating user in users table", createUserResult, username = usernameJson);
                     return utils:createInternalServerError("Failed to create user record");
                 }
 
                 // Get the created user details
-                types:User|error userDetails = storage:getUserDetailsById(userIdJson);
+                types:User|error userDetails = repoClient.getUserDetailsById(userIdJson);
                 if userDetails is error {
                     log:printError("Error getting created user details", userDetails);
                     return utils:createInternalServerError("Failed to get user details");
                 }
 
-                log:printInfo("User created successfully by super admin", 
-                    username = usernameJson, 
-                    userId = userIdJson,
-                    createdBy = userContext.userId);
-                return <http:Created>{ body: userDetails };
+                log:printInfo("User created successfully by super admin",
+                        username = usernameJson,
+                        userId = userIdJson,
+                        createdBy = userContext.userId);
+                return <http:Created>{body: userDetails};
             }
         }
 
         log:printError("Invalid response format from auth backend");
         return utils:createInternalServerError("Invalid response from authentication service");
     }
-    
+
     // Delete a user by ID
     @http:ResourceConfig {
         auth: [
@@ -840,36 +839,36 @@ service /auth on httpListener {
     }
     isolated resource function delete users/[string userId](@http:Header {name: http:AUTH_HEADER} string? authHeader) returns http:Ok|http:NotFound|http:Forbidden|http:Unauthorized|http:InternalServerError {
         log:printInfo("Deleting user", userId = userId);
-        
+
         // Extract user context for RBAC
         if authHeader is () {
             log:printError("Authorization header missing in request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         // Only super admins can delete users
         if !userContext.isSuperAdmin {
-            log:printWarn("Non-super-admin attempted to delete user", 
-                callingUser = userContext.userId,
-                targetUserId = userId);
+            log:printWarn("Non-super-admin attempted to delete user",
+                    callingUser = userContext.userId,
+                    targetUserId = userId);
             return utils:createUnauthorizedError("Super admin access required to delete users");
         }
 
         // Super admins cannot delete themselves
         if userContext.userId == userId {
             log:printWarn("Super admin attempted to delete their own user account",
-                userId = userId);
+                    userId = userId);
             return utils:createForbiddenError("You cannot delete your own user account");
         }
-        
+
         // Check if user exists
-        types:User|error existingUser = storage:getUserDetailsById(userId);
+        types:User|error existingUser = repoClient.getUserDetailsById(userId);
         if existingUser is error {
             if existingUser is sql:NoRowsError {
                 log:printWarn("User not found for deletion", userId = userId);
@@ -882,24 +881,24 @@ service /auth on httpListener {
             log:printError("Error checking user existence", existingUser);
             return utils:createInternalServerError("Error checking user");
         }
-        
+
         // Delete the user
-        error? deleteResult = storage:deleteUserById(userId);
+        error? deleteResult = repoClient.deleteUserById(userId);
         if deleteResult is error {
             log:printError("Error deleting user", deleteResult, userId = userId);
             return utils:createInternalServerError("Failed to delete user");
         }
-        
-        log:printInfo("User deleted successfully by super admin", 
-            userId = userId, 
-            deletedBy = userContext.userId);
+
+        log:printInfo("User deleted successfully by super admin",
+                userId = userId,
+                deletedBy = userContext.userId);
         return <http:Ok>{
             body: {
                 message: "User deleted successfully"
             }
         };
     }
-    
+
     // Update user profile (display name) - users can update their own profile
     @http:ResourceConfig {
         auth: [
@@ -916,37 +915,37 @@ service /auth on httpListener {
     }
     isolated resource function put profile(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:UpdateProfileRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
         log:printInfo("Updating user profile");
-        
+
         if authHeader is () {
             log:printError("Authorization header missing in request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         // Validate input
         if request.displayName.trim().length() == 0 {
             return utils:createBadRequestError("Display name cannot be empty");
         }
-        
+
         // Update profile
-        error? updateResult = storage:updateUserProfile(userContext.userId, request.displayName);
+        error? updateResult = repoClient.updateUserProfile(userContext.userId, request.displayName);
         if updateResult is error {
             log:printError("Error updating user profile", updateResult, userId = userContext.userId);
             return utils:createInternalServerError("Failed to update profile");
         }
-        
+
         // Fetch updated user details
-        types:User|error updatedUser = storage:getUserDetailsById(userContext.userId);
+        types:User|error updatedUser = repoClient.getUserDetailsById(userContext.userId);
         if updatedUser is error {
             log:printError("Error fetching updated user details", updatedUser);
             return utils:createInternalServerError("Failed to fetch updated profile");
         }
-        
+
         log:printInfo("Profile updated successfully", userId = userContext.userId);
         return <http:Ok>{
             body: {
@@ -955,7 +954,7 @@ service /auth on httpListener {
             }
         };
     }
-    
+
     // Change password - users can change their own password
     @http:ResourceConfig {
         auth: [
@@ -972,18 +971,18 @@ service /auth on httpListener {
     }
     isolated resource function put password(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:ChangePasswordRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
         log:printInfo("Changing user password");
-        
+
         if authHeader is () {
             log:printError("Authorization header missing in request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         // Validate input
         if request.currentPassword.trim().length() == 0 {
             return utils:createBadRequestError("Current password is required");
@@ -994,14 +993,14 @@ service /auth on httpListener {
         if request.newPassword.length() < 6 {
             return utils:createBadRequestError("New password must be at least 6 characters long");
         }
-        
+
         // Call the authentication backend to change password
         types:ChangePasswordRequest changePasswordRequest = {
             userId: userContext.userId,
             currentPassword: request.currentPassword,
             newPassword: request.newPassword
         };
-        
+
         http:Response|error authResponse = authBackendClient->post("/change-password", changePasswordRequest, {
             "X-API-Key": authBackendApiKey
         });
@@ -1030,7 +1029,7 @@ service /auth on httpListener {
             }
         };
     }
-    
+
     // Update user roles
     @http:ResourceConfig {
         auth: [
@@ -1047,21 +1046,21 @@ service /auth on httpListener {
     }
     isolated resource function put users/[string userId]/roles(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:UpdateUserRolesRequest request) returns http:Ok|http:NotFound|http:BadRequest|http:Unauthorized|http:InternalServerError|error? {
         log:printInfo("Updating roles for user", userId = userId);
-        
+
         // Extract user context for RBAC
         if authHeader is () {
             log:printError("Authorization header missing in request");
             return utils:createUnauthorizedError("Authorization header required");
         }
-        
+
         types:UserContext|error userContext = utils:extractUserContext(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
-        
+
         // Check if target user exists and get their details
-        types:User|error targetUser = storage:getUserDetailsById(userId);
+        types:User|error targetUser = repoClient.getUserDetailsById(userId);
         if targetUser is error {
             if targetUser is sql:NoRowsError {
                 log:printWarn("Target user not found for role update", userId = userId);
@@ -1074,82 +1073,82 @@ service /auth on httpListener {
             log:printError("Error checking target user existence", targetUser);
             return utils:createInternalServerError("Error checking user");
         }
-        
+
         // RBAC: Only super admins can edit super admin permissions
         if targetUser.isSuperAdmin && !userContext.isSuperAdmin {
-            log:printWarn("Non-super-admin attempted to edit super admin permissions", 
-                callingUser = userContext.userId,
-                targetUser = userId);
+            log:printWarn("Non-super-admin attempted to edit super admin permissions",
+                    callingUser = userContext.userId,
+                    targetUser = userId);
             return utils:createUnauthorizedError("Only super admins can edit super admin permissions");
         }
-        
+
         // RBAC: Verify the calling user has admin access to ALL project-environment type pairs being assigned
         foreach types:RoleAssignment roleAssignment in request.roles {
             final readonly & types:RoleAssignment roleAssignmentValue = roleAssignment.cloneReadOnly();
             // Check if user has admin access to this project and environment type
-            boolean hasAdminAccess = userContext.roles.some(isolated function (types:RoleInfo role) returns boolean { 
-                return role.projectId == roleAssignmentValue.projectId && 
-                role.environmentType == roleAssignmentValue.environmentType && 
+            boolean hasAdminAccess = userContext.roles.some(isolated function(types:RoleInfo role) returns boolean {
+                return role.projectId == roleAssignmentValue.projectId &&
+                role.environmentType == roleAssignmentValue.environmentType &&
                 role.privilegeLevel == types:ADMIN;
-        });
-            
+            });
+
             if !hasAdminAccess && !userContext.isSuperAdmin {
-                log:printWarn("User attempted to assign role without admin access", 
-                    callingUser = userContext.userId,
-                    targetUser = userId,
-                    projectId = roleAssignment.projectId,
-                    environmentType = roleAssignment.environmentType);
+                log:printWarn("User attempted to assign role without admin access",
+                        callingUser = userContext.userId,
+                        targetUser = userId,
+                        projectId = roleAssignment.projectId,
+                        environmentType = roleAssignment.environmentType);
                 return utils:createUnauthorizedError(
-                    string `Access denied: You must be an admin in project ${roleAssignment.projectId} and environment type ${roleAssignment.environmentType} to assign roles`
+                        string `Access denied: You must be an admin in project ${roleAssignment.projectId} and environment type ${roleAssignment.environmentType} to assign roles`
                 );
             }
         }
-        
+
         // RBAC: Only super admins can update isProjectAuthor flag
         if request?.isProjectAuthor is boolean {
             if !userContext.isSuperAdmin {
-                log:printWarn("Non-super-admin attempted to update project author flag", 
-                    callingUser = userContext.userId,
-                    targetUser = userId);
+                log:printWarn("Non-super-admin attempted to update project author flag",
+                        callingUser = userContext.userId,
+                        targetUser = userId);
                 return utils:createUnauthorizedError("Only super admins can update project author permissions");
             }
         }
-        
-        log:printInfo("RBAC check passed for role assignment", 
-            callingUser = userContext.userId,
-            targetUser = userId,
-            roleCount = request.roles.length());
-        
+
+        log:printInfo("RBAC check passed for role assignment",
+                callingUser = userContext.userId,
+                targetUser = userId,
+                roleCount = request.roles.length());
+
         // Validate role assignments
         if request.roles.length() == 0 {
             log:printDebug("Removing all roles for user", userId = userId);
         }
-        
+
         // Update isProjectAuthor flag if provided (and super admin has approved)
         if request?.isProjectAuthor is boolean {
             boolean isProjectAuthor = check request?.isProjectAuthor.ensureType();
-            error? updateAuthorResult = storage:updateUserProjectAuthor(userId, isProjectAuthor);
+            error? updateAuthorResult = repoClient.updateUserProjectAuthor(userId, isProjectAuthor);
             if updateAuthorResult is error {
                 log:printError("Error updating user project author flag", updateAuthorResult, userId = userId);
                 return utils:createInternalServerError("Failed to update project author permission");
             }
             log:printInfo("Updated project author flag", userId = userId, isProjectAuthor = request?.isProjectAuthor);
         }
-        
+
         // Update roles
-        error? updateResult = storage:updateUserRoles(userId, request.roles);
+        error? updateResult = repoClient.updateUserRoles(userId, request.roles);
         if updateResult is error {
             log:printError("Error updating user roles", updateResult, userId = userId);
             return utils:createInternalServerError("Failed to update user roles");
         }
-        
+
         // Fetch updated user with roles
-        types:Role[]|error updatedRoles = storage:getUserRoles(userId);
+        types:Role[]|error updatedRoles = repoClient.getUserRoles(userId);
         if updatedRoles is error {
             log:printError("Error fetching updated roles", updatedRoles);
             return utils:createInternalServerError("Failed to fetch updated roles");
         }
-        
+
         log:printInfo("User roles updated successfully", userId = userId, callingUser = userContext.userId);
         return <http:Ok>{
             body: {

@@ -15,12 +15,11 @@
 // under the License.
 
 import icp_server.types as types;
+import icp_server.utils;
 
 import ballerina/http;
-import ballerina/time;
 import ballerina/log;
-import icp_server.utils;
-import icp_server.storage;
+import ballerina/time;
 
 // HTTP client for OpenSearch with SSL verification disabled
 final http:Client opensearchClient = check new (opensearchUrl,
@@ -50,16 +49,16 @@ listener http:Listener observabilityListener = new (observabilityServerPort,
 
 @http:ServiceConfig {
     auth: [
-            {
-                jwtValidatorConfig: {
-                    issuer: frontendJwtIssuer,
-                    audience: frontendJwtAudience,
-                    signatureConfig: {
-                        secret: defaultJwtHMACSecret
-                    }
+        {
+            jwtValidatorConfig: {
+                issuer: frontendJwtIssuer,
+                audience: frontendJwtAudience,
+                signatureConfig: {
+                    secret: defaultJwtHMACSecret
                 }
             }
-        ],
+        }
+    ],
     cors: {
         allowOrigins: ["http://localhost:3000", "https://localhost:3000"],
         allowHeaders: ["Content-Type", "Authorization"]
@@ -81,16 +80,16 @@ service /icp/observability on observabilityListener {
 
         // Extract user context for RBAC
         types:UserContext userContext = check utils:extractUserContext(authHeader);
-        
+
         // Build the base OpenSearch query filters
         map<json> baseQuery = check buildBaseQuery(logRequest, userContext);
-        
+
         // Get log entries with pagination
         types:LogEntry[] logEntries = check getLogEntries(baseQuery, logRequest.logStartIndex, logRequest.logCount);
-        
+
         // Get log counts by level
         types:LogCount logCounts = check getLogCounts(baseQuery, logRequest.logLevel);
-        
+
         // Return combined response
         return {
             logs: logEntries,
@@ -111,8 +110,8 @@ isolated function buildBaseQuery(types:LogEntryRequest logRequest, types:UserCon
     };
 
     // Get the must array and filters array to add filters
-    json[] mustFilters = <json[]> check query.query.bool.must;
-    json[] filters = <json[]> check query.query.bool.filter;
+    json[] mustFilters = <json[]>check query.query.bool.must;
+    json[] filters = <json[]>check query.query.bool.filter;
 
     json timeRangeFilter = {
         "range": {
@@ -164,10 +163,10 @@ isolated function buildBaseQuery(types:LogEntryRequest logRequest, types:UserCon
             }
             string[] accessibleEnvironments = [];
             foreach string envId in allAccessibleEnvironmentIds {
-                types:Environment env = check storage:getEnvironmentById(envId);
+                types:Environment env = check repoClient.getEnvironmentById(envId);
                 accessibleEnvironments.push(env.name);
             }
-            
+
             json environmentAccessFilter = {
                 "terms": {
                     "environment.keyword": accessibleEnvironments
@@ -191,10 +190,10 @@ isolated function buildBaseQuery(types:LogEntryRequest logRequest, types:UserCon
             string[] accessibleProjectIds = utils:getAccessibleProjectIds(userContext);
             string[] accessibleProjects = [];
             foreach string projectId in accessibleProjectIds {
-                types:Project project = check storage:getProjectById(projectId);
+                types:Project project = check repoClient.getProjectById(projectId);
                 accessibleProjects.push(project.name);
             }
-            
+
             json projectAccessFilter = {
                 "terms": {
                     "project.keyword": accessibleProjects
@@ -223,34 +222,34 @@ isolated function parseTimeString(string timeStr) returns time:Civil|error {
     if timeStr.length() != 16 {
         return error("Invalid time format. Expected format: YYYY-MM-DDTHH:MM");
     }
-    
+
     string[] dateParts = re `T`.split(timeStr);
     if dateParts.length() != 2 {
         return error("Invalid time format. Expected format: YYYY-MM-DDTHH:MM");
     }
-    
+
     string datePart = dateParts[0];
     string timePart = dateParts[1];
-    
+
     // Parse date part (YYYY-MM-DD)
     string[] dateComponents = re `-`.split(datePart);
     if dateComponents.length() != 3 {
         return error("Invalid date format. Expected format: YYYY-MM-DD");
     }
-    
+
     int year = check int:fromString(dateComponents[0]);
     int month = check int:fromString(dateComponents[1]);
     int day = check int:fromString(dateComponents[2]);
-    
+
     // Parse time part (HH:MM)
     string[] timeComponents = re `:`.split(timePart);
     if timeComponents.length() != 2 {
         return error("Invalid time format. Expected format: HH:MM");
     }
-    
+
     int hour = check int:fromString(timeComponents[0]);
     int minute = check int:fromString(timeComponents[1]);
-    
+
     // Validate ranges
     if year < 1900 || year > 3000 {
         return error("Year must be between 1900 and 3000");
@@ -267,7 +266,7 @@ isolated function parseTimeString(string timeStr) returns time:Civil|error {
     if minute < 0 || minute > 59 {
         return error("Minute must be between 0 and 59");
     }
-    
+
     return {
         year: year,
         month: month,
@@ -297,13 +296,13 @@ isolated function getLogEntries(map<json> baseQuery, int logStartIndex, int logC
     // Get response body and parse it
     string responseBody = check response.getTextPayload();
     json responseJson = check responseBody.fromJsonString();
-    
+
     // Convert to OpenSearch response record
     types:OpenSearchResponse opensearchResponse = check responseJson.cloneWithType();
-    
+
     // Transform hits to LogEntry array
     types:LogEntry[] logEntries = [];
-    
+
     foreach types:OpenSearchHit hit in opensearchResponse.hits.hits {
         map<string> sourceData = hit._source;
 
@@ -315,17 +314,17 @@ isolated function getLogEntries(map<json> baseQuery, int logStartIndex, int logC
         string projectValueFromSource = sourceData.hasKey("project") ? sourceData.get("project") : "";
         string environmentValueFromSource = sourceData.hasKey("environment") ? sourceData.get("environment") : "";
         string messageValue = sourceData.hasKey("message") ? sourceData.get("message") : "";
-        
+
         // Create additional tags map excluding common fields
         map<anydata> additionalTags = {};
         string[] commonFields = ["@timestamp", "level", "runtime", "component", "project", "environment", "message"];
-        
+
         foreach string key in sourceData.keys() {
             if commonFields.indexOf(key) is () {
                 additionalTags[key] = sourceData.get(key);
             }
         }
-        
+
         types:LogEntry logEntry = {
             time: timestampValue,
             level: levelValue,
@@ -336,10 +335,10 @@ isolated function getLogEntries(map<json> baseQuery, int logStartIndex, int logC
             message: messageValue,
             additionalTags: additionalTags
         };
-        
+
         logEntries.push(logEntry);
     }
-    
+
     return logEntries;
 }
 
@@ -357,24 +356,32 @@ isolated function getLogCounts(map<json> baseQuery, string? specificLogLevel) re
     if specificLogLevel is string {
         // Clone the base query and add the specific log level filter
         map<json> specificQuery = baseQuery.clone();
-        json[] specificFilters = <json[]> check specificQuery.query.bool.filter;
+        json[] specificFilters = <json[]>check specificQuery.query.bool.filter;
         json logLevelFilter = {
             "terms": {
                 "level.keyword": [specificLogLevel]
             }
         };
         specificFilters.push(logLevelFilter);
-        
+
         // Get count for the specific log level
         int count = check executeCountQuery(specificQuery);
         logCount.total = count;
-        
+
         // Set the specific level count
         match specificLogLevel.toLowerAscii() {
-            "info" => { logCount.info = count; }
-            "debug" => { logCount.debug = count; }
-            "warn" => { logCount.warn = count; }
-            "error" => { logCount.'error = count; }
+            "info" => {
+                logCount.info = count;
+            }
+            "debug" => {
+                logCount.debug = count;
+            }
+            "warn" => {
+                logCount.warn = count;
+            }
+            "error" => {
+                logCount.'error = count;
+            }
         }
     } else {
         // Get total count first
@@ -386,46 +393,54 @@ isolated function getLogCounts(map<json> baseQuery, string? specificLogLevel) re
         foreach string level in logLevels {
             // Clone the base query and add the log level filter
             map<json> levelQuery = baseQuery.clone();
-            json[] levelFilters = <json[]> check levelQuery.query.bool.filter;
+            json[] levelFilters = <json[]>check levelQuery.query.bool.filter;
             json levelFilter = {
                 "terms": {
                     "level.keyword": [level]
                 }
             };
             levelFilters.push(levelFilter);
-            
+
             // Get count for this log level
             int levelCount = check executeCountQuery(levelQuery);
-            
+
             match level {
-                "INFO" => { logCount.info = levelCount; }
-                "DEBUG" => { logCount.debug = levelCount; }
-                "WARN" => { logCount.warn = levelCount; }
-                "ERROR" => { logCount.'error = levelCount; }
+                "INFO" => {
+                    logCount.info = levelCount;
+                }
+                "DEBUG" => {
+                    logCount.debug = levelCount;
+                }
+                "WARN" => {
+                    logCount.warn = levelCount;
+                }
+                "ERROR" => {
+                    logCount.'error = levelCount;
+                }
             }
         }
     }
-    
+
     return logCount;
 }
 
 // Execute count query against OpenSearch
 isolated function executeCountQuery(map<json> query) returns int|error {
     string queryJson = query.toJsonString();
-    
+
     http:Response response = check opensearchClient->post(path = "/ballerina-application-logs-*/_count",
                                                         message = queryJson,
                                                         headers = {"Content-Type": "application/json"});
-    
+
     string responseBody = check response.getTextPayload();
     json responseJson = check responseBody.fromJsonString();
-    
+
     if responseJson is map<json> {
         json countValue = check responseJson.count;
         if countValue is int {
             return countValue;
         }
     }
-    
+
     return error("Invalid count response from OpenSearch");
 }
