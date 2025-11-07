@@ -321,9 +321,6 @@ dependencies = [
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "jballerina.java"}
 ]
-modules = [
-	{org = "ballerina", packageName = "os", moduleName = "os"}
-]
 
 [[package]]
 org = "ballerina"
@@ -528,7 +525,7 @@ modules = [
 [[package]]
 org = "wso2"
 name = "icp_server"
-version = "0.1.0"
+version = "2.0.0-SNAPSHOT"
 dependencies = [
 	{org = "ballerina", name = "cache"},
 	{org = "ballerina", name = "crypto"},
@@ -538,7 +535,6 @@ dependencies = [
 	{org = "ballerina", name = "jwt"},
 	{org = "ballerina", name = "lang.value"},
 	{org = "ballerina", name = "log"},
-	{org = "ballerina", name = "os"},
 	{org = "ballerina", name = "regex"},
 	{org = "ballerina", name = "sql"},
 	{org = "ballerina", name = "task"},
