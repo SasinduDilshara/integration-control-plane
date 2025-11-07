@@ -15,20 +15,42 @@
 // under the License.
 
 import ballerina/log;
+import ballerina/sql;
+import ballerinax/java.jdbc as jdbc;
+import ballerinax/mysql;
+import ballerinax/mysql.driver as _;
 
 enum DatabaseType {
     MYSQL = "mysql",
     H2 = "h2"
 }
 
-public isolated function getDBClient() returns BaseRepository {
-    if dbType == MYSQL {
-        log:printInfo("Using MySQL database for storage");
-        return checkpanic new MySQLRepositoryImplementation();
-    } else if dbType == H2 {
-        log:printInfo("Using H2 database for storage");
-        return checkpanic new H2RepositoryImplementation();
-    } else {
-        panic error("Unsupported database type: " + dbType.toString());
+public client class DatabaseConnectionManager {
+    private final sql:Client dbClient;
+    private final string dbType;
+
+    public function init(string dbType) returns error? {
+        self.dbType = dbType;
+        sql:ConnectionPool pool = {
+            maxOpenConnections: maxOpenConnections,
+            minIdleConnections: minIdleConnections,
+            maxConnectionLifeTime: maxConnectionLifeTime
+        };
+
+        if dbType == MYSQL {
+            self.dbClient = check new mysql:Client(dbHost, dbUser, dbPassword, dbName, dbPort, connectionPool = pool);
+            log:printInfo("MySQL Database initialized successfully.");
+        } else {
+            self.dbClient = check new jdbc:Client("jdbc:h2:file:./database/icpdb;MODE=MySQL;AUTO_SERVER=TRUE", "sa", "");
+            log:printInfo("H2 Database initialized successfully.");
+        }
+    }
+
+    public isolated function getClient() returns sql:Client {
+        return self.dbClient;
+    }
+
+    public isolated function close() returns error? {
+        return self.dbClient.close();
     }
 }

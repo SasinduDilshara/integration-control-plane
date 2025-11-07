@@ -61,7 +61,7 @@ service /icp on httpListener {
     isolated resource function post heartbeat(types:Heartbeat heartbeat) returns types:HeartbeatResponse|error? {
         do {
             // Process heartbeat using the repository (handles both registration and updates)
-            types:HeartbeatResponse heartbeatResponse = check storage:getDBClient().processHeartbeat(heartbeat);
+            types:HeartbeatResponse heartbeatResponse = check storage:processHeartbeat(heartbeat);
             log:printInfo(string `Heartbeat processed successfully for ${heartbeat.runtime}`);
             return heartbeatResponse;
 
@@ -86,7 +86,7 @@ service /icp on httpListener {
     isolated resource function post deltaHeartbeat(types:DeltaHeartbeat deltaHeartbeat) returns types:HeartbeatResponse|error? {
         do {
             // Process delta heartbeat using the repository
-            types:HeartbeatResponse heartbeatResponse = check storage:getDBClient().processDeltaHeartbeat(deltaHeartbeat);
+            types:HeartbeatResponse heartbeatResponse = check storage:processDeltaHeartbeat(deltaHeartbeat);
             log:printInfo(string `Delta heartbeat processed successfully for ${deltaHeartbeat.runtime}`);
             return heartbeatResponse;
 

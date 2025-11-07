@@ -50,7 +50,7 @@ class Job {
     // Executes this function when the scheduled trigger fires.
     public function execute() {
         do {
-            check storage:getDBClient().markOfflineRuntimes();
+            check storage:markOfflineRuntimes();
             log:printDebug("Updated offline runtimes successfully");
         } on fail error e {
             log:printError("Failed to update offline runtimes", e);

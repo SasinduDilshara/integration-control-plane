@@ -28,7 +28,7 @@ class RefreshTokenCleanupJob {
     public function execute() {
         do {
             log:printInfo("Starting refresh token cleanup job");
-            check storage:getDBClient().cleanupExpiredRefreshTokens();
+            check storage:cleanupExpiredRefreshTokens();
             log:printInfo("Refresh token cleanup completed successfully");
         } on fail error e {
             log:printError("Failed to cleanup expired refresh tokens", e);

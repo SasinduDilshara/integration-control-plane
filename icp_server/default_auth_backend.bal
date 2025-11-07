@@ -171,13 +171,24 @@ service / on defaultAuthServiceListener {
             return utils:createInternalServerError("Failed to process password");
         }
 
+        // Check if user already exists
+        types:UserCredentials|sql:Error existingUser = dbClient->queryRow(
+            `SELECT user_id, username, display_name FROM user_credentials WHERE username = ${request.username}`
+        );
+
+        if existingUser is types:UserCredentials {
+            log:printWarn("Attempt to create user with existing username", username = request.username);
+            return utils:createBadRequestError("Username already exists");
+        }
+
         // Create user credentials only (auth backend manages user_credentials table)
         string userId = uuid:createRandomUuid();
         error? createResult = createUserCredentials(userId, request.username, request.displayName, passwordHash);
 
         if createResult is error {
             log:printError("Error creating user credentials in auth backend", createResult, username = request.username);
-            if createResult.toString().toLowerAscii().includes("duplicate") {
+            string errorMsg = createResult.toString().toLowerAscii();
+            if errorMsg.includes("duplicate") || errorMsg.includes("unique") || errorMsg.includes("constraint") {
                 return utils:createBadRequestError("Username already exists");
             }
             return utils:createInternalServerError("Failed to create user credentials");

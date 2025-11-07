@@ -38,7 +38,7 @@ function testStoreRefreshToken() returns error? {
     string ipAddress = "192.168.1.100";
 
     // Store the refresh token
-    error? result = storage:getDBClient().storeRefreshToken(
+    error? result = storage:storeRefreshToken(
         tokenId,
         userId,
         tokenHash,
@@ -68,7 +68,7 @@ function testStoreRefreshTokenWithOptionalMetadata() returns error? {
     int expirySeconds = 604800;
 
     // Store without user agent and IP (both nullable)
-    error? result = storage:getDBClient().storeRefreshToken(
+    error? result = storage:storeRefreshToken(
         tokenId,
         userId,
         tokenHash,
@@ -99,7 +99,7 @@ function testValidateRefreshTokenValid() returns error? {
     int expirySeconds = 604800; // 7 days - won't expire during test
 
     // Store the token
-    error? storeResult = storage:getDBClient().storeRefreshToken(
+    error? storeResult = storage:storeRefreshToken(
         tokenId,
         userId,
         tokenHash,
@@ -110,7 +110,7 @@ function testValidateRefreshTokenValid() returns error? {
     test:assertFalse(storeResult is error, "Should store token successfully");
 
     // Validate the token
-    types:User|error validationResult = storage:getDBClient().validateRefreshToken(tokenHash);
+    types:User|error validationResult = storage:validateRefreshToken(tokenHash);
 
     // Assert validation succeeded and returned user
     test:assertFalse(validationResult is error, "Should validate token successfully");
@@ -138,7 +138,7 @@ function testValidateRefreshTokenExpired() returns error? {
     int expirySeconds = -1; // Expired 1 second ago
 
     // Store the expired token
-    error? storeResult = storage:getDBClient().storeRefreshToken(
+    error? storeResult = storage:storeRefreshToken(
         tokenId,
         userId,
         tokenHash,
@@ -149,7 +149,7 @@ function testValidateRefreshTokenExpired() returns error? {
     test:assertFalse(storeResult is error, "Should store expired token successfully");
 
     // Try to validate the expired token
-    types:User|error validationResult = storage:getDBClient().validateRefreshToken(tokenHash);
+    types:User|error validationResult = storage:validateRefreshToken(tokenHash);
 
     // Assert validation failed
     test:assertTrue(validationResult is error, "Should reject expired token");
@@ -174,7 +174,7 @@ function testValidateRefreshTokenRevoked() returns error? {
     int expirySeconds = 604800; // 7 days
 
     // Store the token
-    error? storeResult = storage:getDBClient().storeRefreshToken(
+    error? storeResult = storage:storeRefreshToken(
         tokenId,
         userId,
         tokenHash,
@@ -185,11 +185,11 @@ function testValidateRefreshTokenRevoked() returns error? {
     test:assertFalse(storeResult is error, "Should store token successfully");
 
     // Revoke the token
-    error? revokeResult = storage:getDBClient().revokeRefreshToken(tokenHash);
+    error? revokeResult = storage:revokeRefreshToken(tokenHash);
     test:assertFalse(revokeResult is error, "Should revoke token successfully");
 
     // Try to validate the revoked token
-    types:User|error validationResult = storage:getDBClient().validateRefreshToken(tokenHash);
+    types:User|error validationResult = storage:validateRefreshToken(tokenHash);
 
     // Assert validation failed
     test:assertTrue(validationResult is error, "Should reject revoked token");
@@ -211,7 +211,7 @@ function testValidateRefreshTokenNotFound() returns error? {
     string nonExistentHash = utils:hashRefreshToken(nonExistentToken);
 
     // Try to validate non-existent token
-    types:User|error validationResult = storage:getDBClient().validateRefreshToken(nonExistentHash);
+    types:User|error validationResult = storage:validateRefreshToken(nonExistentHash);
 
     // Assert validation failed
     test:assertTrue(validationResult is error, "Should reject non-existent token");
@@ -236,7 +236,7 @@ function testRevokeRefreshToken() returns error? {
     int expirySeconds = 604800;
 
     // Store the token
-    error? storeResult = storage:getDBClient().storeRefreshToken(
+    error? storeResult = storage:storeRefreshToken(
         tokenId,
         userId,
         tokenHash,
@@ -247,11 +247,11 @@ function testRevokeRefreshToken() returns error? {
     test:assertFalse(storeResult is error, "Should store token successfully");
 
     // Revoke the token
-    error? revokeResult = storage:getDBClient().revokeRefreshToken(tokenHash);
+    error? revokeResult = storage:revokeRefreshToken(tokenHash);
     test:assertFalse(revokeResult is error, "Should revoke token without error");
 
     // Verify token is revoked by trying to validate
-    types:User|error validationResult = storage:getDBClient().validateRefreshToken(tokenHash);
+    types:User|error validationResult = storage:validateRefreshToken(tokenHash);
     test:assertTrue(validationResult is error, "Revoked token should not validate");
 
     log:printInfo("Test passed: Refresh token revoked successfully");
@@ -269,7 +269,7 @@ function testRevokeAllUserRefreshTokens() returns error? {
     // Store multiple tokens for the same user
     string token1 = utils:generateRefreshToken();
     string tokenHash1 = utils:hashRefreshToken(token1);
-    error? store1 = storage:getDBClient().storeRefreshToken(
+    error? store1 = storage:storeRefreshToken(
         utils:generateTokenId(),
         userId,
         tokenHash1,
@@ -281,7 +281,7 @@ function testRevokeAllUserRefreshTokens() returns error? {
 
     string token2 = utils:generateRefreshToken();
     string tokenHash2 = utils:hashRefreshToken(token2);
-    error? store2 = storage:getDBClient().storeRefreshToken(
+    error? store2 = storage:storeRefreshToken(
         utils:generateTokenId(),
         userId,
         tokenHash2,
@@ -293,7 +293,7 @@ function testRevokeAllUserRefreshTokens() returns error? {
 
     string token3 = utils:generateRefreshToken();
     string tokenHash3 = utils:hashRefreshToken(token3);
-    error? store3 = storage:getDBClient().storeRefreshToken(
+    error? store3 = storage:storeRefreshToken(
         utils:generateTokenId(),
         userId,
         tokenHash3,
@@ -304,13 +304,13 @@ function testRevokeAllUserRefreshTokens() returns error? {
     test:assertFalse(store3 is error, "Should store token 3");
 
     // Revoke all tokens for the user
-    error? revokeAllResult = storage:getDBClient().revokeAllUserRefreshTokens(userId);
+    error? revokeAllResult = storage:revokeAllUserRefreshTokens(userId);
     test:assertFalse(revokeAllResult is error, "Should revoke all tokens without error");
 
     // Verify all tokens are revoked
-    types:User|error validation1 = storage:getDBClient().validateRefreshToken(tokenHash1);
-    types:User|error validation2 = storage:getDBClient().validateRefreshToken(tokenHash2);
-    types:User|error validation3 = storage:getDBClient().validateRefreshToken(tokenHash3);
+    types:User|error validation1 = storage:validateRefreshToken(tokenHash1);
+    types:User|error validation2 = storage:validateRefreshToken(tokenHash2);
+    types:User|error validation3 = storage:validateRefreshToken(tokenHash3);
 
     test:assertTrue(validation1 is error, "Token 1 should be revoked");
     test:assertTrue(validation2 is error, "Token 2 should be revoked");
@@ -335,7 +335,7 @@ function testCleanupExpiredRefreshTokens() returns error? {
         string refreshToken = utils:generateRefreshToken();
         string tokenHash = utils:hashRefreshToken(refreshToken);
 
-        error? storeResult = storage:getDBClient().storeRefreshToken(
+        error? storeResult = storage:storeRefreshToken(
             tokenId,
             userId,
             tokenHash,
@@ -347,7 +347,7 @@ function testCleanupExpiredRefreshTokens() returns error? {
     }
 
     // Run cleanup
-    error? cleanupResult = storage:getDBClient().cleanupExpiredRefreshTokens();
+    error? cleanupResult = storage:cleanupExpiredRefreshTokens();
     test:assertFalse(cleanupResult is error, "Should cleanup expired tokens without error");
 
     log:printInfo("Test passed: Expired tokens cleaned up successfully");
@@ -370,7 +370,7 @@ function testCleanupRevokedRefreshTokens() returns error? {
         string tokenHash = utils:hashRefreshToken(refreshToken);
 
         // Store token
-        error? storeResult = storage:getDBClient().storeRefreshToken(
+        error? storeResult = storage:storeRefreshToken(
             tokenId,
             userId,
             tokenHash,
@@ -381,12 +381,12 @@ function testCleanupRevokedRefreshTokens() returns error? {
         test:assertFalse(storeResult is error, string `Should store token ${i}`);
 
         // Revoke it
-        error? revokeResult = storage:getDBClient().revokeRefreshToken(tokenHash);
+        error? revokeResult = storage:revokeRefreshToken(tokenHash);
         test:assertFalse(revokeResult is error, string `Should revoke token ${i}`);
     }
 
     // Run cleanup (should remove revoked tokens)
-    error? cleanupResult = storage:getDBClient().cleanupExpiredRefreshTokens();
+    error? cleanupResult = storage:cleanupExpiredRefreshTokens();
     test:assertFalse(cleanupResult is error, "Should cleanup revoked tokens without error");
 
     log:printInfo("Test passed: Revoked tokens cleaned up successfully");

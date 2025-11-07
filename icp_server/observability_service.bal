@@ -164,7 +164,7 @@ isolated function buildBaseQuery(types:LogEntryRequest logRequest, types:UserCon
             }
             string[] accessibleEnvironments = [];
             foreach string envId in allAccessibleEnvironmentIds {
-                types:Environment env = check storage:getDBClient().getEnvironmentById(envId);
+                types:Environment env = check storage:getEnvironmentById(envId);
                 accessibleEnvironments.push(env.name);
             }
 
@@ -191,7 +191,7 @@ isolated function buildBaseQuery(types:LogEntryRequest logRequest, types:UserCon
             string[] accessibleProjectIds = utils:getAccessibleProjectIds(userContext);
             string[] accessibleProjects = [];
             foreach string projectId in accessibleProjectIds {
-                types:Project project = check storage:getDBClient().getProjectById(projectId);
+                types:Project project = check storage:getProjectById(projectId);
                 accessibleProjects.push(project.name);
             }
 
