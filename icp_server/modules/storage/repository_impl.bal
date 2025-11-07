@@ -409,6 +409,73 @@ public isolated function getRuntimeById(string runtimeId) returns types:Runtime?
     return check mapToRuntime(runtimeRecords[0]);
 }
 
+// Get component deployment information from runtimes table
+public isolated function getComponentDeployment(string componentId, string environmentId, string versionId) returns types:ComponentDeployment?|error {
+    log:printDebug(string `Fetching deployment info for component: ${componentId}, environment: ${environmentId}`);
+
+    // Query runtimes table for deployment information
+    stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(`
+        SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version,
+               platform_name, platform_version, platform_home, os_name, os_version,
+               registration_time, last_heartbeat
+        FROM runtimes
+        WHERE component_id = ${componentId} AND environment_id = ${environmentId}
+        ORDER BY last_heartbeat DESC
+        LIMIT 1
+    `);
+
+    types:RuntimeDBRecord[] runtimeRecords = check from types:RuntimeDBRecord runtimeRecord in runtimeStream
+        select runtimeRecord;
+
+    if runtimeRecords.length() == 0 {
+        log:printDebug(string `No runtime found for component ${componentId} in environment ${environmentId}`);
+        return (); // No deployment found
+    }
+
+    types:RuntimeDBRecord runtime = runtimeRecords[0];
+
+    // Get component details for apiId
+    types:Component component = check getComponentById(componentId);
+
+    // Count configurations (services + listeners)
+    int configCount = 0;
+    types:Service[] services = check getServicesForRuntime(runtime.runtime_id);
+    types:Listener[] listeners = check getListenersForRuntime(runtime.runtime_id);
+    configCount = services.length() + listeners.length();
+
+    // Build deployment information from runtime data
+    types:BuildInfo buildInfo = {
+        buildId: runtime.runtime_id,
+        deployedAt: runtime?.last_heartbeat is time:Utc ? time:utcToString(<time:Utc>runtime?.last_heartbeat) : (),
+        'commit: (),
+        sourceConfigMigrationStatus: (),
+        runId: runtime.runtime_id
+    };
+
+    types:ComponentDeployment deployment = {
+        environmentId: environmentId,
+        configCount: configCount,
+        apiId: component?.apiId,
+        releaseId: runtime.runtime_id,
+        apiRevision: (),
+        build: buildInfo,
+        imageUrl: "",
+        invokeUrl: "",
+        versionId: versionId,
+        deploymentStatus: runtime.status,
+        deploymentStatusV2: runtime.status,
+        version: runtime?.version,
+        cron: (),
+        cronTimezone: ()
+    };
+
+    log:printInfo(string `Retrieved deployment info for component ${componentId}`, 
+                  status = runtime.status, 
+                  configCount = configCount);
+
+    return deployment;
+}
+
 // Delete a runtime by ID
 public isolated function deleteRuntime(string runtimeId) returns error? {
     sql:ParameterizedQuery deleteQuery = `DELETE FROM runtimes WHERE runtime_id = ${runtimeId}`;
@@ -3373,4 +3440,3 @@ public isolated function checkProjectHandlerAvailability(int orgId, string proje
         alternateHandlerCandidate: alternateCandidate
     };
 }
-

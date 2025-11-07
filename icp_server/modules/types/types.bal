@@ -1573,3 +1573,55 @@ public type ProjectHandlerAvailability record {
     boolean handlerUnique;
     string? alternateHandlerCandidate;
 };
+
+// === Component Deployment Types ===
+
+public type ComponentDeployment record {
+    string environmentId;
+    int configCount;
+    string? apiId?;
+    string releaseId;
+    ApiRevision? apiRevision?;
+    BuildInfo build;
+    string imageUrl;
+    string invokeUrl;
+    string versionId;
+    string deploymentStatus;
+    string deploymentStatusV2;
+    string? version?;
+    string? cron?;
+    string? cronTimezone?;
+};
+
+public type ApiRevision record {
+    string id;
+    string displayName;
+};
+
+public type BuildInfo record {
+    string buildId;
+    string? deployedAt?;
+    CommitInfo? 'commit?;
+    SourceConfigMigrationStatus? sourceConfigMigrationStatus?;
+    string runId;
+};
+
+public type CommitInfo record {
+    AuthorInfo author;
+    string sha;
+    string message;
+    boolean isLatest;
+};
+
+public type AuthorInfo record {
+    string name;
+    string date;
+    string email;
+    string avatarUrl;
+};
+
+public type SourceConfigMigrationStatus record {
+    boolean canMigrate;
+    string existingFileName;
+    string existingFileSchemaVersion;
+};

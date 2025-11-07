@@ -128,6 +128,40 @@ service /graphql on graphqlListener {
         return runtime;
     }
 
+    // Get component deployment information for a specific environment
+    isolated resource function get componentDeployment(
+        graphql:Context context,
+        string orgHandler,
+        string orgUuid,
+        string componentId,
+        string versionId,
+        string environmentId
+    ) returns types:ComponentDeployment?|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+
+        // Extract user context for RBAC
+        types:UserContext userContext = check utils:extractUserContext(authHeader);
+
+        // Get component to verify access
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return (); // Component not found
+        }
+
+        // Verify user has access to the component's project and environment
+        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
+            return error("Access denied to component deployment");
+        }
+
+        // Get deployment information from runtimes table
+        types:ComponentDeployment? deployment = check storage:getComponentDeployment(componentId, environmentId, versionId);
+
+        return deployment;
+    }
+
     // Get services for a specific runtime
     isolated resource function get services(graphql:Context context, string runtimeId) returns types:Service[]|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
