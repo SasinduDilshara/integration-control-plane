@@ -225,6 +225,19 @@ task packageICP {
                 println "Please ensure distribution/scripts folder exists with run.sh and run.bat"
             }
             
+            // Copy www folder if it exists
+            if (file('www').exists()) {
+                def wwwDir = file("${tempDir}/www")
+                if (!wwwDir.exists()) {
+                    wwwDir.mkdirs()
+                }
+                copy {
+                    from 'www'
+                    into wwwDir
+                }
+                println "Added www folder to package"
+            }
+            
             // Create the zip file
             println "Creating zip file: ${zipFile.absolutePath}"
             exec {
