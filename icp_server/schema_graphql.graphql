@@ -22,6 +22,7 @@ type Query {
   # Component Queries
   components(orgHandler: String!, projectId: String, options: ComponentOptionsInput): [Component!]!
   component(componentId: String, projectId: String, componentHandler: String): Component
+  componentDeployment(orgHandler: String!, orgUuid: String!, componentId: String!, versionId: String!, environmentId: String!): ComponentDeployment
 }
 
 # ============================================
@@ -39,13 +40,14 @@ type Mutation {
 
   # Project Mutations
   createProject(project: ProjectInput!): Project
-  deleteProject(projectId: String!): Boolean!
-  updateProject(projectId: String!, name: String, description: String): Project
+  deleteProject(orgId: Int!, projectId: String!): DeleteResponse!
+  updateProject(project: ProjectUpdateInput!): Project
 
   # Component Mutations
   createComponent(component: ComponentInput!): Component
   deleteComponent(componentId: String!): Boolean!
-  updateComponent(componentId: String!, name: String, description: String): Component!
+  deleteComponentV2(orgHandler: String!, componentId: String!, projectId: String!): DeleteComponentV2Response!
+  updateComponent(component: ComponentUpdateInput!): Component!
 }
 
 # ============================================
@@ -254,93 +256,6 @@ type Environment {
   updatedAt: String
   updatedBy: String
   createdBy: String
-}
-
-type Artifacts {
-  listeners: [Listener!]!
-  services: [Service!]!
-}
-
-type Listener {
-  name: String!
-  package: String!
-  protocol: String!
-  state: ArtifactState!
-}
-
-enum ArtifactState {
-  FAILED
-  STOPPING
-  STARTING
-  DISABLED
-  ENABLED
-}
-
-type Service {
-  name: String!
-  package: String!
-  basePath: String!
-  state: ArtifactState!
-  resources: [Resource!]!
-}
-
-type Resource {
-  methods: [String!]!
-  url: String!
-}
-
-type Mutation {
-  deleteRuntime(runtimeId: String!): Boolean!
-  createEnvironment(environment: EnvironmentInput!): Environment
-  deleteEnvironment(environmentId: String!): Boolean!
-  updateEnvironment(environmentId: String!, name: String, description: String): Environment
-  updateEnvironmentProductionStatus(environmentId: String!, isProduction: Boolean!): Environment
-  createProject(project: ProjectInput!): Project
-  deleteProject(orgId: Int!, projectId: String!): DeleteResponse!
-  updateProject(project: ProjectUpdateInput!): Project
-  createComponent(component: ComponentInput!): Component
-  deleteComponent(componentId: String!): Boolean!
-  deleteComponentV2(orgHandler: String!, componentId: String!, projectId: String!): DeleteComponentV2Response!
-  updateComponent(componentId: String!, name: String, description: String): Component!
-}
-
-input EnvironmentInput {
-  name: String!
-  description: String
-  isProduction: Boolean
-}
-
-input ProjectInput {
-  orgId: Int!
-  orgHandler: String!
-  name: String!
-  version: String
-  projectHandler: String!
-  handler: String
-  region: String
-  description: String
-  defaultDeploymentPipelineId: String
-  deploymentPipelineIds: [String!]
-  type: String
-  gitProvider: String
-  gitOrganization: String
-  repository: String
-  branch: String
-  secretRef: String
-}
-
-input ProjectUpdateInput {
-  id: String!
-  orgId: Int
-  name: String
-  version: String
-  description: String
-}
-
-input ComponentInput {
-  projectId: String!
-  name: String!
-  description: String
 }
 
 # ============================================
@@ -664,6 +579,38 @@ input ComponentInput {
   isPublicRepo: Boolean
 }
 
+# Project Update Input
+input ProjectUpdateInput {
+  id: String!
+  orgId: Int
+  name: String
+  version: String
+  description: String
+}
+
+# Component Update Input
+input ComponentUpdateInput {
+  # Required field - component ID to update
+  id: String!
+
+  # Basic fields that can be updated
+  name: String
+  displayName: String
+  description: String
+  version: String
+  labels: String
+  serviceAccessMode: String
+
+  # Extended fields (accepted for compatibility but may not be persisted)
+  apiId: String
+  httpBased: Boolean
+  isMigrationCompleted: Boolean
+  skipDeploy: Boolean
+  endpointShortUrlEnabled: Boolean
+  isUnifiedConfigMapping: Boolean
+  componentSubType: String
+}
+
 # ============================================
 # Input Types for Queries
 # ============================================
@@ -727,4 +674,72 @@ type DeleteComponentV2Response {
   canDelete: Boolean!
   message: String!
   encodedData: String!
+}
+
+# ============================================
+# Component Deployment Type - Deployment Information
+# ============================================
+type ComponentDeployment {
+  environmentId: String!
+  configCount: Int!
+  apiId: String
+  releaseId: String!
+  apiRevision: ApiRevision
+  build: BuildInfo!
+  imageUrl: String!
+  invokeUrl: String!
+  versionId: String!
+  deploymentStatus: String!
+  deploymentStatusV2: String!
+  version: String
+  cron: String
+  cronTimezone: String
+}
+
+# ============================================
+# API Revision Type
+# ============================================
+type ApiRevision {
+  id: String!
+  displayName: String!
+}
+
+# ============================================
+# Build Info Type - Build Information
+# ============================================
+type BuildInfo {
+  buildId: String!
+  deployedAt: String
+  commit: CommitInfo
+  sourceConfigMigrationStatus: SourceConfigMigrationStatus
+  runId: String!
+}
+
+# ============================================
+# Commit Info Type - Git Commit Information
+# ============================================
+type CommitInfo {
+  author: AuthorInfo!
+  sha: String!
+  message: String!
+  isLatest: Boolean!
+}
+
+# ============================================
+# Author Info Type - Commit Author Information
+# ============================================
+type AuthorInfo {
+  name: String!
+  date: String!
+  email: String!
+  avatarUrl: String!
+}
+
+# ============================================
+# Source Config Migration Status Type
+# ============================================
+type SourceConfigMigrationStatus {
+  canMigrate: Boolean!
+  existingFileName: String!
+  existingFileSchemaVersion: String!
 }

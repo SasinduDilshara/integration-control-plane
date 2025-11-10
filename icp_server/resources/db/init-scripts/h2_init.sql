@@ -2,11 +2,11 @@
 -- ICP Server H2 Database Schema (Full Rewrite for H2 2.0+)
 -- ============================================================================
 
-DROP SCHEMA IF EXISTS ICP_DATABASE CASCADE;
+-- DROP SCHEMA IF EXISTS ICP_DATABASE CASCADE;
 
-CREATE SCHEMA ICP_DATABASE;
+-- CREATE SCHEMA ICP_DATABASE;
 
-SET SCHEMA ICP_DATABASE;
+-- SET SCHEMA ICP_DATABASE;
 
 -- ============================================================================
 -- ORGANIZATIONS

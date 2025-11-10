@@ -775,8 +775,8 @@ service /graphql on graphqlListener {
         };
     }
 
-    // Update component - supports both legacy parameters and component object
-    isolated remote function updateComponent(graphql:Context context, string? componentId, string? name, string? description, types:ComponentUpdateInput? component) returns types:Component|error {
+    // Update component using ComponentUpdateInput object
+    isolated remote function updateComponent(graphql:Context context, types:ComponentUpdateInput component) returns types:Component|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -784,25 +784,10 @@ service /graphql on graphqlListener {
 
         types:UserContext userContext = check utils:extractUserContext(authHeader);
 
-        // Determine which format is being used and extract values
-        string targetComponentId;
-        string? targetName;
-        string? targetDescription;
-
-        if component is types:ComponentUpdateInput {
-            // New format: using component object
-            targetComponentId = component.id;
-            targetName = component.name ?: component.displayName; // Use displayName if name is not provided
-            targetDescription = component.description;
-        } else {
-            // Legacy format: using individual parameters
-            if componentId is () {
-                return error("Either componentId or component object must be provided");
-            }
-            targetComponentId = componentId;
-            targetName = name;
-            targetDescription = description;
-        }
+        // Extract values from ComponentUpdateInput
+        string targetComponentId = component.id;
+        string? targetName = component.name ?: component.displayName; // Use displayName if name is not provided
+        string? targetDescription = component.description;
 
         // Get component to check project access
         types:Component? existingComponent = check storage:getComponentById(targetComponentId);
