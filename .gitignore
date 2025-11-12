@@ -129,7 +129,6 @@ dist/
 
 # Gradle Build Files
 .gradle/
-gradle/
 build/
 dist/
 *.jar
