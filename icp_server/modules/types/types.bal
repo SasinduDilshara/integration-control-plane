@@ -1685,7 +1685,7 @@ public type DeleteComponentV2Response record {
 };
 
 // Available artifact types for a component
-public type ArtifactTypes record {
-    string[] availableTypes;
-    RuntimeType componentType;
-};
+public type ArtifactTypeCount record {|
+    ArtifactType artifactType;
+    int artifactCount;
+|};
