@@ -37,6 +37,11 @@ public enum RuntimeStatus {
     STOPPED
 }
 
+public enum DeploymentState {
+    Active,
+    Faulty
+}
+
 public enum ArtifactState {
     ENABLED,
     DISABLED,
@@ -361,10 +366,8 @@ public type LocalEntryRecordInDB record {
 
 public type CarbonAppRecordInDB record {
     string app_name;
-    string component_id;
     string version = "";
-    string app_version = "";
-    ArtifactState state;
+    DeploymentState state;
 };
 
 public type RegistryResourceRecordInDB record {

@@ -471,7 +471,6 @@ public isolated function getCarbonAppsForRuntime(string runtimeId) returns types
         do {
             types:CarbonApp app = {
                 name: appRecord.app_name,
-                componentId: appRecord.component_id,
                 version: appRecord.version,
                 state: appRecord.state
             };
