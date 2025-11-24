@@ -192,13 +192,13 @@ task dbDown {
     }
 }
 
-// H2 database initialization task
+// H2 database initialization tasks
 task initH2Database {
-    description = 'Initialize H2 database with schema from h2_init.sql'
+    description = 'Initialize main H2 database with schema from h2_init.sql'
     
     doLast {
         logger.quiet('╔════════════════════════════════════════╗')
-        logger.quiet('║  Initializing H2 Database...           ║')
+        logger.quiet('║  Initializing Main H2 Database...      ║')
         logger.quiet('╚════════════════════════════════════════╝')
         
         def h2InitScript = file('resources/db/init-scripts/h2_init.sql')
@@ -225,24 +225,76 @@ task initH2Database {
             onerror: 'abort'
         )
         
-        logger.quiet('✓ H2 database initialized successfully!')
+        logger.quiet('✓ Main H2 database initialized successfully!')
         logger.lifecycle("Database location: ${h2DbFile.absolutePath}.mv.db")
     }
 }
 
+task initH2CredentialsDatabase {
+    description = 'Initialize credentials H2 database with schema from credentials_h2_init.sql'
+    
+    doLast {
+        logger.quiet('╔════════════════════════════════════════╗')
+        logger.quiet('║  Initializing Credentials H2 DB...    ║')
+        logger.quiet('╚════════════════════════════════════════╝')
+        
+        def credentialsInitScript = file('resources/db/init-scripts/credentials_h2_init.sql')
+        def credentialsDbFile = file('database/credentialsdb')
+        
+        if (!credentialsInitScript.exists()) {
+            throw new Exception("Credentials init script not found at: ${credentialsInitScript.absolutePath}")
+        }
+        
+        logger.lifecycle("Using init script: ${credentialsInitScript.absolutePath}")
+        logger.lifecycle("Database file: ${credentialsDbFile.absolutePath}")
+        
+        // Execute H2 initialization using Ant SQL task
+        ant.sql(
+            driver: 'org.h2.Driver',
+            url: "jdbc:h2:file:${credentialsDbFile.absolutePath};MODE=MySQL;DB_CLOSE_DELAY=-1",
+            userid: 'sa',
+            password: '',
+            src: credentialsInitScript.absolutePath,
+            classpath: buildscript.configurations.classpath.asPath,
+            print: true,
+            showheaders: false,
+            showtrailers: false,
+            onerror: 'abort'
+        )
+        
+        logger.quiet('✓ Credentials H2 database initialized successfully!')
+        logger.lifecycle("Database location: ${credentialsDbFile.absolutePath}.mv.db")
+    }
+}
+
+task initAllH2Databases {
+    description = 'Initialize both main and credentials H2 databases'
+    dependsOn initH2Database, initH2CredentialsDatabase
+    
+    doLast {
+        logger.quiet('')
+        logger.quiet('╔════════════════════════════════════════╗')
+        logger.quiet('║  All H2 Databases Initialized! ✓      ║')
+        logger.quiet('╠════════════════════════════════════════╣')
+        logger.quiet('║  • Main DB: database/icpdb.mv.db      ║')
+        logger.quiet('║  • Credentials: database/credentialsdb║')
+        logger.quiet('╚════════════════════════════════════════╝')
+    }
+}
+
 task cleanH2Database {
-    description = 'Clean/delete H2 database files'
+    description = 'Clean/delete all H2 database files (main and credentials)'
     
     doLast {
         logger.lifecycle('Cleaning H2 database files...')
         
-        def dbFiles = fileTree(dir: '.', include: 'icp_database*.db')
+        def dbFiles = fileTree(dir: 'database', include: '*.db')
         dbFiles.each { file ->
             logger.lifecycle("Deleting: ${file.name}")
             file.delete()
         }
         
-        logger.quiet('✓ H2 database files cleaned')
+        logger.quiet('✓ All H2 database files cleaned')
     }
 }
 
