@@ -338,7 +338,7 @@ CREATE TABLE runtime_api_resources (
     runtime_id CHAR(36) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
     resource_path VARCHAR(1000) NOT NULL,
-    methods VARCHAR(20) NOT NULL,  -- Single HTTP method as string (e.g., "POST", "GET")
+    methods VARCHAR(20) NOT NULL, -- Single HTTP method as string (e.g., "POST", "GET")
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_api_resources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
@@ -863,9 +863,9 @@ INSERT INTO
 VALUES (
         '650e8400-e29b-41d4-a716-446655440001',
         1,
-        'sample_project',
+        'Sample Project',
         '1.0.0',
-        'admin',
+        'sample-project',
         'us-west-2',
         'Sample project for testing',
         'web-application',
@@ -879,9 +879,9 @@ VALUES (
     (
         '650e8400-e29b-41d4-a716-446655440002',
         1,
-        'sample_project_2',
+        'Sample Project 2',
         '1.1.0',
-        'testuser',
+        'sample-project-2',
         'eu-west-1',
         'Second sample project for testing',
         'api-service',
@@ -905,7 +905,7 @@ INSERT INTO
     )
 VALUES (
         '640e8400-e29b-41d4-a716-446655440001',
-        'sample_integration',
+        'sample-integration',
         'Sample Integration',
         'BI',
         'Sample integration for testing',

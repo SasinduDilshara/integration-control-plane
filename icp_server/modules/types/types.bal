@@ -705,7 +705,7 @@ public type Project record {
     @sql:Column {
         name: "extended_handler"
     }
-    string? extendedHandler?;
+    string extendedHandler?;
 
     string region?;
     string description?;

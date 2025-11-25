@@ -187,17 +187,17 @@ public isolated function getProjectById(string projectId) returns types:Project|
     return projectRecord;
 }
 
-// Get project ID by name
-public isolated function getProjectIdByName(string projectName) returns string|error {
+// Get project ID by handler
+public isolated function getProjectIdByHandler(string projectHandler) returns string|error {
     stream<record {|string project_id;|}, sql:Error?> projectStream = dbClient->query(`
-        SELECT project_id FROM projects WHERE name = ${projectName}
+        SELECT project_id FROM projects WHERE handler = ${projectHandler}
     `);
 
     record {|string project_id;|}[] projectRecords = check from record {|string project_id;|} project in projectStream
         select project;
 
     if projectRecords.length() == 0 {
-        return error(string `Project ${projectName} not found.`);
+        return error(string `Project ${projectHandler} not found.`);
     }
     return projectRecords[0].project_id;
 }
