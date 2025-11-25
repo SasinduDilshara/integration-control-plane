@@ -1563,6 +1563,15 @@ public type UserContext record {
     boolean isProjectAuthor = false; // Can create/update/delete projects
 };
 
+// UserContext V2 - RBAC V2 permission-based authorization
+// Used with new permission-based JWT tokens
+public type UserContextV2 record {
+    string userId;
+    string username;
+    string displayName;
+    string[] permissions; // Flat list of permission names from JWT
+};
+
 // Database role record type
 public type Role record {
     @sql:Column {

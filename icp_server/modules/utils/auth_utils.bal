@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.auth;
 import icp_server.storage;
 import icp_server.types;
 
@@ -801,5 +802,222 @@ public isolated function isAdminInAnyEnvironment(types:UserContext userContext, 
         role.projectId == projectId &&
         role.privilegeLevel == types:ADMIN
     );
+}
+
+// ============================================================================
+// RBAC V2 - JWT & CONTEXT MANAGEMENT
+// ============================================================================
+// New functions for RBAC V2 permission-based authorization.
+// These functions coexist with the old RBAC functions above.
+// Stage 6 will migrate all endpoints to use these V2 functions.
+// ============================================================================
+
+// Generate JWT token V2 with permissions (RBAC V2)
+// Uses permission-based authorization instead of role-based
+public isolated function generateJWTTokenV2(
+        string userId,
+        string username,
+        string displayName,
+        string jwtIssuer,
+        int tokenExpiryTime,
+        string jwtAudience,
+        jwt:IssuerSignatureConfig signatureConfig
+) returns string|error {
+    log:printDebug("Generating JWT token V2 with permissions", username = username);
+
+    // Get all permission names for the user (across all scopes)
+    string[] permissionNames = check auth:getUserPermissionNames(userId);
+
+    // Create scope string (OAuth2/OIDC standard for permissions)
+    string scopeString = string:'join(" ", ...permissionNames);
+
+    // Generate JWT token
+    jwt:IssuerConfig issuerConfig = {
+        username: userId, // 'sub' claim should be the userId (UUID)
+        issuer: jwtIssuer,
+        expTime: <decimal>tokenExpiryTime,
+        audience: jwtAudience,
+        signatureConfig: signatureConfig
+    };
+
+    // Add custom claims
+    issuerConfig.customClaims["username"] = username;
+    issuerConfig.customClaims["displayName"] = displayName;
+    issuerConfig.customClaims["permissions"] = permissionNames; // Array format
+    issuerConfig.customClaims["scope"] = scopeString; // Space-separated format (OAuth2 standard)
+
+    string|jwt:Error jwtToken = jwt:issue(issuerConfig);
+    if jwtToken is jwt:Error {
+        log:printError("Error generating JWT token V2", jwtToken, username = username);
+        return error("Failed to generate JWT token V2", jwtToken);
+    }
+
+    log:printInfo("JWT token V2 generated successfully", 
+        username = username, 
+        permissionCount = permissionNames.length());
+    return jwtToken;
+}
+
+// Extract UserContextV2 from JWT token (RBAC V2)
+// Parses permissions from the 'scope' claim
+public isolated function extractUserContextV2(string authorizationHeader) returns types:UserContextV2|error {
+    // Remove "Bearer " prefix if present
+    string token = authorizationHeader;
+    if authorizationHeader.toLowerAscii().startsWith("bearer ") {
+        token = authorizationHeader.substring(7);
+    }
+
+    // Decode JWT token (validation already done by auth interceptor)
+    [jwt:Header, jwt:Payload]|jwt:Error decodeResult = jwt:decode(token);
+    if decodeResult is jwt:Error {
+        log:printError("Failed to decode JWT token V2 for user context", decodeResult);
+        return error("Invalid JWT token");
+    }
+
+    jwt:Payload payload = decodeResult[1];
+
+    // Extract user ID (sub claim)
+    string|error userId = payload.sub.ensureType();
+    if userId is error {
+        log:printError("JWT token missing 'sub' claim");
+        return error("Invalid token: missing user ID");
+    }
+
+    // Extract username from custom claims
+    anydata usernameData = payload["username"];
+    json|error usernameJson = usernameData.ensureType();
+    string username = usernameJson is string ? usernameJson : userId;
+
+    // Extract display name from custom claims
+    anydata displayNameData = payload["displayName"];
+    json|error displayNameJson = displayNameData.ensureType();
+    string displayName = displayNameJson is string ? displayNameJson : username;
+
+    // Extract permissions from custom claims (array format)
+    anydata permissionsData = payload["permissions"];
+    json|error permissionsJson = permissionsData.ensureType();
+    string[] permissions = [];
+    
+    if permissionsJson is json[] {
+        foreach json permJson in permissionsJson {
+            if permJson is string {
+                permissions.push(permJson);
+            }
+        }
+    } else {
+        log:printWarn("JWT token missing or invalid 'permissions' claim", userId = userId);
+    }
+
+    log:printInfo("Successfully extracted user context V2",
+            userId = userId,
+            username = username,
+            permissionCount = permissions.length());
+
+    return {
+        userId: userId,
+        username: username,
+        displayName: displayName,
+        permissions: permissions
+    };
+}
+
+// Extract permissions array from JWT token
+// Quick utility for getting just the permissions without full context
+public isolated function extractPermissionsFromJWT(string token) returns string[]|error {
+    // Remove "Bearer " prefix if present
+    string cleanToken = token;
+    if token.toLowerAscii().startsWith("bearer ") {
+        cleanToken = token.substring(7);
+    }
+
+    // Decode JWT token
+    [jwt:Header, jwt:Payload]|jwt:Error decodeResult = jwt:decode(cleanToken);
+    if decodeResult is jwt:Error {
+        return error("Invalid JWT token", decodeResult);
+    }
+
+    jwt:Payload payload = decodeResult[1];
+
+    // Extract permissions from custom claims
+    anydata permissionsData = payload["permissions"];
+    json|error permissionsJson = permissionsData.ensureType();
+    
+    if permissionsJson is json[] {
+        string[] permissions = [];
+        foreach json permJson in permissionsJson {
+            if permJson is string {
+                permissions.push(permJson);
+            }
+        }
+        return permissions;
+    }
+
+    // If permissions claim not found, return empty array
+    return [];
+}
+
+// Check if JWT token contains a specific permission
+// Useful for client-side authorization checks (UI show/hide logic)
+public isolated function hasPermissionInJWT(string token, string permissionName) returns boolean|error {
+    string[] permissions = check extractPermissionsFromJWT(token);
+    
+    foreach string permission in permissions {
+        if permission == permissionName {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// Extract scope string from JWT (space-separated permissions)
+// Returns the OAuth2-standard scope claim
+public isolated function extractScopeFromJWT(string token) returns string|error {
+    // Remove "Bearer " prefix if present
+    string cleanToken = token;
+    if token.toLowerAscii().startsWith("bearer ") {
+        cleanToken = token.substring(7);
+    }
+
+    // Decode JWT token
+    [jwt:Header, jwt:Payload]|jwt:Error decodeResult = jwt:decode(cleanToken);
+    if decodeResult is jwt:Error {
+        return error("Invalid JWT token", decodeResult);
+    }
+
+    jwt:Payload payload = decodeResult[1];
+
+    // Extract scope from custom claims
+    anydata scopeData = payload["scope"];
+    json|error scopeJson = scopeData.ensureType();
+    
+    if scopeJson is string {
+        return scopeJson;
+    }
+
+    // If scope claim not found, return empty string
+    return "";
+}
+
+// Build full authorization context from JWT for use with auth module
+// This combines JWT extraction with auth context building for complete authorization
+public isolated function buildAuthzContextFromJWT(string token, types:AccessScope? scope = ()) returns auth:UserAuthzContext|error {
+    // Extract basic user context from JWT
+    types:UserContextV2 userContext = check extractUserContextV2(token);
+    
+    // Build full authorization context using auth module
+    auth:UserAuthzContext authzContext = check auth:buildUserAuthzContext(userContext.userId, scope);
+    
+    return authzContext;
+}
+
+// Quick check if user has a specific permission using JWT + repository lookup
+// Convenience function that combines JWT extraction with permission checking
+public isolated function hasPermissionV2(string token, string permissionName, types:AccessScope scope) returns boolean|error {
+    // Extract user ID from JWT
+    types:UserContextV2 userContext = check extractUserContextV2(token);
+    
+    // Check permission using auth module
+    return check auth:hasPermission(userContext.userId, permissionName, scope);
 }
 
