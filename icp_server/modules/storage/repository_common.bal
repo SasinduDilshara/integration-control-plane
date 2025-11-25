@@ -54,12 +54,14 @@ isolated function retrieveAndMarkCommandsAsSent(string runtimeId) returns types:
     types:ControlCommand[] pendingCommands = [];
 
     // Retrieve pending control commands for this runtime
+    // Lock pending commands to avoid concurrent modifications
     stream<types:ControlCommand, sql:Error?> commandStream = dbClient->query(`
         SELECT command_id, runtime_id, target_artifact, action, issued_at, status
         FROM control_commands
         WHERE runtime_id = ${runtimeId}
         AND status = 'pending'
         ORDER BY issued_at ASC
+        FOR UPDATE
     `);
 
     check from types:ControlCommand command in commandStream
@@ -114,6 +116,6 @@ isolated function countTotalArtifacts(types:Artifacts artifacts) returns int {
     totalArtifacts += (<types:Connector[]>artifacts.connectors).length();
 
     totalArtifacts += (<types:RegistryResource[]>artifacts.registryResources).length();
-    
+
     return totalArtifacts;
 }
