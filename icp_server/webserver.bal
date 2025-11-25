@@ -46,6 +46,20 @@ service / on httpListener {
         boolean fileExists = check file:test(fullPath, file:EXISTS);
 
         if !fileExists {
+            // For SPA routing: if file doesn't exist and path doesn't have an extension,
+            // serve index.html to let client-side router handle it
+            if filePath.indexOf(".") is () {
+                string indexPath = "../www/index.html";
+                boolean indexExists = check file:test(indexPath, file:EXISTS);
+
+                if indexExists {
+                    byte[] fileContent = check io:fileReadBytes(indexPath);
+                    response.setHeader("Content-Type", "text/html; charset=utf-8");
+                    response.setBinaryPayload(fileContent);
+                    return response;
+                }
+            }
+
             response.statusCode = 404;
             response.setTextPayload("File not found: " + filePath);
             log:printError("File not found: " + fullPath);
