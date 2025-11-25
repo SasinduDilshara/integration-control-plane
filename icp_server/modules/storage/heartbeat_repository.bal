@@ -152,12 +152,15 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
     // This ensures commands are marked as 'sent' atomically with audit log creation
     transaction {
         // Retrieve pending control commands for this runtime
+        // Lock pending commands for this runtime to avoid concurrent modifications
+        // Use FOR UPDATE so rows cannot be changed by other transactions while we process them
         stream<types:ControlCommand, sql:Error?> commandStream = dbClient->query(`
             SELECT command_id, runtime_id, target_artifact, action, issued_at, status
             FROM control_commands
             WHERE runtime_id = ${deltaHeartbeat.runtime}
             AND status = 'pending'
             ORDER BY issued_at ASC
+            FOR UPDATE
         `);
 
         check from types:ControlCommand command in commandStream
