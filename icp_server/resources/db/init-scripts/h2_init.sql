@@ -184,6 +184,304 @@ CREATE INDEX idx_user_roles_user_id ON user_roles (user_id);
 CREATE INDEX idx_user_roles_role_id ON user_roles (role_id);
 
 -- ============================================================================
+-- RBAC V2 - GROUP-BASED AUTHORIZATION
+-- ============================================================================
+
+-- User Groups table
+CREATE TABLE user_groups (
+    group_id VARCHAR(36) PRIMARY KEY,
+    group_name VARCHAR(255) NOT NULL,
+    org_uuid INT NOT NULL DEFAULT 1,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_groups_org FOREIGN KEY (org_uuid) REFERENCES organizations(org_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_user_groups_org_uuid ON user_groups (org_uuid);
+CREATE INDEX idx_user_groups_group_name ON user_groups (group_name);
+
+-- Roles v2 table (new structure for permission-based RBAC)
+CREATE TABLE roles_v2 (
+    role_id VARCHAR(36) PRIMARY KEY,
+    role_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_role_name UNIQUE (role_name)
+);
+
+CREATE INDEX idx_roles_v2_role_name ON roles_v2 (role_name);
+
+-- Permissions table with domain grouping
+CREATE TABLE permissions (
+    permission_id VARCHAR(36) PRIMARY KEY,
+    permission_name VARCHAR(255) NOT NULL UNIQUE,
+    permission_domain VARCHAR(50) NOT NULL,
+    resource_type VARCHAR(100) NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_permission_domain CHECK (permission_domain IN (
+        'Integration-Management',
+        'Environment-Management',
+        'Observability-Management',
+        'Project-Management',
+        'User-Management'
+    ))
+);
+
+CREATE INDEX idx_permissions_domain ON permissions (permission_domain);
+CREATE INDEX idx_permissions_resource_type ON permissions (resource_type);
+CREATE INDEX idx_permissions_name ON permissions (permission_name);
+
+-- Group-User mapping (Many-to-Many)
+CREATE TABLE group_user_mapping (
+    id IDENTITY PRIMARY KEY,
+    group_id VARCHAR(36) NOT NULL,
+    user_uuid VARCHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_group_user_group FOREIGN KEY (group_id) REFERENCES user_groups(group_id) ON DELETE CASCADE,
+    CONSTRAINT fk_group_user_user FOREIGN KEY (user_uuid) REFERENCES users(user_id) ON DELETE CASCADE,
+    CONSTRAINT unique_group_user UNIQUE (group_id, user_uuid)
+);
+
+CREATE INDEX idx_group_user_user_uuid ON group_user_mapping (user_uuid);
+CREATE INDEX idx_group_user_group_id ON group_user_mapping (group_id);
+
+-- Group-Role mapping with context (Many-to-Many with hierarchical scoping)
+CREATE TABLE group_role_mapping (
+    id IDENTITY PRIMARY KEY,
+    group_id VARCHAR(36) NOT NULL,
+    role_id VARCHAR(36) NOT NULL,
+    org_uuid INT,
+    project_uuid CHAR(36),
+    env_uuid CHAR(36),
+    integration_uuid CHAR(36),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_grp_role_group FOREIGN KEY (group_id) REFERENCES user_groups(group_id) ON DELETE CASCADE,
+    CONSTRAINT fk_grp_role_role FOREIGN KEY (role_id) REFERENCES roles_v2(role_id) ON DELETE CASCADE,
+    CONSTRAINT fk_grp_role_org FOREIGN KEY (org_uuid) REFERENCES organizations(org_id) ON DELETE CASCADE,
+    CONSTRAINT fk_grp_role_project FOREIGN KEY (project_uuid) REFERENCES projects(project_id) ON DELETE CASCADE,
+    CONSTRAINT fk_grp_role_env FOREIGN KEY (env_uuid) REFERENCES environments(environment_id) ON DELETE CASCADE,
+    CONSTRAINT fk_grp_role_integration FOREIGN KEY (integration_uuid) REFERENCES components(component_id) ON DELETE CASCADE,
+    CONSTRAINT chk_integration_requires_project CHECK (integration_uuid IS NULL OR project_uuid IS NOT NULL),
+    CONSTRAINT unique_group_role_context UNIQUE (group_id, role_id, org_uuid, project_uuid, env_uuid, integration_uuid)
+);
+
+CREATE INDEX idx_grp_role_group_id ON group_role_mapping (group_id);
+CREATE INDEX idx_grp_role_role_id ON group_role_mapping (role_id);
+CREATE INDEX idx_grp_role_org_uuid ON group_role_mapping (org_uuid);
+CREATE INDEX idx_grp_role_project_uuid ON group_role_mapping (project_uuid);
+CREATE INDEX idx_grp_role_env_uuid ON group_role_mapping (env_uuid);
+CREATE INDEX idx_grp_role_integration_uuid ON group_role_mapping (integration_uuid);
+CREATE INDEX idx_grp_role_group_project ON group_role_mapping (group_id, project_uuid);
+CREATE INDEX idx_grp_role_group_env ON group_role_mapping (group_id, env_uuid);
+
+-- Role-Permission mapping (Many-to-Many)
+CREATE TABLE role_permission_mapping (
+    id IDENTITY PRIMARY KEY,
+    role_id VARCHAR(36) NOT NULL,
+    permission_id VARCHAR(36) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_role_perm_role FOREIGN KEY (role_id) REFERENCES roles_v2(role_id) ON DELETE CASCADE,
+    CONSTRAINT fk_role_perm_permission FOREIGN KEY (permission_id) REFERENCES permissions(permission_id) ON DELETE CASCADE,
+    CONSTRAINT unique_role_permission UNIQUE (role_id, permission_id)
+);
+
+CREATE INDEX idx_role_perm_role_id ON role_permission_mapping (role_id);
+CREATE INDEX idx_role_perm_permission_id ON role_permission_mapping (permission_id);
+
+-- ============================================================================
+-- RBAC V2 VIEWS
+-- ============================================================================
+
+-- View: User's accessible projects
+CREATE VIEW v_user_project_access AS
+-- Direct project-level access
+SELECT DISTINCT
+    gum.user_uuid,
+    grm.project_uuid,
+    p.name AS project_name,
+    p.org_id AS org_uuid,
+    grm.role_id,
+    'project' AS access_level
+FROM group_user_mapping gum
+INNER JOIN group_role_mapping grm ON gum.group_id = grm.group_id
+INNER JOIN projects p ON grm.project_uuid = p.project_id
+WHERE grm.project_uuid IS NOT NULL AND grm.integration_uuid IS NULL
+
+UNION
+
+-- Org-level access (inherits all projects)
+SELECT DISTINCT
+    gum.user_uuid,
+    p.project_id AS project_uuid,
+    p.name AS project_name,
+    p.org_id AS org_uuid,
+    grm.role_id,
+    'org' AS access_level
+FROM group_user_mapping gum
+INNER JOIN group_role_mapping grm ON gum.group_id = grm.group_id
+INNER JOIN projects p ON grm.org_uuid = p.org_id
+WHERE grm.org_uuid IS NOT NULL 
+  AND grm.project_uuid IS NULL 
+  AND grm.integration_uuid IS NULL
+
+UNION
+
+-- Integration-level access (project must be visible for navigation)
+SELECT DISTINCT
+    gum.user_uuid,
+    grm.project_uuid,
+    p.name AS project_name,
+    p.org_id AS org_uuid,
+    grm.role_id,
+    'integration' AS access_level
+FROM group_user_mapping gum
+INNER JOIN group_role_mapping grm ON gum.group_id = grm.group_id
+INNER JOIN projects p ON grm.project_uuid = p.project_id
+WHERE grm.integration_uuid IS NOT NULL;
+
+-- View: User's accessible integrations
+CREATE VIEW v_user_integration_access AS
+-- Direct integration-level access
+SELECT DISTINCT
+    gum.user_uuid,
+    grm.integration_uuid,
+    c.name AS integration_name,
+    c.project_id AS project_uuid,
+    grm.env_uuid,
+    grm.role_id,
+    'integration' AS access_level
+FROM group_user_mapping gum
+INNER JOIN group_role_mapping grm ON gum.group_id = grm.group_id
+INNER JOIN components c ON grm.integration_uuid = c.component_id
+WHERE grm.integration_uuid IS NOT NULL
+
+UNION
+
+-- Project-level access (inherits all integrations in project)
+SELECT DISTINCT
+    gum.user_uuid,
+    c.component_id AS integration_uuid,
+    c.name AS integration_name,
+    c.project_id AS project_uuid,
+    grm.env_uuid,
+    grm.role_id,
+    'project' AS access_level
+FROM group_user_mapping gum
+INNER JOIN group_role_mapping grm ON gum.group_id = grm.group_id
+INNER JOIN components c ON grm.project_uuid = c.project_id
+WHERE grm.project_uuid IS NOT NULL 
+  AND grm.integration_uuid IS NULL
+
+UNION
+
+-- Org-level access (inherits all integrations in all projects)
+SELECT DISTINCT
+    gum.user_uuid,
+    c.component_id AS integration_uuid,
+    c.name AS integration_name,
+    c.project_id AS project_uuid,
+    grm.env_uuid,
+    grm.role_id,
+    'org' AS access_level
+FROM group_user_mapping gum
+INNER JOIN group_role_mapping grm ON gum.group_id = grm.group_id
+INNER JOIN projects p ON grm.org_uuid = p.org_id
+INNER JOIN components c ON p.project_id = c.project_id
+WHERE grm.org_uuid IS NOT NULL 
+  AND grm.project_uuid IS NULL 
+  AND grm.integration_uuid IS NULL;
+
+-- View: User's environment access/restrictions
+CREATE VIEW v_user_environment_access AS
+SELECT DISTINCT
+    gum.user_uuid,
+    grm.env_uuid,
+    grm.project_uuid,
+    grm.integration_uuid,
+    grm.role_id,
+    CASE 
+        WHEN grm.integration_uuid IS NOT NULL THEN 'integration'
+        WHEN grm.project_uuid IS NOT NULL THEN 'project'
+        ELSE 'org'
+    END AS scope_level
+FROM group_user_mapping gum
+INNER JOIN group_role_mapping grm ON gum.group_id = grm.group_id
+WHERE grm.env_uuid IS NOT NULL OR grm.org_uuid IS NOT NULL;
+
+-- ============================================================================
+-- RBAC V2 SEED DATA
+-- ============================================================================
+
+-- Insert pre-defined roles
+INSERT INTO roles_v2 (role_id, role_name, description) VALUES
+(RANDOM_UUID(), 'Super Admin', 'Full access to all resources and permissions'),
+(RANDOM_UUID(), 'Admin', 'Administrative access to projects and integrations'),
+(RANDOM_UUID(), 'Developer', 'Development access with limited permissions');
+
+-- Insert permissions for all domains
+INSERT INTO permissions (permission_id, permission_name, permission_domain, resource_type, action, description) VALUES
+-- Integration Management
+(RANDOM_UUID(), 'integration_mgt:view', 'Integration-Management', 'integration', 'view', 'View integrations'),
+(RANDOM_UUID(), 'integration_mgt:edit', 'Integration-Management', 'integration', 'edit', 'Edit integrations'),
+(RANDOM_UUID(), 'integration_mgt:manage', 'Integration-Management', 'integration', 'manage', 'Create, edit, and delete integrations'),
+
+-- Environment Management
+(RANDOM_UUID(), 'environment_mgt:manage', 'Environment-Management', 'environment', 'manage', 'Create and delete environments'),
+(RANDOM_UUID(), 'environment_mgt:manage_nonprod', 'Environment-Management', 'environment', 'manage', 'Create and delete non-production environments'),
+
+-- Project Management
+(RANDOM_UUID(), 'project_mgt:view', 'Project-Management', 'project', 'view', 'View projects'),
+(RANDOM_UUID(), 'project_mgt:edit', 'Project-Management', 'project', 'edit', 'Edit projects'),
+(RANDOM_UUID(), 'project_mgt:manage', 'Project-Management', 'project', 'manage', 'Create, edit, and delete projects'),
+
+-- Observability Management
+(RANDOM_UUID(), 'observability_mgt:view_logs', 'Observability-Management', 'logs', 'view', 'View logs'),
+(RANDOM_UUID(), 'observability_mgt:view_insights', 'Observability-Management', 'insights', 'view', 'View insights'),
+
+-- User Management
+(RANDOM_UUID(), 'user_mgt:manage_users', 'User-Management', 'user', 'manage', 'Create, update, and delete users'),
+(RANDOM_UUID(), 'user_mgt:update_users', 'User-Management', 'user', 'update', 'Assign user groups'),
+(RANDOM_UUID(), 'user_mgt:manage_groups', 'User-Management', 'group', 'manage', 'Create, update, and delete groups'),
+(RANDOM_UUID(), 'user_mgt:manage_roles', 'User-Management', 'role', 'manage', 'Create, update, and delete roles'),
+(RANDOM_UUID(), 'user_mgt:update_group_roles', 'User-Management', 'group-role', 'update', 'Map roles to groups');
+
+-- Map Super Admin to ALL permissions
+INSERT INTO role_permission_mapping (role_id, permission_id)
+SELECT 
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Super Admin'),
+    permission_id
+FROM permissions;
+
+-- Map Admin to all permissions except User Management
+INSERT INTO role_permission_mapping (role_id, permission_id)
+SELECT 
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Admin'),
+    permission_id
+FROM permissions
+WHERE permission_domain != 'User-Management';
+
+-- Map Developer to specific permissions
+INSERT INTO role_permission_mapping (role_id, permission_id)
+SELECT 
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Developer'),
+    permission_id
+FROM permissions
+WHERE permission_name IN (
+    'integration_mgt:view',
+    'integration_mgt:edit',
+    'environment_mgt:manage_nonprod',
+    'project_mgt:view',
+    'project_mgt:edit',
+    'observability_mgt:view_logs',
+    'observability_mgt:view_insights'
+);
+
+-- ============================================================================
 -- RUNTIMES & ARTIFACTS
 -- ============================================================================
 
