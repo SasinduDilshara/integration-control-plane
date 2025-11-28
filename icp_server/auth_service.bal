@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.auth;
 import icp_server.storage as storage;
 import icp_server.types as types;
 import icp_server.utils;
@@ -120,16 +121,11 @@ service /auth on httpListener {
             }
         }
 
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
-        if userRoles is error {
-            log:printError("Error getting user roles", userRoles);
-            return utils:createInternalServerError("Error getting user roles");
-        }
-
-        // Generate JWT token using utility function
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate JWT token using V2 utility function with permissions
+        string|error jwtToken = utils:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -139,6 +135,13 @@ service /auth on httpListener {
         if jwtToken is error {
             log:printError("Error generating JWT token", jwtToken);
             return utils:createInternalServerError("Error generating JWT token");
+        }
+
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
         }
 
         // Generate refresh token
@@ -173,7 +176,7 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error storing refresh token");
         }
 
-        log:printInfo("Login successful for user", username = username, isSuperAdmin = userDetails.isSuperAdmin, isProjectAuthor = userDetails.isProjectAuthor);
+        log:printInfo("Login successful for user", username = username, permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
@@ -182,9 +185,7 @@ service /auth on httpListener {
                 refreshTokenExpiresIn: refreshTokenExpiryTime,
                 username: username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor,
+                permissions: userPermissions,
                 isOidcUser: false
             }
         };
@@ -262,17 +263,11 @@ service /auth on httpListener {
             }
         }
 
-        // Fetch user roles
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
-        if userRoles is error {
-            log:printError("Error getting user roles for OIDC user", userRoles);
-            return utils:createInternalServerError("Error getting user roles");
-        }
-
-        // Generate JWT token using utility function
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate JWT token using V2 utility function with permissions
+        string|error jwtToken = utils:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -282,6 +277,13 @@ service /auth on httpListener {
         if jwtToken is error {
             log:printError("Error generating JWT token for OIDC user", jwtToken);
             return utils:createInternalServerError("Error generating JWT token");
+        }
+
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions for OIDC user", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
         }
 
         // Generate refresh token
@@ -317,7 +319,7 @@ service /auth on httpListener {
         }
 
         // Return login response
-        log:printInfo("OIDC login successful", username = userInfo.username, isSuperAdmin = userDetails.isSuperAdmin, isProjectAuthor = userDetails.isProjectAuthor);
+        log:printInfo("OIDC login successful", username = userInfo.username, permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
@@ -326,9 +328,7 @@ service /auth on httpListener {
                 refreshTokenExpiresIn: refreshTokenExpiryTime,
                 username: userInfo.username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor,
+                permissions: userPermissions,
                 isOidcUser: true
             }
         };
@@ -357,30 +357,25 @@ service /auth on httpListener {
             return utils:createUnauthorizedError("Authorization header required");
         }
 
-        // Extract user context from current token
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
+        // Extract user context from current token (V2)
+        types:UserContextV2|error userContext = utils:extractUserContextV2(authHeader);
         if userContext is error {
             log:printError("Failed to extract user context for token renewal", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
 
-        // Fetch latest user details and roles from database
+        // Fetch latest user details from database
         types:User|error userDetails = storage:getUserDetailsById(userContext.userId);
         if userDetails is error {
             log:printError("Error fetching user details for token renewal", userDetails, userId = userContext.userId);
             return utils:createInternalServerError("Failed to fetch user details");
         }
 
-        types:Role[]|error userRoles = storage:getUserRoles(userContext.userId);
-        if userRoles is error {
-            log:printError("Error fetching user roles for token renewal", userRoles, userId = userContext.userId);
-            return utils:createInternalServerError("Failed to fetch user roles");
-        }
-
-        // Generate JWT token using utility function
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate JWT token using V2 utility function with fresh permissions
+        string|error jwtToken = utils:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -392,16 +387,21 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error generating JWT token");
         }
 
-        log:printInfo("Token renewed successfully", username = userDetails.username, roleCount = userRoles.length());
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions for token renewal", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
+        }
+
+        log:printInfo("Token renewed successfully", username = userDetails.username, permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
                 expiresIn: defaultTokenExpiryTime,
                 username: userDetails.username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor
+                permissions: userPermissions
             }
         };
     }
@@ -427,17 +427,11 @@ service /auth on httpListener {
             return utils:createUnauthorizedError("Invalid or expired refresh token");
         }
 
-        // Fetch user roles
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
-        if userRoles is error {
-            log:printError("Error fetching user roles for refresh token", userRoles, userId = userDetails.userId);
-            return utils:createInternalServerError("Failed to fetch user roles");
-        }
-
-        // Generate new JWT access token
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate new JWT access token using V2 with permissions
+        string|error jwtToken = utils:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -449,11 +443,19 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error generating JWT token");
         }
 
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions for refresh token", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
+        }
+
         // If rotation is disabled, return response with same refresh token
         if !enableRefreshTokenRotation {
             log:printInfo("Token refreshed without rotation",
                     username = userDetails.username,
-                    userId = userDetails.userId);
+                    userId = userDetails.userId,
+                    permissionCount = userPermissions.length());
             return <http:Ok>{
                 body: {
                     token: jwtToken,
@@ -462,9 +464,7 @@ service /auth on httpListener {
                     refreshTokenExpiresIn: refreshTokenExpiryTime,
                     username: userDetails.username,
                     displayName: userDetails.displayName,
-                    roles: userRoles,
-                    isSuperAdmin: userDetails.isSuperAdmin,
-                    isProjectAuthor: userDetails.isProjectAuthor
+                    permissions: userPermissions
                 }
             };
         }
@@ -510,7 +510,8 @@ service /auth on httpListener {
 
         log:printInfo("Token refreshed with rotation",
                 username = userDetails.username,
-                userId = userDetails.userId);
+                userId = userDetails.userId,
+                permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
@@ -519,9 +520,7 @@ service /auth on httpListener {
                 refreshTokenExpiresIn: refreshTokenExpiryTime,
                 username: userDetails.username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor
+                permissions: userPermissions
             }
         };
     }
