@@ -18,6 +18,7 @@ import ballerina/http;
 import ballerina/jwt;
 import ballerina/log;
 import ballerina/test;
+import ballerina/time;
 
 // Test configuration
 const string AUTH_V2_SERVICE_URL = "https://localhost:9445";
@@ -585,6 +586,346 @@ function testGetUserEffectivePermissions() returns error? {
     test:assertTrue(permissionNamesStr.includes("user_mgt:manage_users"), "Should have user management permission");
     test:assertTrue(permissionNamesStr.includes("user_mgt:manage_groups"), "Should have group management permission");
     test:assertTrue(permissionNamesStr.includes("user_mgt:manage_roles"), "Should have role management permission");
+}
+
+// =============================================================================
+// Test 5: User Management Endpoints
+// =============================================================================
+
+@test:Config {
+    groups: ["auth-v2", "users"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testListUsers() returns error? {
+    // Send list users request
+    http:Response response = check authV2Client->get(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status
+    test:assertEquals(response.statusCode, 200, "Expected status code 200 for list users");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+
+    // Assert response structure
+    test:assertTrue(responseBody.users is json[], "Users array should be present");
+    test:assertTrue(responseBody.count is int, "Count should be present");
+
+    // Verify we have at least one user (the admin)
+    json[] users = check responseBody.users.ensureType();
+    test:assertTrue(users.length() >= 1, "Should have at least one user");
+
+    // Verify user structure
+    json firstUser = users[0];
+    test:assertTrue(firstUser.userId is string, "User ID should be present");
+    test:assertTrue(firstUser.username is string, "Username should be present");
+    test:assertTrue(firstUser.displayName is string, "Display name should be present");
+    test:assertTrue(firstUser.groups is json[], "Groups array should be present");
+    test:assertTrue(firstUser.groupCount is int, "Group count should be present");
+
+    log:printInfo("Successfully listed users", count = users.length());
+}
+
+@test:Config {
+    groups: ["auth-v2", "users"],
+    dependsOn: [testListUsers]
+}
+function testCreateUser() returns error? {
+    // First, create a test group for user assignment
+    json createGroupPayload = {
+        groupName: "User Test Group",
+        description: "Test group for user management tests"
+    };
+
+    http:Response groupResponse = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/groups`,
+        createGroupPayload,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(groupResponse.statusCode, 201, "Expected status code 201 for create group");
+    json groupBody = check groupResponse.getJsonPayload();
+    string userTestGroupId = check groupBody.groupId;
+
+    // Create user payload with unique username using timestamp
+    string uniqueUsername = string `testuser_${time:utcNow()[0]}`;
+    json createUserPayload = {
+        username: uniqueUsername,
+        password: "Test@123",
+        displayName: "Test User Created By V2",
+        groupIds: [userTestGroupId]
+    };
+
+    // Send create user request
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users`,
+        createUserPayload,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status
+    test:assertEquals(response.statusCode, 201, "Expected status code 201 for create user");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+
+    // Assert user structure
+    test:assertTrue(responseBody.userId is string, "User ID should be present");
+    test:assertTrue(responseBody.username is string, "Username should be present");
+    test:assertEquals(responseBody.username, uniqueUsername, "Username should match");
+    test:assertEquals(responseBody.displayName, "Test User Created By V2", "Display name should match");
+    test:assertEquals(responseBody.isSuperAdmin, false, "New user should not be super admin");
+    test:assertEquals(responseBody.isProjectAuthor, false, "New user should not be project author");
+    test:assertTrue(responseBody.groups is json[], "Groups array should be present");
+    test:assertTrue(responseBody.groupCount is int, "Group count should be present");
+
+    // Verify user was added to the specified group
+    json[] groups = check responseBody.groups.ensureType();
+    test:assertEquals(groups.length(), 1, "User should be in one group");
+    test:assertEquals(groups[0].groupId, userTestGroupId, "User should be in the test group");
+
+    log:printInfo("Successfully created user", username = uniqueUsername);
+}
+
+@test:Config {
+    groups: ["auth-v2", "users"],
+    dependsOn: [testCreateUser]
+}
+function testCreateUserDuplicateUsername() returns error? {
+    // Try to create user with admin username (guaranteed to exist)
+    json createUserPayload = {
+        username: "admin",
+        password: "Another@123",
+        displayName: "Another User"
+    };
+
+    // Send create user request
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users`,
+        createUserPayload,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status - should be 400 Bad Request
+    test:assertEquals(response.statusCode, 400, "Expected status code 400 for duplicate username");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+
+    string message = check responseBody.message;
+    test:assertTrue(message.includes("already exists"), "Error message should mention duplicate");
+
+    log:printInfo("Successfully validated duplicate username prevention");
+}
+
+@test:Config {
+    groups: ["auth-v2", "users"],
+    dependsOn: [testCreateUser]
+}
+function testDeleteUser() returns error? {
+    // Create a user specifically for deletion
+    string timestamp = time:utcNow()[0].toString();
+    string uniqueUsername = string `deleteme_${timestamp}`;
+
+    // Create a test group
+    json createGroupPayload = {
+        groupName: "Delete Test Group",
+        groupDescription: "Group for user deletion test"
+    };
+
+    http:Response groupResponse = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/groups`,
+        createGroupPayload,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+    test:assertEquals(groupResponse.statusCode, 201, "Expected status code 201 for group creation");
+    json groupBody = check groupResponse.getJsonPayload();
+    string deleteTestGroupId = check groupBody.groupId;
+
+    // Create a user in this group
+    json createUserPayload = {
+        username: uniqueUsername,
+        password: "Delete@123",
+        displayName: "User To Delete",
+        groupIds: [deleteTestGroupId]
+    };
+
+    http:Response createResponse = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users`,
+        createUserPayload,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+    test:assertEquals(createResponse.statusCode, 201, "Expected status code 201 for user creation");
+    json createBody = check createResponse.getJsonPayload();
+    string userIdToDelete = check createBody.userId;
+
+    log:printInfo("Created user for deletion", userId = userIdToDelete, username = uniqueUsername);
+
+    // Delete the user
+    http:Response deleteResponse = check authV2Client->delete(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users/${userIdToDelete}`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status - should be 204 No Content
+    test:assertEquals(deleteResponse.statusCode, 204, "Expected status code 204 for successful deletion");
+
+    // Verify user is deleted by trying to list users
+    http:Response listResponse = check authV2Client->get(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+    test:assertEquals(listResponse.statusCode, 200, "Expected status code 200 for list users");
+    
+    json listBody = check listResponse.getJsonPayload();
+    json[] users = check listBody.users.ensureType();
+    
+    // User should not be in the list
+    boolean userFound = false;
+    foreach json user in users {
+        string userId = check user.userId;
+        if userId == userIdToDelete {
+            userFound = true;
+            break;
+        }
+    }
+    test:assertFalse(userFound, "Deleted user should not appear in users list");
+
+    // Cleanup: Delete the test group
+    _ = check authV2Client->delete(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/groups/${deleteTestGroupId}`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`},
+        targetType = http:Response
+    );
+
+    log:printInfo("Successfully deleted user", userId = userIdToDelete);
+}
+
+@test:Config {
+    groups: ["auth-v2", "users"],
+    dependsOn: [testCreateUser]
+}
+function testDeleteUserNotFound() returns error? {
+    // Try to delete a non-existent user
+    string nonExistentUserId = "00000000-0000-0000-0000-000000000000";
+
+    http:Response response = check authV2Client->delete(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users/${nonExistentUserId}`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status - should be 404 Not Found
+    test:assertEquals(response.statusCode, 404, "Expected status code 404 for non-existent user");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+
+    string message = check responseBody.message;
+    test:assertTrue(message.includes("not found"), "Error message should mention user not found");
+
+    log:printInfo("Successfully validated user not found error");
+}
+
+@test:Config {
+    groups: ["auth-v2", "users"],
+    dependsOn: [testCreateUser]
+}
+function testDeleteSelf() returns error? {
+    // Try to delete own user account (super admin trying to delete themselves)
+    // We need the super admin's user ID
+    // From the init script, super admin has userId: 550e8400-e29b-41d4-a716-446655440000
+
+    string superAdminUserId = "550e8400-e29b-41d4-a716-446655440000";
+
+    http:Response response = check authV2Client->delete(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users/${superAdminUserId}`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status - should be 403 Forbidden
+    test:assertEquals(response.statusCode, 403, "Expected status code 403 for self-deletion attempt");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+
+    string message = check responseBody.message;
+    test:assertTrue(
+        message.includes("own user account") || message.includes("system administrator"), 
+        "Error message should mention self-deletion or system admin protection"
+    );
+
+    log:printInfo("Successfully validated self-deletion prevention");
+}
+
+@test:Config {
+    groups: ["auth-v2", "users"],
+    dependsOn: [testCreateUser]
+}
+function testDeleteSystemAdmin() returns error? {
+    // Create a non-admin user to try to delete the system admin
+    // First create a regular user
+    string timestamp = time:utcNow()[0].toString();
+    string regularUsername = string `regular_${timestamp}`;
+
+    json createUserPayload = {
+        username: regularUsername,
+        password: "Regular@123",
+        displayName: "Regular User"
+    };
+
+    http:Response createResponse = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users`,
+        createUserPayload,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+    test:assertEquals(createResponse.statusCode, 201, "Expected status code 201 for user creation");
+
+    json createBody = check createResponse.getJsonPayload();
+    string regularUserId = check createBody.userId;
+
+    // Login as the regular user to get their token
+    json loginPayload = {
+        username: regularUsername,
+        password: "Regular@123"
+    };
+
+    http:Response loginResponse = check authV2Client->post("/auth/login", loginPayload);
+    test:assertEquals(loginResponse.statusCode, 200, "Expected status code 200 for login");
+    
+    json loginBody = check loginResponse.getJsonPayload();
+    string regularUserToken = check loginBody.token;
+
+    // Try to delete system admin (with regular user token)
+    string superAdminUserId = "550e8400-e29b-41d4-a716-446655440000";
+
+    http:Response response = check authV2Client->delete(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users/${superAdminUserId}`,
+        headers = {"Authorization": string `Bearer ${regularUserToken}`}
+    );
+
+    // Assert response status - should be 403 Forbidden (due to system admin protection)
+    test:assertEquals(response.statusCode, 403, "Expected status code 403 for system admin deletion attempt");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+
+    string message = check responseBody.message;
+    test:assertTrue(message.includes("system administrator"), "Error message should mention system admin protection");
+
+    // Cleanup: Delete the regular user
+    _ = check authV2Client->delete(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/users/${regularUserId}`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`},
+        targetType = http:Response
+    );
+
+    log:printInfo("Successfully validated system admin deletion prevention");
 }
 
 // =============================================================================

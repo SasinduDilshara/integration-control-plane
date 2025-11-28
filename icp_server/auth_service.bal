@@ -1030,134 +1030,6 @@ service /auth on httpListener {
         };
     }
 
-    // Update user roles
-    @http:ResourceConfig {
-        auth: [
-            {
-                jwtValidatorConfig: {
-                    issuer: frontendJwtIssuer,
-                    audience: frontendJwtAudience,
-                    signatureConfig: {
-                        secret: defaultJwtHMACSecret
-                    }
-                }
-            }
-        ]
-    }
-    isolated resource function put users/[string userId]/roles(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:UpdateUserRolesRequest request) returns http:Ok|http:NotFound|http:BadRequest|http:Unauthorized|http:InternalServerError|error? {
-        log:printInfo("Updating roles for user", userId = userId);
-
-        // Extract user context for RBAC
-        if authHeader is () {
-            log:printError("Authorization header missing in request");
-            return utils:createUnauthorizedError("Authorization header required");
-        }
-
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
-        if userContext is error {
-            log:printError("Failed to extract user context", userContext);
-            return utils:createUnauthorizedError("Invalid authorization token");
-        }
-
-        // Check if target user exists and get their details
-        types:User|error targetUser = storage:getUserDetailsById(userId);
-        if targetUser is error {
-            if targetUser is sql:NoRowsError {
-                log:printWarn("Target user not found for role update", userId = userId);
-                return <http:NotFound>{
-                    body: {
-                        message: "User not found"
-                    }
-                };
-            }
-            log:printError("Error checking target user existence", targetUser);
-            return utils:createInternalServerError("Error checking user");
-        }
-
-        // RBAC: Only super admins can edit super admin permissions
-        if targetUser.isSuperAdmin && !userContext.isSuperAdmin {
-            log:printWarn("Non-super-admin attempted to edit super admin permissions",
-                    callingUser = userContext.userId,
-                    targetUser = userId);
-            return utils:createUnauthorizedError("Only super admins can edit super admin permissions");
-        }
-
-        // RBAC: Verify the calling user has admin access to ALL project-environment type pairs being assigned
-        foreach types:RoleAssignment roleAssignment in request.roles {
-            final readonly & types:RoleAssignment roleAssignmentValue = roleAssignment.cloneReadOnly();
-            // Check if user has admin access to this project and environment type
-            boolean hasAdminAccess = userContext.roles.some(isolated function(types:RoleInfo role) returns boolean {
-                return role.projectId == roleAssignmentValue.projectId &&
-                role.environmentType == roleAssignmentValue.environmentType &&
-                role.privilegeLevel == types:ADMIN;
-            });
-
-            if !hasAdminAccess && !userContext.isSuperAdmin {
-                log:printWarn("User attempted to assign role without admin access",
-                        callingUser = userContext.userId,
-                        targetUser = userId,
-                        projectId = roleAssignment.projectId,
-                        environmentType = roleAssignment.environmentType);
-                return utils:createUnauthorizedError(
-                        string `Access denied: You must be an admin in project ${roleAssignment.projectId} and environment type ${roleAssignment.environmentType} to assign roles`
-                );
-            }
-        }
-
-        // RBAC: Only super admins can update isProjectAuthor flag
-        if request?.isProjectAuthor is boolean {
-            if !userContext.isSuperAdmin {
-                log:printWarn("Non-super-admin attempted to update project author flag",
-                        callingUser = userContext.userId,
-                        targetUser = userId);
-                return utils:createUnauthorizedError("Only super admins can update project author permissions");
-            }
-        }
-
-        log:printInfo("RBAC check passed for role assignment",
-                callingUser = userContext.userId,
-                targetUser = userId,
-                roleCount = request.roles.length());
-
-        // Validate role assignments
-        if request.roles.length() == 0 {
-            log:printDebug("Removing all roles for user", userId = userId);
-        }
-
-        // Update isProjectAuthor flag if provided (and super admin has approved)
-        if request?.isProjectAuthor is boolean {
-            boolean isProjectAuthor = check request?.isProjectAuthor.ensureType();
-            error? updateAuthorResult = storage:updateUserProjectAuthor(userId, isProjectAuthor);
-            if updateAuthorResult is error {
-                log:printError("Error updating user project author flag", updateAuthorResult, userId = userId);
-                return utils:createInternalServerError("Failed to update project author permission");
-            }
-            log:printInfo("Updated project author flag", userId = userId, isProjectAuthor = request?.isProjectAuthor);
-        }
-
-        // Update roles
-        error? updateResult = storage:updateUserRoles(userId, request.roles);
-        if updateResult is error {
-            log:printError("Error updating user roles", updateResult, userId = userId);
-            return utils:createInternalServerError("Failed to update user roles");
-        }
-
-        // Fetch updated user with roles
-        types:Role[]|error updatedRoles = storage:getUserRoles(userId);
-        if updatedRoles is error {
-            log:printError("Error fetching updated roles", updatedRoles);
-            return utils:createInternalServerError("Failed to fetch updated roles");
-        }
-
-        log:printInfo("User roles updated successfully", userId = userId, callingUser = userContext.userId);
-        return <http:Ok>{
-            body: {
-                message: "User roles updated successfully",
-                roles: updatedRoles
-            }
-        };
-    }
-
     // RBAC v2: Group Management Endpoints
 
     // Get all groups for an organization
@@ -1895,6 +1767,175 @@ service /auth on httpListener {
                 count: enrichedMappings.length()
             }
         };
+    }
+
+    // ============================================================================
+    // User Management Endpoints (RBAC v2)
+    // ============================================================================
+
+    // GET /auth/orgs/{orgHandle}/users - List all users with group memberships
+    @http:ResourceConfig {
+        auth: {
+            scopes: ["user_mgt:manage_users", "user_mgt:view"]
+        }
+    }
+    resource function get orgs/[string orgHandle]/users()
+            returns http:Ok|http:InternalServerError|error {
+        
+        log:printInfo("Fetching users for organization", orgHandle = orgHandle);
+
+        // Get all users with their group memberships
+        json[]|error users = storage:getAllUsersV2();
+        if users is error {
+            log:printError("Failed to fetch users", users);
+            return utils:createInternalServerError(string `Failed to fetch users: ${users.message()}`);
+        }
+
+        log:printInfo(string `Successfully fetched ${users.length()} users`);
+
+        return <http:Ok>{
+            body: {
+                users: users,
+                count: users.length()
+            }
+        };
+    }
+
+    // POST /auth/orgs/{orgHandle}/users - Create a new user
+    @http:ResourceConfig {
+        auth: {
+            scopes: ["user_mgt:manage_users"]
+        }
+    }
+    resource function post orgs/[string orgHandle]/users(@http:Payload json payload)
+            returns http:Created|http:BadRequest|http:InternalServerError|error {
+        
+        log:printInfo("Creating new user", orgHandle = orgHandle);
+
+        // Extract and validate payload
+        string username = check payload.username;
+        string password = check payload.password;
+        string displayName = check payload.displayName;
+        
+        // Handle optional groupIds array
+        string[] groupIds = [];
+        json|error groupIdsField = payload.groupIds;
+        if groupIdsField is json[] {
+            groupIds = from var id in groupIdsField select id.toString();
+        }
+
+        // Validate required fields
+        if username.trim().length() == 0 {
+            return utils:createBadRequestError("Username is required");
+        }
+        if password.trim().length() == 0 {
+            return utils:createBadRequestError("Password is required");
+        }
+        if displayName.trim().length() == 0 {
+            return utils:createBadRequestError("Display name is required");
+        }
+
+        // Call auth backend to create user credentials
+        json createUserRequest = {
+            username: username,
+            password: password,
+            displayName: displayName
+        };
+
+        http:Response|error authResponse = authBackendClient->post("/users", createUserRequest, headers = {
+            "X-API-Key": authBackendApiKey
+        });
+
+        if authResponse is error {
+            log:printError("Failed to create user credentials in auth backend", authResponse);
+            return utils:createInternalServerError("Failed to create user credentials");
+        }
+
+        if authResponse.statusCode == 400 {
+            json|error errorBody = authResponse.getJsonPayload();
+            if errorBody is json {
+                json|error messageField = errorBody.message;
+                string message = messageField is string ? messageField : "Username already exists";
+                return utils:createBadRequestError(message);
+            }
+            return utils:createBadRequestError("Username already exists");
+        }
+
+        if authResponse.statusCode != 201 {
+            log:printError(string `Auth backend returned error status: ${authResponse.statusCode}`);
+            return utils:createInternalServerError("Failed to create user credentials");
+        }
+
+        // Get the created user ID from auth backend response
+        json authResponseBody = check authResponse.getJsonPayload();
+        string userId = check authResponseBody.userId;
+
+        // Create user in main database with group assignments
+        json|error createdUser = storage:createUserV2(userId, username, displayName, groupIds);
+        if createdUser is error {
+            log:printError("Failed to create user in main database", createdUser);
+            // TODO: Consider cleanup - delete from credentials DB if main DB creation fails
+            return utils:createInternalServerError(string `Failed to create user: ${createdUser.message()}`);
+        }
+
+        log:printInfo(string `Successfully created user: ${username}`);
+
+        return <http:Created>{
+            body: createdUser
+        };
+    }
+
+    // DELETE /auth/orgs/{orgHandle}/users/{userId} - Delete a user
+    @http:ResourceConfig {
+        auth: {
+            scopes: ["user_mgt:manage_users"]
+        }
+    }
+    resource function delete orgs/[string orgHandle]/users/[string userId](http:Request req)
+            returns http:NoContent|http:BadRequest|http:Forbidden|http:NotFound|http:InternalServerError|error {
+        
+        log:printInfo("Deleting user", orgHandle = orgHandle, userId = userId);
+
+        // Extract user context from JWT token
+        string|http:HeaderNotFoundError authHeader = req.getHeader("Authorization");
+        if authHeader is http:HeaderNotFoundError {
+            log:printError("Authorization header not found");
+            return utils:createInternalServerError("Authorization header not found");
+        }
+
+        types:UserContextV2|error userContext = utils:extractUserContextV2(authHeader);
+        if userContext is error {
+            log:printError("Failed to extract user context", userContext);
+            return utils:createInternalServerError("Failed to extract user context");
+        }
+
+        // Delete user with safety checks (cannot delete self or system admin)
+        error? deleteResult = storage:deleteUserV2(userId, userContext.userId);
+        if deleteResult is error {
+            string errorMsg = deleteResult.message();
+            if errorMsg.includes("system administrator") {
+                log:printWarn(string `Attempted to delete system administrator`, userId = userId);
+                return utils:createForbiddenError("Cannot delete system administrator");
+            }
+            if errorMsg.includes("own user account") {
+                log:printWarn(string `User attempted to delete own account`, userId = userId);
+                return utils:createForbiddenError("Cannot delete your own user account");
+            }
+            if errorMsg.includes("not found") {
+                log:printWarn(string `User not found for deletion`, userId = userId);
+                return <http:NotFound>{
+                    body: {
+                        message: string `User not found: ${userId}`
+                    }
+                };
+            }
+            log:printError("Failed to delete user", deleteResult);
+            return utils:createInternalServerError(string `Failed to delete user: ${errorMsg}`);
+        }
+
+        log:printInfo(string `Successfully deleted user ${userId}`);
+
+        return <http:NoContent>{};
     }
 
     // ============================================================================
