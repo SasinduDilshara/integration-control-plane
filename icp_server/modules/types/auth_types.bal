@@ -229,13 +229,24 @@ public type AddUsersToGroupInput record {
     string[] userIds;
 };
 
-// Input for assigning a role to a group with context
+// Input for assigning a role to a group with context (used by storage layer)
 // This is how permissions are granted to users (via groups)
 public type AssignRoleToGroupInput record {
     string groupId;
     string roleId;
     
     // Scope context - defines WHERE this role applies
+    int orgUuid?; // Default: 1
+    string projectUuid?; // NULL = org-wide
+    string envUuid?; // NULL = all environments (acts as filter)
+    string integrationUuid?; // NULL = not integration-specific (requires projectUuid if set)
+};
+
+// Input for assigning multiple roles to a group (used by API endpoint)
+public type AssignRolesToGroupInput record {
+    string[] roleIds; // Multiple roles can be assigned at once
+    
+    // Scope context - defines WHERE these roles apply
     int orgUuid?; // Default: 1
     string projectUuid?; // NULL = org-wide
     string envUuid?; // NULL = all environments (acts as filter)

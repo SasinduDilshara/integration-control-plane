@@ -1392,7 +1392,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups"]
+                scopes: ["user_mgt:manage_groups", "user_mgt:manage_users", "user_mgt:update_users"]
             }
         ]
     }
@@ -1464,7 +1464,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups"]
+                scopes: ["user_mgt:manage_groups", "user_mgt:manage_users", "user_mgt:update_users"]
             }
         ]
     }
@@ -1491,6 +1491,408 @@ service /auth on httpListener {
                 message: "User removed from group successfully",
                 groupId: groupId,
                 userId: userId
+            }
+        };
+    }
+
+    // ============================================================================
+    // Group-Role Mapping Endpoints (RBAC v2)
+    // ============================================================================
+
+    // POST /auth/orgs/{orgHandle}/groups/{groupId}/roles - Assign roles to group with scope
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: ["user_mgt:manage_users", "user_mgt:manage_groups", "user_mgt:update_group_roles"]
+            }
+        ]
+    }
+    isolated resource function post orgs/[string orgHandle]/groups/[string groupId]/roles(types:AssignRolesToGroupInput input, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+        log:printInfo("Assigning roles to group", orgHandle = orgHandle, groupId = groupId, roleCount = input.roleIds.length());
+
+        // Extract user context for granular permission checks
+        string|http:HeaderNotFoundError authHeader = req.getHeader("Authorization");
+        if authHeader is http:HeaderNotFoundError {
+            return utils:createUnauthorizedError("Authorization header not found");
+        }
+        
+        string token = authHeader.substring(7); // Remove "Bearer " prefix
+        types:UserContextV2|error userContext = utils:extractUserContextV2(token);
+        if userContext is error {
+            log:printError("Failed to extract user context", userContext);
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+
+        // Note: Basic permission validation is handled by @http:ResourceConfig scopes
+        // Additional granular checks below ensure user has permissions at the specified scope level
+
+        // Validate input
+        if input.roleIds.length() == 0 {
+            return <http:BadRequest>{
+                body: {
+                    message: "At least one role ID must be provided"
+                }
+            };
+        }
+
+        // Verify group exists
+        types:Group|error existingGroup = storage:getGroupById(groupId);
+        if existingGroup is error {
+            log:printError("Group not found", existingGroup, groupId = groupId);
+            return <http:NotFound>{
+                body: {
+                    message: "Group not found"
+                }
+            };
+        }
+
+        // Validate scope context
+        if input.integrationUuid is string && input.projectUuid is () {
+            return <http:BadRequest>{
+                body: {
+                    message: "projectUuid is required when integrationUuid is provided"
+                }
+            };
+        }
+
+        // Granular permission checks based on scope level
+        // Check user has appropriate permissions at the specified scope
+        
+        if input.integrationUuid is string {
+            // Integration-level scope - most restrictive
+            string integrationUuid = <string>input.integrationUuid;
+            string projectUuid = <string>input.projectUuid; // Already validated above
+            
+            boolean|error canAssign = auth:canAssignRolesAtIntegrationScope(userContext.userId, integrationUuid, projectUuid);
+            if canAssign is error {
+                log:printError("Error checking integration scope permissions", canAssign, userId = userContext.userId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canAssign {
+                log:printWarn("User lacks permission to assign roles at integration scope", 
+                    userId = userContext.userId, integrationUuid = integrationUuid);
+                return <http:Forbidden>{
+                    body: {
+                        message: "You do not have permission to assign roles at this integration scope"
+                    }
+                };
+            }
+        } else if input.projectUuid is string {
+            // Project-level scope
+            string projectUuid = <string>input.projectUuid;
+            
+            boolean|error canAssign = auth:canAssignRolesAtProjectScope(userContext.userId, projectUuid);
+            if canAssign is error {
+                log:printError("Error checking project scope permissions", canAssign, userId = userContext.userId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canAssign {
+                log:printWarn("User lacks permission to assign roles at project scope", 
+                    userId = userContext.userId, projectUuid = projectUuid);
+                return <http:Forbidden>{
+                    body: {
+                        message: "You do not have permission to assign roles at this project scope"
+                    }
+                };
+            }
+        } else {
+            // Org-level scope - already validated by @http:ResourceConfig
+            // Additional check for consistency
+            boolean|error canAssign = auth:canAssignRolesAtOrgScope(userContext.userId);
+            if canAssign is error {
+                log:printError("Error checking org scope permissions", canAssign, userId = userContext.userId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canAssign {
+                log:printWarn("User lacks permission to assign roles at org scope", userId = userContext.userId);
+                return <http:Forbidden>{
+                    body: {
+                        message: "You do not have permission to assign roles at organization scope"
+                    }
+                };
+            }
+        }
+
+        // Assign each role to the group with the specified scope
+        int successCount = 0;
+        int failureCount = 0;
+        string[] errors = [];
+        int[] mappingIds = [];
+
+        int orgUuid = input.orgUuid ?: 1;
+
+        foreach string roleId in input.roleIds {
+            // Verify role exists
+            types:RoleV2|error role = storage:getRoleV2ById(roleId);
+            if role is error {
+                failureCount += 1;
+                errors.push(string `Role ${roleId} not found`);
+                log:printError(string `Role not found: ${roleId}`, role);
+                continue;
+            }
+
+            // Create assignment input for this role
+            types:AssignRoleToGroupInput assignInput = {
+                groupId: groupId,
+                roleId: roleId,
+                orgUuid: orgUuid,
+                projectUuid: input.projectUuid,
+                envUuid: input.envUuid,
+                integrationUuid: input.integrationUuid
+            };
+
+            // Assign role to group
+            int|error mappingId = storage:assignRoleToGroup(assignInput);
+            if mappingId is error {
+                failureCount += 1;
+                errors.push(string `Failed to assign role ${roleId}: ${mappingId.message()}`);
+                log:printError(string `Error assigning role ${roleId} to group ${groupId}`, mappingId);
+            } else {
+                successCount += 1;
+                mappingIds.push(mappingId);
+            }
+        }
+
+        log:printInfo("Roles assigned to group", groupId = groupId, successCount = successCount, failureCount = failureCount);
+
+        if failureCount > 0 && successCount == 0 {
+            // All operations failed
+            return utils:createInternalServerError(string `Failed to assign all roles to group: ${errors[0]}`);
+        }
+
+        return <http:Ok>{
+            body: {
+                message: string `Successfully assigned ${successCount} role(s) to group`,
+                groupId: groupId,
+                successCount: successCount,
+                failureCount: failureCount,
+                mappingIds: mappingIds,
+                errors: errors
+            }
+        };
+    }
+
+    // DELETE /auth/orgs/{orgHandle}/groups/{groupId}/roles/{mappingId} - Remove role from group
+    @http:ResourceConfig {
+        auth: {
+            scopes: ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"]
+        }
+    }
+    resource function delete orgs/[string orgHandle]/groups/[string groupId]/roles/[int mappingId](http:Request req)
+            returns http:Ok|http:NotFound|http:Forbidden|http:InternalServerError|error {
+        
+        log:printInfo("Removing role from group", orgHandle = orgHandle, groupId = groupId, mappingId = mappingId);
+
+        // Extract user context from JWT token
+        string|http:HeaderNotFoundError authHeader = req.getHeader("Authorization");
+        if authHeader is http:HeaderNotFoundError {
+            log:printError("Authorization header not found");
+            return utils:createInternalServerError("Authorization header not found");
+        }
+
+        types:UserContextV2|error userContext = utils:extractUserContextV2(authHeader);
+        if userContext is error {
+            log:printError("Failed to extract user context", userContext);
+            return utils:createInternalServerError("Failed to extract user context");
+        }
+
+        // Verify group exists
+        types:Group|error existingGroup = storage:getGroupById(groupId);
+        if existingGroup is error {
+            log:printWarn("Group not found", groupId = groupId, 'error = existingGroup);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group not found: ${groupId}`
+                }
+            };
+        }
+
+        // Get the mapping to determine its scope for permission validation
+        types:GroupRoleMapping|error mapping = storage:getGroupRoleMappingById(mappingId);
+        if mapping is error {
+            log:printWarn("Group-role mapping not found", mappingId = mappingId, 'error = mapping);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group-role mapping not found: ${mappingId}`
+                }
+            };
+        }
+
+        // Verify the mapping belongs to the specified group
+        if mapping.groupId != groupId {
+            log:printWarn("Mapping does not belong to specified group", 
+                mappingId = mappingId, 
+                mappingGroupId = mapping.groupId, 
+                requestedGroupId = groupId);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group-role mapping ${mappingId} does not belong to group ${groupId}`
+                }
+            };
+        }
+
+        // Granular permission checks based on mapping scope
+        // Check permissions at the scope level of the mapping (integration → project → org)
+        if mapping.integrationUuid is string {
+            // Integration scope - most restrictive
+            string integrationId = <string>mapping.integrationUuid;
+            string projectId = mapping.projectUuid is string ? <string>mapping.projectUuid : "";
+            
+            boolean|error canRemove = auth:canAssignRolesAtIntegrationScope(
+                userContext.userId, 
+                integrationId, 
+                projectId
+            );
+            if canRemove is error {
+                log:printError("Error checking integration scope permissions", canRemove, 
+                    userId = userContext.userId, 
+                    integrationId = integrationId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canRemove {
+                log:printWarn("User lacks permission to remove roles at integration scope", 
+                    userId = userContext.userId, 
+                    integrationId = integrationId);
+                return <http:Forbidden>{
+                    body: {
+                        message: string `You do not have permission to remove roles at integration scope: ${integrationId}`
+                    }
+                };
+            }
+        } else if mapping.projectUuid is string {
+            // Project scope
+            string projectId = <string>mapping.projectUuid;
+            
+            boolean|error canRemove = auth:canAssignRolesAtProjectScope(userContext.userId, projectId);
+            if canRemove is error {
+                log:printError("Error checking project scope permissions", canRemove, 
+                    userId = userContext.userId, 
+                    projectId = projectId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canRemove {
+                log:printWarn("User lacks permission to remove roles at project scope", 
+                    userId = userContext.userId, 
+                    projectId = projectId);
+                return <http:Forbidden>{
+                    body: {
+                        message: string `You do not have permission to remove roles at project scope: ${projectId}`
+                    }
+                };
+            }
+        } else {
+            // Organization scope - least restrictive
+            boolean|error canRemove = auth:canAssignRolesAtOrgScope(userContext.userId);
+            if canRemove is error {
+                log:printError("Error checking org scope permissions", canRemove, userId = userContext.userId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canRemove {
+                log:printWarn("User lacks permission to remove roles at org scope", userId = userContext.userId);
+                return <http:Forbidden>{
+                    body: {
+                        message: "You do not have permission to remove roles at organization scope"
+                    }
+                };
+            }
+        }
+
+        // Remove the role mapping
+        error? result = storage:removeRoleFromGroup(mappingId);
+        if result is error {
+            log:printError(string `Failed to remove role mapping ${mappingId}`, result);
+            return utils:createInternalServerError(string `Failed to remove role from group: ${result.message()}`);
+        }
+
+        log:printInfo("Successfully removed role from group", mappingId = mappingId, groupId = groupId);
+
+        return <http:Ok>{
+            body: {
+                message: string `Successfully removed role from group`,
+                mappingId: mappingId,
+                groupId: groupId
+            }
+        };
+    }
+
+    // GET /auth/orgs/{orgHandle}/groups/{groupId}/roles - List group's role assignments
+    @http:ResourceConfig {
+        auth: {
+            scopes: ["user_mgt:manage_groups", "user_mgt:view", "user_mgt:update_group_roles", "user_mgt:manage_users"]
+        }
+    }
+    resource function get orgs/[string orgHandle]/groups/[string groupId]/roles()
+            returns http:Ok|http:NotFound|http:InternalServerError|error {
+        
+        log:printInfo("Fetching role assignments for group", orgHandle = orgHandle, groupId = groupId);
+
+        // Verify group exists
+        types:Group|error existingGroup = storage:getGroupById(groupId);
+        if existingGroup is error {
+            log:printWarn("Group not found", groupId = groupId, 'error = existingGroup);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group not found: ${groupId}`
+                }
+            };
+        }
+
+        // Get all role mappings for this group
+        types:GroupRoleMapping[]|error mappings = storage:getGroupRoleMappings(groupId);
+        if mappings is error {
+            log:printError(string `Failed to fetch role mappings for group ${groupId}`, mappings);
+            return utils:createInternalServerError(string `Failed to fetch role assignments: ${mappings.message()}`);
+        }
+
+        // Enrich mappings with role details
+        json[] enrichedMappings = [];
+        foreach types:GroupRoleMapping mapping in mappings {
+            // Get role details
+            types:RoleV2|error role = storage:getRoleV2ById(mapping.roleId);
+            if role is error {
+                log:printWarn(string `Role not found for mapping ${mapping.id}`, roleId = mapping.roleId);
+                // Skip this mapping if role doesn't exist (orphaned mapping)
+                continue;
+            }
+
+            // Build enriched mapping with role name
+            json enrichedMapping = {
+                id: mapping.id,
+                groupId: mapping.groupId,
+                roleId: mapping.roleId,
+                roleName: role.roleName,
+                roleDescription: role.description,
+                // Scope information
+                orgUuid: mapping.orgUuid,
+                projectUuid: mapping.projectUuid,
+                envUuid: mapping.envUuid,
+                integrationUuid: mapping.integrationUuid,
+                createdAt: mapping.createdAt
+            };
+
+            enrichedMappings.push(enrichedMapping);
+        }
+
+        log:printInfo(string `Found ${enrichedMappings.length()} role assignments for group ${groupId}`);
+
+        return <http:Ok>{
+            body: {
+                groupId: groupId,
+                mappings: enrichedMappings,
+                count: enrichedMappings.length()
             }
         };
     }

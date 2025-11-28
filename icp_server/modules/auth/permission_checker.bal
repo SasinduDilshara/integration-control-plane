@@ -351,3 +351,72 @@ public isolated function canUpdateGroupRoles(string userId) returns boolean|erro
     
     return check hasPermission(userId, "user_mgt:update_group_roles", scope);
 }
+
+// ============================================================================
+// Granular Permission Checks for Group-Role Assignments
+// ============================================================================
+
+// Check if user has permission to assign roles at a specific project scope
+// Used when assigning group-role mappings with projectUuid
+public isolated function canAssignRolesAtProjectScope(string userId, string projectId) returns boolean|error {
+    log:printDebug(string `Checking if user ${userId} can assign roles at project scope: ${projectId}`);
+
+    // First check if user has access to the project
+    boolean hasAccess = check storage:hasAccessToProject(userId, projectId);
+    if !hasAccess {
+        log:printDebug(string `User ${userId} does not have access to project ${projectId}`);
+        return false;
+    }
+
+    // Check if user has any of the required permissions at project scope
+    types:AccessScope scope = {
+        orgUuid: storage:DEFAULT_ORG_ID,
+        projectUuid: projectId
+    };
+    
+    return check hasAnyPermission(
+        userId, 
+        ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"], 
+        scope
+    );
+}
+
+// Check if user has permission to assign roles at a specific integration scope
+// Used when assigning group-role mappings with integrationUuid
+public isolated function canAssignRolesAtIntegrationScope(string userId, string integrationId, string projectId) returns boolean|error {
+    log:printDebug(string `Checking if user ${userId} can assign roles at integration scope: ${integrationId}`);
+
+    // First check if user has access to the integration
+    boolean hasAccess = check storage:hasAccessToIntegration(userId, integrationId);
+    if !hasAccess {
+        log:printDebug(string `User ${userId} does not have access to integration ${integrationId}`);
+        return false;
+    }
+
+    // Check if user has any of the required permissions at integration scope
+    types:AccessScope scope = {
+        orgUuid: storage:DEFAULT_ORG_ID,
+        projectUuid: projectId,
+        integrationUuid: integrationId
+    };
+    
+    return check hasAnyPermission(
+        userId, 
+        ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"], 
+        scope
+    );
+}
+
+// Check if user has permission to assign roles at org level
+// This is the most permissive check - just validates org-level permissions
+public isolated function canAssignRolesAtOrgScope(string userId) returns boolean|error {
+    log:printDebug(string `Checking if user ${userId} can assign roles at org scope`);
+
+    types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+    
+    return check hasAnyPermission(
+        userId, 
+        ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"], 
+        scope
+    );
+}

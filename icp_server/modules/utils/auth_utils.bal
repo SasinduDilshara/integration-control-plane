@@ -892,19 +892,22 @@ public isolated function extractUserContextV2(string authorizationHeader) return
     json|error displayNameJson = displayNameData.ensureType();
     string displayName = displayNameJson is string ? displayNameJson : username;
 
-    // Extract permissions from custom claims (array format)
-    anydata permissionsData = payload["permissions"];
-    json|error permissionsJson = permissionsData.ensureType();
+    // Extract permissions from 'scope' claim (OAuth2 standard - space-separated string)
+    anydata scopeData = payload["scope"];
+    json|error scopeJson = scopeData.ensureType();
     string[] permissions = [];
     
-    if permissionsJson is json[] {
-        foreach json permJson in permissionsJson {
-            if permJson is string {
-                permissions.push(permJson);
-            }
+    if scopeJson is string {
+        // Split space-separated scope string into array
+        string scopeString = scopeJson.trim();
+        if scopeString.length() > 0 {
+            // Split by any whitespace (space, tab, newline)
+            permissions = from string perm in re ` +`.split(scopeString)
+                          where perm.trim().length() > 0
+                          select perm.trim();
         }
     } else {
-        log:printWarn("JWT token missing or invalid 'permissions' claim", userId = userId);
+        log:printWarn("JWT token missing or invalid 'scope' claim", userId = userId);
     }
 
     log:printInfo("Successfully extracted user context V2",

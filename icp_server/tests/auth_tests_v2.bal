@@ -39,6 +39,7 @@ final http:Client authV2Client = check new (AUTH_V2_SERVICE_URL,
 string superAdminToken = "";
 string testGroupId = "";
 string testRoleId = "";
+int testMappingId = 0;
 
 // =============================================================================
 // Test 1: Login as Super Admin and Verify V2 JWT
@@ -403,6 +404,108 @@ function testUpdateRole() returns error? {
 }
 
 // =============================================================================
+// Test 3.5: Group-Role Mapping Endpoints
+// =============================================================================
+
+@test:Config {
+    groups: ["auth-v2", "group-roles"],
+    dependsOn: [testCreateGroup, testCreateRole]
+}
+function testAssignRolesToGroup() returns error? {
+    // Prepare assign roles request
+    json assignRequest = {
+        roleIds: [testRoleId], // Assign the test role to test group
+        orgUuid: 1 // Org-level scope
+    };
+
+    // Send assign roles request
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/groups/${testGroupId}/roles`,
+        assignRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status
+    test:assertEquals(response.statusCode, 200, "Expected status code 200 for assigning roles to group");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+
+    // Assert response structure
+    test:assertTrue(responseBody.message is string, "Message should be present");
+    test:assertEquals(responseBody.successCount, 1, "Success count should be 1");
+    test:assertEquals(responseBody.failureCount, 0, "Failure count should be 0");
+    test:assertTrue(responseBody.mappingIds is json[], "Mapping IDs array should be present");
+    
+    // Store mapping ID for later tests
+    json[] mappingIdsJson = check responseBody.mappingIds.ensureType();
+    test:assertTrue(mappingIdsJson.length() > 0, "Should have at least one mapping ID");
+    testMappingId = check mappingIdsJson[0].ensureType();
+    log:printInfo("Stored test mapping ID", mappingId = testMappingId);
+}
+
+@test:Config {
+    groups: ["auth-v2", "group-roles"],
+    dependsOn: [testAssignRolesToGroup]
+}
+function testListGroupRoleAssignments() returns error? {
+    // Send list role assignments request
+    http:Response response = check authV2Client->get(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/groups/${testGroupId}/roles`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status
+    test:assertEquals(response.statusCode, 200, "Expected status code 200 for listing group role assignments");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+
+    // Assert response structure
+    test:assertEquals(responseBody.groupId, testGroupId, "Group ID should match");
+    test:assertTrue(responseBody.mappings is json[], "Mappings array should be present");
+    test:assertTrue(responseBody.count is int, "Count should be present");
+
+    // Verify we have at least one mapping (the one we just created)
+    json[] mappings = check responseBody.mappings.ensureType();
+    test:assertTrue(mappings.length() >= 1, "Should have at least one role assignment");
+
+    // Verify the mapping structure
+    json firstMapping = mappings[0];
+    test:assertTrue(firstMapping.id is int, "Mapping ID should be present");
+    test:assertEquals(firstMapping.roleId, testRoleId, "Role ID should match");
+    test:assertTrue(firstMapping.roleName is string, "Role name should be present");
+    test:assertTrue(firstMapping.groupId is string, "Group ID should be present");
+    
+    log:printInfo("Successfully listed group role assignments", count = mappings.length());
+}
+
+@test:Config {
+    groups: ["auth-v2", "group-roles"],
+    dependsOn: [testListGroupRoleAssignments]
+}
+function testRemoveRoleFromGroup() returns error? {
+    // Send delete request
+    http:Response response = check authV2Client->delete(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/groups/${testGroupId}/roles/${testMappingId}`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // Assert response status
+    test:assertEquals(response.statusCode, 200, "Expected status code 200 for removing role from group");
+
+    // Parse response body
+    json responseBody = check response.getJsonPayload();
+
+    // Assert response structure
+    test:assertTrue(responseBody.message is string, "Message should be present");
+    test:assertEquals(responseBody.mappingId, testMappingId, "Mapping ID should match");
+    test:assertEquals(responseBody.groupId, testGroupId, "Group ID should match");
+
+    log:printInfo("Successfully removed role from group", mappingId = testMappingId, groupId = testGroupId);
+}
+
+// =============================================================================
 // Test 4: Permission Endpoints
 // =============================================================================
 
@@ -490,7 +593,7 @@ function testGetUserEffectivePermissions() returns error? {
 
 @test:Config {
     groups: ["auth-v2", "cleanup"],
-    dependsOn: [testUpdateGroup, testUpdateRole]
+    dependsOn: [testUpdateGroup, testUpdateRole, testRemoveRoleFromGroup]
 }
 function testDeleteGroup() returns error? {
     // Send delete group request
@@ -512,7 +615,7 @@ function testDeleteGroup() returns error? {
 
 @test:Config {
     groups: ["auth-v2", "cleanup"],
-    dependsOn: [testUpdateRole]
+    dependsOn: [testUpdateRole, testRemoveRoleFromGroup]
 }
 function testDeleteRole() returns error? {
     // Send delete role request

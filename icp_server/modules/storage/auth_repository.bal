@@ -946,6 +946,20 @@ public isolated function permissionExists(string permissionName) returns boolean
 }
 
 // Get group-role mappings for a specific group (returns full mapping details including scope)
+// Get a single group-role mapping by ID
+public isolated function getGroupRoleMappingById(int mappingId) returns types:GroupRoleMapping|error {
+    log:printDebug(string `Fetching group-role mapping with ID: ${mappingId}`);
+
+    types:GroupRoleMapping mapping = check dbClient->queryRow(
+        `SELECT id, group_id, role_id, org_uuid, project_uuid, env_uuid, integration_uuid, created_at
+         FROM group_role_mapping
+         WHERE id = ${mappingId}`
+    );
+
+    log:printDebug(string `Found mapping: group=${mapping.groupId}, role=${mapping.roleId}`);
+    return mapping;
+}
+
 public isolated function getGroupRoleMappings(string groupId) returns types:GroupRoleMapping[]|error {
     log:printDebug(string `Fetching role mappings for group: ${groupId}`);
 
