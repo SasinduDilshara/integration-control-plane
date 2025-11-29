@@ -660,12 +660,25 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
-        // Only super admins can create environments
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to create environments");
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+
+        // Check if user can manage environments based on production status
+        if environment.critical {
+            // Production environment requires full management permission
+            if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+                return error("Access denied: insufficient permissions to create production environments");
+            }
+        } else {
+            // Non-production environment requires manage_nonprod or manage permission
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, "environment_mgt:manage_nonprod", scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope);
+            if !canManageNonProd && !canManageFull {
+                return error("Access denied: insufficient permissions to create environments");
+            }
         }
 
         // Set created_by to the current user's ID
@@ -684,102 +697,164 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
-        // Get all environment IDs where user has any role (across all projects)
-        // Note: Parameters orgUuid, type, projectId are ignored - environments are global
-        string[]|error accessibleEnvironmentIds = utils:getAccessibleEnvironmentIdsByType(userContext);
-        if accessibleEnvironmentIds is error {
-            log:printError("Failed to get accessible environment IDs", accessibleEnvironmentIds);
-            return error("Failed to get accessible environment IDs");
+        // Get user's accessible environments (filtered by role mappings)
+        // If user has any role mapping, they can see environments within their scope
+        types:UserEnvironmentAccess[] accessibleEnvs = 
+            check storage:getUserEnvironmentRestrictions(userContext.userId);
+
+        // Check if user has any access at all
+        if accessibleEnvs.length() == 0 {
+            return error("Access denied: no role mappings found for user");
         }
 
-        // Return empty array if user has no access to any environment
-        if accessibleEnvironmentIds.length() == 0 {
-            return [];
+        // Build environment ID list from access mappings:
+        // If ANY mapping has env_uuid = NULL, user gets all environments
+        // Otherwise, collect specific env_uuid values
+        
+        boolean hasUnrestrictedAccess = false;
+        string[] envIds = [];
+        
+        foreach types:UserEnvironmentAccess envAccess in accessibleEnvs {
+            if envAccess.envUuid is () {
+                // env_uuid is NULL = unrestricted access to all environments
+                hasUnrestrictedAccess = true;
+                break;
+            } else if envAccess.envUuid is string {
+                // Specific environment access
+                string envId = <string>envAccess.envUuid;
+                if envIds.indexOf(envId) is () {
+                    envIds.push(envId);
+                }
+            }
         }
 
-        // Fetch environments by accessible environment IDs
-        types:Environment[] environments = check storage:getEnvironmentsByIds(accessibleEnvironmentIds);
+        // Fetch environments based on access type
+        types:Environment[] environments = [];
+        if hasUnrestrictedAccess {
+            // User has unrestricted access - fetch all environments
+            environments = check storage:getAllEnvironments();
+        } else {
+            // User has access to specific environments only (envIds must have at least one item)
+            environments = check storage:getEnvironmentsByIds(envIds);
+        }
 
-        // The id alias is already set in the storage layer
+        // Filter by type if provided (prod = critical, non-prod = non-critical)
+        if 'type is string {
+            if 'type == "prod" {
+                environments = environments.filter(env => env.critical);
+            } else if 'type == "non-prod" {
+                environments = environments.filter(env => !env.critical);
+            }
+        }
+
         return environments;
     }
 
-    // Get all environments where user has admin access (for permission management)
-    isolated resource function get adminEnvironments(graphql:Context context) returns types:Environment[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Get all environment IDs where user is admin (across all projects)
-        string[] adminEnvironmentIds = utils:getAdminEnvironmentIdsByType(userContext);
-
-        // Return empty array if user is not admin in any environment
-        if adminEnvironmentIds.length() == 0 {
-            return [];
-        }
-
-        // Fetch environments by admin environment IDs
-        return check storage:getEnvironmentsByIds(adminEnvironmentIds);
-    }
-
-    // Delete an environment (super admin only)
+    // Delete an environment (requires management permission based on environment type)
     isolated remote function deleteEnvironment(graphql:Context context, string environmentId) returns boolean|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
-        // Only super admins can delete environments
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to delete environments");
+        // Fetch environment to check its production status
+        types:Environment? env = check storage:getEnvironmentById(environmentId);
+        if env is () {
+            return error("Environment not found");
+        }
+
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+
+        // Check permission based on production status
+        if env.critical {
+            // Production environment requires full management permission
+            if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+                return error("Access denied: insufficient permissions to delete production environments");
+            }
+        } else {
+            // Non-production environment requires manage_nonprod or manage permission
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, "environment_mgt:manage_nonprod", scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope);
+            if !canManageNonProd && !canManageFull {
+                return error("Access denied: insufficient permissions to delete environments");
+            }
         }
 
         check storage:deleteEnvironment(environmentId);
         return true;
     }
 
-    // Update environment name, description, and/or critical status (super admin only)
+    // Update environment name, description, and/or critical status (requires management permission)
     isolated remote function updateEnvironment(graphql:Context context, string environmentId, string? name, string? description, boolean? critical) returns types:Environment?|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
-        // Only super admins can update environments
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to update environments");
+        // Fetch current environment to check its production status
+        types:Environment? currentEnv = check storage:getEnvironmentById(environmentId);
+        if currentEnv is () {
+            return error("Environment not found");
+        }
+
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+
+        // If changing critical flag, check permission for the target state
+        // Otherwise, check permission for the current state
+        boolean targetIsCritical = critical ?: currentEnv.critical;
+
+        if targetIsCritical {
+            // Production environment requires full management permission
+            if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+                return error("Access denied: insufficient permissions to update production environments");
+            }
+        } else {
+            // Non-production environment requires manage_nonprod or manage permission
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, "environment_mgt:manage_nonprod", scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope);
+            if !canManageNonProd && !canManageFull {
+                return error("Access denied: insufficient permissions to update environments");
+            }
         }
 
         check storage:updateEnvironment(environmentId, name, description, critical);
         return check storage:getEnvironmentById(environmentId);
     }
 
-    // Update environment production status (super admin only)
+    // Update environment production status (requires full management permission)
+    // This is a critical operation that always requires the highest permission level
     isolated remote function updateEnvironmentProductionStatus(graphql:Context context, string environmentId, boolean isProduction) returns types:Environment?|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
-        // Only super admins can update environment production status
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to update environment production status");
+        // Verify environment exists
+        types:Environment? env = check storage:getEnvironmentById(environmentId);
+        if env is () {
+            return error("Environment not found");
+        }
+
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+
+        // Changing production status is a critical operation - always requires full management permission
+        if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+            return error("Access denied: full environment management permission required to change production status");
         }
 
         check storage:updateEnvironmentProductionStatus(environmentId, isProduction);
