@@ -97,14 +97,6 @@ service /graphql on graphqlListener {
         // Extract user context V2 for RBAC
         types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
-        // Build scope based on provided filters
-        types:AccessScope scope = auth:buildScopeFromContext(projectId, componentId, environmentId);
-
-        // Check base permission to view integrations
-        if !check auth:hasPermission(userContext.userId, "integration_mgt:view", scope) {
-            return error("Access denied: insufficient permissions to view runtimes");
-        }
-
         // If specific componentId (integration) is provided, check access and return filtered
         if componentId is string {
             boolean hasAccess = check storage:hasAccessToIntegration(userContext.userId, componentId);

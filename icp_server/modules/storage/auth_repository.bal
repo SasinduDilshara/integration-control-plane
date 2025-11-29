@@ -666,8 +666,8 @@ public isolated function getUserAccessibleIntegrations(string userId, string? pr
     types:UserIntegrationAccess[] integrations = [];
     
     sql:ParameterizedQuery query = `
-        SELECT user_uuid, integration_uuid, integration_name, project_uuid, project_name, 
-               env_uuid, env_name, group_id, group_name, role_id, role_name, org_uuid
+        SELECT user_uuid, integration_uuid, integration_name, project_uuid, 
+               env_uuid, role_id, access_level
         FROM v_user_integration_access
         WHERE user_uuid = ${userId}`;
 
@@ -680,7 +680,7 @@ public isolated function getUserAccessibleIntegrations(string userId, string? pr
         query = sql:queryConcat(query, ` AND (env_uuid = ${envId} OR env_uuid IS NULL)`);
     }
 
-    query = sql:queryConcat(query, ` ORDER BY project_name, integration_name`);
+    query = sql:queryConcat(query, ` ORDER BY integration_name`);
 
     stream<types:UserIntegrationAccess, sql:Error?> integrationStream = dbClient->query(query);
 
@@ -700,8 +700,8 @@ public isolated function getUserEnvironmentRestrictions(string userId, string? p
     types:UserEnvironmentAccess[] environments = [];
     
     sql:ParameterizedQuery query = `
-        SELECT user_uuid, env_uuid, env_name, project_uuid, project_name, 
-               integration_uuid, integration_name, group_id, group_name, role_id, role_name, org_uuid
+        SELECT user_uuid, env_uuid, project_uuid, 
+               integration_uuid, role_id, scope_level
         FROM v_user_environment_access
         WHERE user_uuid = ${userId}`;
 
@@ -714,7 +714,7 @@ public isolated function getUserEnvironmentRestrictions(string userId, string? p
         query = sql:queryConcat(query, ` AND (integration_uuid = ${integrationId} OR integration_uuid IS NULL)`);
     }
 
-    query = sql:queryConcat(query, ` ORDER BY env_name`);
+    query = sql:queryConcat(query, ` ORDER BY env_uuid`);
 
     stream<types:UserEnvironmentAccess, sql:Error?> envStream = dbClient->query(query);
 
