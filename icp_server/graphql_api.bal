@@ -780,28 +780,6 @@ service /graphql on graphqlListener {
         return allProjects;
     }
 
-    // Get projects where user has admin access (for permission management)
-    isolated resource function get adminProjects(graphql:Context context) returns types:Project[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Get project IDs where user is admin
-        string[] adminProjectIds = utils:getAdminProjectIds(userContext);
-
-        // Return empty array if user is not admin in any project
-        if adminProjectIds.length() == 0 {
-            return [];
-        }
-
-        // Fetch projects by admin project IDs
-        return check storage:getProjectsByIds(adminProjectIds);
-    }
-
     // Get a specific project by ID with optional orgId filter
     isolated resource function get project(graphql:Context context, int? orgId, string projectId) returns types:Project?|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
