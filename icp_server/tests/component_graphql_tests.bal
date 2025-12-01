@@ -472,29 +472,3 @@ function testGetComponentArtifactTypesNoPermission() returns error? {
     // Should return error (query returns error for artifact operations)
     test:assertTrue(response.errors is json, "Query should return errors for insufficient permissions");
 }
-
-// =============================================================================
-// Test 13: Delete component - Success when component has no runtimes
-// =============================================================================
-
-@test:Config {
-    groups: ["component-graphql", "delete-component"],
-    enable: false  // Disabled to avoid affecting other tests that depend on Component 2
-}
-function testDeleteComponentWithoutRuntimes() returns error? {
-    string mutation = string `
-        mutation DeleteComponent($componentId: String!) {
-            deleteComponent(componentId: $componentId)
-        }
-    `;
-
-    // Component 2 has runtimes but we can test the permission check fails for viewer
-    json variables = {
-        componentId: COMPONENT_2_ID
-    };
-
-    json response = check executeGraphQL(mutation, integrationViewerToken, variables);
-
-    // Should return error due to insufficient permissions
-    test:assertTrue(response.errors is json, "Should return error for insufficient permissions");
-}

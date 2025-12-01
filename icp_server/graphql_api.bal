@@ -1129,45 +1129,6 @@ service /graphql on graphqlListener {
         return component;
     }
 
-    // Delete a component
-    isolated remote function deleteComponent(graphql:Context context, string componentId) returns boolean|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
-
-        // Get component to check project access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
-
-        // Build scope with project and integration context
-        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId);
-
-        // Check if user has permission to manage (delete requires manage)
-        if !check auth:hasPermission(userContext.userId, "integration_mgt:manage", scope) {
-            return error("Insufficient permissions to delete this component");
-        }
-
-        // Get all environments where this component has runtimes
-        string[] environmentsWithRuntimes = check storage:getEnvironmentIdsWithRuntimes(componentId);
-
-        // Check if user has permission in ALL environments where the component has runtimes
-        foreach string envId in environmentsWithRuntimes {
-            types:AccessScope envScope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = envId);
-            if !check auth:hasPermission(userContext.userId, "integration_mgt:manage", envScope) {
-                return error(string `Cannot delete component: it has runtimes in environment ${envId} where you don't have manage permission`);
-            }
-        }
-
-        check storage:deleteComponent(componentId);
-        return true;
-    }
-
     // Delete a component V2 - with detailed response
     isolated remote function deleteComponentV2(graphql:Context context, string orgHandler, string componentId, string projectId) returns types:DeleteComponentV2Response|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
