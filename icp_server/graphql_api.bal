@@ -240,8 +240,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // First, fetch the runtime to verify access to its environment
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -250,9 +250,17 @@ service /graphql on graphqlListener {
             return error("Runtime not found");
         }
 
-        // Verify user has access to the runtime's project and environment
-        if !utils:hasAccessToEnvironment(userContext, runtime.component.projectId, runtime.environment.id) {
-            return error("Access denied to runtime");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: runtime.component.projectId,
+            integrationUuid: runtime.component.id,
+            envUuid: runtime.environment.id
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to runtime services");
         }
 
         return check storage:getServicesForRuntime(runtimeId);
@@ -265,8 +273,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -274,9 +282,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component services");
         }
 
         return check storage:getServicesByEnvironmentAndComponent(environmentId, componentId);
@@ -289,8 +305,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // First, fetch the runtime to verify access to its environment
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -299,9 +315,17 @@ service /graphql on graphqlListener {
             return error("Runtime not found");
         }
 
-        // Verify user has access to the runtime's project and environment
-        if !utils:hasAccessToEnvironment(userContext, runtime.component.projectId, runtime.environment.id) {
-            return error("Access denied to runtime");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: runtime.component.projectId,
+            integrationUuid: runtime.component.id,
+            envUuid: runtime.environment.id
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to runtime listeners");
         }
 
         return check storage:getListenersForRuntime(runtimeId);
@@ -314,8 +338,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -323,9 +347,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component listeners");
         }
 
         return check storage:getListenersByEnvironmentAndComponent(environmentId, componentId);
@@ -338,8 +370,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -347,9 +379,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component REST APIs");
         }
 
         return check storage:getRestApisByEnvironmentAndComponent(environmentId, componentId);
@@ -362,8 +402,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -371,9 +411,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component Carbon Apps");
         }
 
         return check storage:getCarbonAppsByEnvironmentAndComponent(environmentId, componentId);
@@ -386,8 +434,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -395,9 +443,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component inbound endpoints");
         }
 
         return check storage:getInboundEndpointsByEnvironmentAndComponent(environmentId, componentId);
@@ -410,8 +466,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -419,9 +475,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component endpoints");
         }
 
         return check storage:getEndpointsByEnvironmentAndComponent(environmentId, componentId);
@@ -434,8 +498,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -443,9 +507,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component sequences");
         }
 
         return check storage:getSequencesByEnvironmentAndComponent(environmentId, componentId);
@@ -458,8 +530,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -467,9 +539,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component proxy services");
         }
 
         return check storage:getProxyServicesByEnvironmentAndComponent(environmentId, componentId);
@@ -482,8 +562,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -491,9 +571,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component tasks");
         }
 
         return check storage:getTasksByEnvironmentAndComponent(environmentId, componentId);
@@ -506,8 +594,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -515,9 +603,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component templates");
         }
 
         return check storage:getTemplatesByEnvironmentAndComponent(environmentId, componentId);
@@ -530,8 +626,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -539,9 +635,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component message stores");
         }
 
         return check storage:getMessageStoresByEnvironmentAndComponent(environmentId, componentId);
@@ -554,8 +658,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -563,9 +667,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component message processors");
         }
 
         return check storage:getMessageProcessorsByEnvironmentAndComponent(environmentId, componentId);
@@ -578,8 +690,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -587,9 +699,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component local entries");
         }
 
         return check storage:getLocalEntriesByEnvironmentAndComponent(environmentId, componentId);
@@ -602,8 +722,8 @@ service /graphql on graphqlListener {
             return error("Authorization header missing in request");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Extract user context V2 for RBAC
+        types:UserContextV2 userContext = check utils:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -611,9 +731,17 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: component.projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Access denied to component data services");
         }
 
         return check storage:getDataServicesByEnvironmentAndComponent(environmentId, componentId);
