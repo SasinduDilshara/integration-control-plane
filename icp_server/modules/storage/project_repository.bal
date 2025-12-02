@@ -295,36 +295,6 @@ public isolated function deleteProject(string projectId) returns error? {
     return ();
 }
 
-// Check project creation eligibility for an organization
-public isolated function checkProjectCreationEligibility(int orgId, string orgHandler) returns types:ProjectCreationEligibility|error {
-    log:printDebug(string `Checking project creation eligibility for orgId: ${orgId}, orgHandler: ${orgHandler}`);
-
-    sql:ParameterizedQuery query = `SELECT COUNT(*) as PROJECTCOUNT 
-                                   FROM projects 
-                                   WHERE org_id = ${orgId}`;
-
-    int currentProjectCount = 0;
-
-    stream<record {}, sql:Error?> projectCountStream = dbClient->query(query);
-
-    check from record {} countRecord in projectCountStream
-        do {
-            currentProjectCount = <int>countRecord["PROJECTCOUNT"];
-        };
-
-    boolean isAllowed = true;
-
-    log:printInfo(string `Project creation eligibility check completed`,
-            orgId = orgId,
-            orgHandler = orgHandler,
-            currentProjectCount = currentProjectCount,
-            isAllowed = isAllowed);
-
-    return {
-        isProjectCreationAllowed: isAllowed
-    };
-}
-
 // Check project handler availability for an organization
 public isolated function checkProjectHandlerAvailability(int orgId, string projectHandlerCandidate) returns types:ProjectHandlerAvailability|error {
     log:printDebug(string `Checking project handler availability for orgId: ${orgId}, handler: ${projectHandlerCandidate}`);

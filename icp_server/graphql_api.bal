@@ -896,7 +896,7 @@ service /graphql on graphqlListener {
         types:UserContextV2 userContext = check extractUserContext(context);
 
         // Build org-level scope for permission check
-        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+        types:AccessScope scope = {orgUuid: orgId, projectUuid: projectId};
         // Check permission at project level - requires project_mgt:manage 
         if !check auth:hasPermission(userContext.userId, auth:PERMISSION_PROJECT_MANAGE, scope)  {
             return error("Insufficient permissions to delete project");
@@ -923,8 +923,8 @@ service /graphql on graphqlListener {
     isolated remote function updateProject(graphql:Context context, types:ProjectUpdateInput project) returns types:Project|error {
         types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Build org-level scope for permission check
-        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+        // Build project-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID, projectUuid: project.id};
         // Check permission at project level - requires project_mgt:edit or project_mgt:manage
         if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE], scope) {
             return error("Insufficient permissions to update project");
@@ -1068,7 +1068,6 @@ service /graphql on graphqlListener {
         if environmentsWithRuntimes.length() > 0 {
             // Check if user has manage permission in ALL environments where the component has runtimes
             foreach string envId in environmentsWithRuntimes {
-                // TODO remove redundant permissions check
                 types:AccessScope envScope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = envId);
                 if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, envScope) {
                     return {
