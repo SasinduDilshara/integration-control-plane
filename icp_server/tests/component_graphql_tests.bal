@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/test;
+import icp_server.auth;
 
 // Test data IDs - these are already defined in runtime_graphql_tests.bal
 // const string PROJECT_1_ID = "650e8400-e29b-41d4-a716-446655440001";
@@ -33,7 +34,7 @@ function setupComponentTests() returns error? {
     readOnlyViewerToken = check generateV2Token(
         "770e8400-e29b-41d4-a716-446655440005",
         "readonlyviewer",
-        ["integration_mgt:view", "project_mgt:view"]
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_PROJECT_VIEW]
     );
 }
 

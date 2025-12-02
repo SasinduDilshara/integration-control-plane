@@ -17,6 +17,7 @@
 import ballerina/http;
 import ballerina/jwt;
 import ballerina/test;
+import icp_server.auth;
 
 // GraphQL endpoint for runtime queries (using test port from Config.toml)
 const string GRAPHQL_URL = "http://localhost:9446/graphql";
@@ -52,21 +53,21 @@ function setupRuntimeTests() returns error? {
     orgDevToken = check generateV2Token(
         "770e8400-e29b-41d4-a716-446655440001",
         "orgdev",
-        ["integration_mgt:view", "integration_mgt:edit", "project_mgt:view"]
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_PROJECT_VIEW]
     );
 
     // Generate token for projectadmin (project-level Admin - full access to Project 1)
     project1AdminToken = check generateV2Token(
         "770e8400-e29b-41d4-a716-446655440002",
         "projectadmin",
-        ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage", "project_mgt:view", "project_mgt:manage"]
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_PROJECT_MANAGE]
     );
 
     // Generate token for integrationviewer (integration-level - view Component 1 only)
     integrationViewerToken = check generateV2Token(
         "770e8400-e29b-41d4-a716-446655440003",
         "integrationviewer",
-        ["integration_mgt:view", "project_mgt:view"]
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_PROJECT_VIEW]
     );
 }
 

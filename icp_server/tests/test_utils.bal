@@ -17,6 +17,7 @@
 import ballerina/http;
 import ballerina/jwt;
 import ballerina/test;
+import icp_server.auth;
 
 // HTTP client for testing - matches configuration from auth_tests.bal
 const string AUTH_SERVICE_URL = "https://localhost:9445";
@@ -49,21 +50,21 @@ function initializeTestTokens() returns error? {
         "550e8400-e29b-41d4-a716-446655440000", 
         "admin", 
         [
-            "integration_mgt:view",
-            "integration_mgt:edit",
-            "integration_mgt:manage",
-            "environment_mgt:manage",
-            "environment_mgt:manage_nonprod",
-            "project_mgt:view",
-            "project_mgt:edit",
-            "project_mgt:manage",
-            "observability_mgt:view_logs",
-            "observability_mgt:view_insights",
-            "user_mgt:manage_users",
-            "user_mgt:update_users",
-            "user_mgt:manage_groups",
-            "user_mgt:manage_roles",
-            "user_mgt:update_group_roles"
+            auth:PERMISSION_INTEGRATION_VIEW,
+            auth:PERMISSION_INTEGRATION_EDIT,
+            auth:PERMISSION_INTEGRATION_MANAGE,
+            auth:PERMISSION_ENVIRONMENT_MANAGE,
+            auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD,
+            auth:PERMISSION_PROJECT_VIEW,
+            auth:PERMISSION_PROJECT_EDIT,
+            auth:PERMISSION_PROJECT_MANAGE,
+            auth:PERMISSION_OBSERVABILITY_VIEW_LOGS,
+            auth:PERMISSION_OBSERVABILITY_VIEW_INSIGHTS,
+            auth:PERMISSION_USER_MANAGE_USERS,
+            auth:PERMISSION_USER_UPDATE_USERS,
+            auth:PERMISSION_USER_MANAGE_GROUPS,
+            auth:PERMISSION_USER_MANAGE_ROLES,
+            auth:PERMISSION_USER_UPDATE_GROUP_ROLES
         ]
     );
     
@@ -71,14 +72,14 @@ function initializeTestTokens() returns error? {
     regularUserToken = check generateV2Token(
         "770e8400-e29b-41d4-a716-446655440001",
         "orgdev",
-        ["integration_mgt:view", "integration_mgt:edit", "project_mgt:view"]
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_PROJECT_VIEW]
     );
     
     // Generate project admin token (admin in project-1 only)
     projectAdminToken = check generateV2Token(
         "770e8400-e29b-41d4-a716-446655440002",
         "projectadmin",
-        ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage", "project_mgt:view", "project_mgt:manage"]
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_PROJECT_MANAGE]
     );
 }
 

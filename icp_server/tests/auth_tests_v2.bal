@@ -19,6 +19,7 @@ import ballerina/jwt;
 import ballerina/log;
 import ballerina/test;
 import ballerina/time;
+import icp_server.auth;
 
 // Test configuration
 const string AUTH_V2_SERVICE_URL = "https://localhost:9445";
@@ -106,9 +107,9 @@ function testSuperAdminLoginWithV2JWT() returns error? {
     // Verify V2 JWT structure - permissions in scope claim
     test:assertTrue(payload["scope"] is string, "Scope claim should be present in V2 JWT");
     string scopeClaim = check payload["scope"].ensureType();
-    test:assertTrue(scopeClaim.includes("user_mgt:manage_users"), "Should have user management permission in scope");
-    test:assertTrue(scopeClaim.includes("user_mgt:manage_groups"), "Should have group management permission in scope");
-    test:assertTrue(scopeClaim.includes("user_mgt:manage_roles"), "Should have role management permission in scope");
+    test:assertTrue(scopeClaim.includes(auth:PERMISSION_USER_MANAGE_USERS), "Should have user management permission in scope");
+    test:assertTrue(scopeClaim.includes(auth:PERMISSION_USER_MANAGE_GROUPS), "Should have group management permission in scope");
+    test:assertTrue(scopeClaim.includes(auth:PERMISSION_USER_MANAGE_ROLES), "Should have role management permission in scope");
 
     // Verify permissions in response body (not in token - only scope claim is used)
     json[] permissionsJsonArray = check responseBody.permissions.ensureType();
@@ -603,9 +604,9 @@ function testGetUserEffectivePermissions() returns error? {
     
     // Verify super admin has user management permissions
     string permissionNamesStr = permissionNames.toString();
-    test:assertTrue(permissionNamesStr.includes("user_mgt:manage_users"), "Should have user management permission");
-    test:assertTrue(permissionNamesStr.includes("user_mgt:manage_groups"), "Should have group management permission");
-    test:assertTrue(permissionNamesStr.includes("user_mgt:manage_roles"), "Should have role management permission");
+    test:assertTrue(permissionNamesStr.includes(auth:PERMISSION_USER_MANAGE_USERS), "Should have user management permission");
+    test:assertTrue(permissionNamesStr.includes(auth:PERMISSION_USER_MANAGE_GROUPS), "Should have group management permission");
+    test:assertTrue(permissionNamesStr.includes(auth:PERMISSION_USER_MANAGE_ROLES), "Should have role management permission");
 }
 
 // =============================================================================

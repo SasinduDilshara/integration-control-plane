@@ -2,6 +2,7 @@ import ballerina/http;
 import ballerina/test;
 import ballerina/io;
 import ballerina/jwt;
+import icp_server.auth;
 
 // =============================================================================
 // Environment GraphQL Tests
@@ -28,14 +29,14 @@ function setupEnvironmentTests() returns error? {
     envAdminToken = check generateV2Token(
         "550e8400-e29b-41d4-a716-446655440000",
         "envadmin",
-        ["environment_mgt:manage", "environment_mgt:manage_nonprod", "project_mgt:view", "integration_mgt:view"]
+        [auth:PERMISSION_ENVIRONMENT_MANAGE, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_INTEGRATION_VIEW]
     );
 
     // Generate token for non-prod only user
     envNonProdToken = check generateV2Token(
         "770e8400-e29b-41d4-a716-446655440001",
         "envnonprod",
-        ["environment_mgt:manage_nonprod", "project_mgt:view", "integration_mgt:view"]
+        [auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_INTEGRATION_VIEW]
     );
 }
 

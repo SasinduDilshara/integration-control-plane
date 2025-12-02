@@ -20,6 +20,39 @@ import ballerina/log;
 import ballerina/uuid;
 import icp_server.types as types;
 
+// ============================================================================
+// PERMISSION CONSTANTS
+// ============================================================================
+// These constants match the permission_name values in the permissions table
+
+// Integration Management Permissions
+public const string PERMISSION_INTEGRATION_VIEW = "integration_mgt:view";
+public const string PERMISSION_INTEGRATION_EDIT = "integration_mgt:edit";
+public const string PERMISSION_INTEGRATION_MANAGE = "integration_mgt:manage";
+
+// Environment Management Permissions
+public const string PERMISSION_ENVIRONMENT_MANAGE = "environment_mgt:manage";
+public const string PERMISSION_ENVIRONMENT_MANAGE_NONPROD = "environment_mgt:manage_nonprod";
+
+// Project Management Permissions
+public const string PERMISSION_PROJECT_VIEW = "project_mgt:view";
+public const string PERMISSION_PROJECT_EDIT = "project_mgt:edit";
+public const string PERMISSION_PROJECT_MANAGE = "project_mgt:manage";
+
+// Observability Management Permissions
+public const string PERMISSION_OBSERVABILITY_VIEW_LOGS = "observability_mgt:view_logs";
+public const string PERMISSION_OBSERVABILITY_VIEW_INSIGHTS = "observability_mgt:view_insights";
+
+// User Management Permissions
+public const string PERMISSION_USER_MANAGE_USERS = "user_mgt:manage_users";
+public const string PERMISSION_USER_UPDATE_USERS = "user_mgt:update_users";
+public const string PERMISSION_USER_MANAGE_GROUPS = "user_mgt:manage_groups";
+public const string PERMISSION_USER_MANAGE_ROLES = "user_mgt:manage_roles";
+public const string PERMISSION_USER_UPDATE_GROUP_ROLES = "user_mgt:update_group_roles";
+
+// ============================================================================
+// TOKEN GENERATION
+// ============================================================================
 
 // Generate JWT token V2 with permissions (RBAC V2)
 public isolated function generateJWTTokenV2(

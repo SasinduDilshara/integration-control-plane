@@ -146,7 +146,7 @@ public isolated function canViewIntegration(string userId, string integrationId)
     // For now, we check at org level (will be refined when integrated with component queries)
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasAnyPermission(userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope);
+    return check hasAnyPermission(userId, [PERMISSION_INTEGRATION_VIEW, PERMISSION_INTEGRATION_EDIT, PERMISSION_INTEGRATION_MANAGE], scope);
 }
 
 // Check if user can edit a specific integration
@@ -160,7 +160,7 @@ public isolated function canEditIntegration(string userId, string integrationId)
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasAnyPermission(userId, ["integration_mgt:edit", "integration_mgt:manage"], scope);
+    return check hasAnyPermission(userId, [PERMISSION_INTEGRATION_EDIT, PERMISSION_INTEGRATION_MANAGE], scope);
 }
 
 // Check if user can manage (create/delete) integrations
@@ -174,7 +174,7 @@ public isolated function canManageIntegration(string userId, string integrationI
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasPermission(userId, "integration_mgt:manage", scope);
+    return check hasPermission(userId, PERMISSION_INTEGRATION_MANAGE, scope);
 }
 
 // Check if user can create integrations in a project
@@ -191,7 +191,7 @@ public isolated function canCreateIntegration(string userId, string projectId) r
         projectUuid: projectId
     };
     
-    return check hasPermission(userId, "integration_mgt:manage", scope);
+    return check hasPermission(userId, PERMISSION_INTEGRATION_MANAGE, scope);
 }
 
 // ============================================================================
@@ -212,7 +212,7 @@ public isolated function canViewProject(string userId, string projectId) returns
         projectUuid: projectId
     };
     
-    return check hasAnyPermission(userId, ["project_mgt:view", "project_mgt:edit", "project_mgt:manage"], scope);
+    return check hasAnyPermission(userId, [PERMISSION_PROJECT_VIEW, PERMISSION_PROJECT_EDIT, PERMISSION_PROJECT_MANAGE], scope);
 }
 
 // Check if user can edit a specific project
@@ -229,7 +229,7 @@ public isolated function canEditProject(string userId, string projectId) returns
         projectUuid: projectId
     };
     
-    return check hasAnyPermission(userId, ["project_mgt:edit", "project_mgt:manage"], scope);
+    return check hasAnyPermission(userId, [PERMISSION_PROJECT_EDIT, PERMISSION_PROJECT_MANAGE], scope);
 }
 
 // Check if user can manage (create/delete) projects
@@ -242,7 +242,7 @@ public isolated function canManageProject(string userId, string? projectId = ())
         scope.projectUuid = projectId;
     }
     
-    return check hasPermission(userId, "project_mgt:manage", scope);
+    return check hasPermission(userId, PERMISSION_PROJECT_MANAGE, scope);
 }
 
 // ============================================================================
@@ -255,7 +255,7 @@ public isolated function canManageEnvironment(string userId) returns boolean|err
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasPermission(userId, "environment_mgt:manage", scope);
+    return check hasPermission(userId, PERMISSION_ENVIRONMENT_MANAGE, scope);
 }
 
 // Check if user can manage non-production environments only
@@ -264,7 +264,7 @@ public isolated function canManageNonProdEnvironment(string userId) returns bool
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasAnyPermission(userId, ["environment_mgt:manage_nonprod", "environment_mgt:manage"], scope);
+    return check hasAnyPermission(userId, [PERMISSION_ENVIRONMENT_MANAGE_NONPROD, PERMISSION_ENVIRONMENT_MANAGE], scope);
 }
 
 // ============================================================================
@@ -298,7 +298,7 @@ public isolated function canViewLogs(string userId, string? integrationId = (), 
         envUuid: envId
     };
     
-    return check hasPermission(userId, "observability_mgt:view_logs", scope);
+    return check hasPermission(userId, PERMISSION_OBSERVABILITY_VIEW_LOGS, scope);
 }
 
 // Check if user can view insights for an integration/project
@@ -328,7 +328,7 @@ public isolated function canViewInsights(string userId, string? integrationId = 
         envUuid: envId
     };
     
-    return check hasPermission(userId, "observability_mgt:view_insights", scope);
+    return check hasPermission(userId, PERMISSION_OBSERVABILITY_VIEW_INSIGHTS, scope);
 }
 
 // ============================================================================
@@ -341,7 +341,7 @@ public isolated function canManageUsers(string userId) returns boolean|error {
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasPermission(userId, "user_mgt:manage_users", scope);
+    return check hasPermission(userId, PERMISSION_USER_MANAGE_USERS, scope);
 }
 
 // Check if user can update users (assign groups)
@@ -350,7 +350,7 @@ public isolated function canUpdateUsers(string userId) returns boolean|error {
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasAnyPermission(userId, ["user_mgt:update_users", "user_mgt:manage_users"], scope);
+    return check hasAnyPermission(userId, [PERMISSION_USER_UPDATE_USERS, PERMISSION_USER_MANAGE_USERS], scope);
 }
 
 // Check if user can manage groups
@@ -359,7 +359,7 @@ public isolated function canManageGroups(string userId) returns boolean|error {
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasPermission(userId, "user_mgt:manage_groups", scope);
+    return check hasPermission(userId, PERMISSION_USER_MANAGE_GROUPS, scope);
 }
 
 // Check if user can manage roles
@@ -368,7 +368,7 @@ public isolated function canManageRoles(string userId) returns boolean|error {
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasPermission(userId, "user_mgt:manage_roles", scope);
+    return check hasPermission(userId, PERMISSION_USER_MANAGE_ROLES, scope);
 }
 
 // Check if user can update group-role mappings
@@ -377,7 +377,7 @@ public isolated function canUpdateGroupRoles(string userId) returns boolean|erro
 
     types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
     
-    return check hasPermission(userId, "user_mgt:update_group_roles", scope);
+    return check hasPermission(userId, PERMISSION_USER_UPDATE_GROUP_ROLES, scope);
 }
 
 // ============================================================================
@@ -404,7 +404,7 @@ public isolated function canAssignRolesAtProjectScope(string userId, string proj
     
     return check hasAnyPermission(
         userId, 
-        ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"], 
+        [PERMISSION_USER_MANAGE_GROUPS, PERMISSION_USER_UPDATE_GROUP_ROLES, PERMISSION_USER_MANAGE_USERS], 
         scope
     );
 }
@@ -430,7 +430,7 @@ public isolated function canAssignRolesAtIntegrationScope(string userId, string 
     
     return check hasAnyPermission(
         userId, 
-        ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"], 
+        [PERMISSION_USER_MANAGE_GROUPS, PERMISSION_USER_UPDATE_GROUP_ROLES, PERMISSION_USER_MANAGE_USERS], 
         scope
     );
 }
@@ -444,7 +444,7 @@ public isolated function canAssignRolesAtOrgScope(string userId) returns boolean
     
     return check hasAnyPermission(
         userId, 
-        ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"], 
+        [PERMISSION_USER_MANAGE_GROUPS, PERMISSION_USER_UPDATE_GROUP_ROLES, PERMISSION_USER_MANAGE_USERS], 
         scope
     );
 }

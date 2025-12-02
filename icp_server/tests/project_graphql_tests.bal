@@ -15,6 +15,7 @@
 // under the License.
 
 import ballerina/test;
+import icp_server.auth;
 
 // Project IDs from test data
 const string PROJECT_2_ID = "650e8400-e29b-41d4-a716-446655440002";
@@ -37,7 +38,7 @@ function setupProjectTests() returns error? {
     orgAdminToken = check generateV2Token(
         "550e8400-e29b-41d4-a716-446655440000", // Super admin user ID from test data
         "admin",
-        ["project_mgt:manage", "project_mgt:edit", "project_mgt:view", "integration_mgt:manage", "integration_mgt:edit", "integration_mgt:view"]
+        [auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_VIEW]
     );
 }
 

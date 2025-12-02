@@ -114,7 +114,6 @@ service /auth on httpListener {
                     return utils:createInternalServerError("Error getting user details");
                 }
 
-                //TODO Handle roles for new users
             } else {
                 log:printError("Error getting user details", userDetails);
                 return utils:createInternalServerError("Error getting user details");
@@ -648,7 +647,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups"]
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
             }
         ]
     }
@@ -688,7 +687,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups"]
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
             }
         ]
     }
@@ -741,7 +740,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups"]
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
             }
         ]
     }
@@ -776,7 +775,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups"]
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
             }
         ]
     }
@@ -821,7 +820,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups"]
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
             }
         ]
     }
@@ -869,7 +868,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups", "user_mgt:manage_users", "user_mgt:update_users"]
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
             }
         ]
     }
@@ -941,7 +940,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_groups", "user_mgt:manage_users", "user_mgt:update_users"]
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
             }
         ]
     }
@@ -987,7 +986,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_users", "user_mgt:manage_groups", "user_mgt:update_group_roles"]
+                scopes: [auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES]
             }
         ]
     }
@@ -1162,7 +1161,7 @@ service /auth on httpListener {
     // DELETE /auth/orgs/{orgHandle}/groups/{groupId}/roles/{mappingId} - Remove role from group
     @http:ResourceConfig {
         auth: {
-            scopes: ["user_mgt:manage_groups", "user_mgt:update_group_roles", "user_mgt:manage_users"]
+            scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS]
         }
     }
     resource function delete orgs/[string orgHandle]/groups/[string groupId]/roles/[int mappingId](http:Request req)
@@ -1308,7 +1307,7 @@ service /auth on httpListener {
     // GET /auth/orgs/{orgHandle}/groups/{groupId}/roles - List group's role assignments
     @http:ResourceConfig {
         auth: {
-            scopes: ["user_mgt:manage_groups", "user_mgt:view", "user_mgt:update_group_roles", "user_mgt:manage_users"]
+            scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
         }
     }
     resource function get orgs/[string orgHandle]/groups/[string groupId]/roles()
@@ -1381,7 +1380,7 @@ service /auth on httpListener {
     // GET /auth/orgs/{orgHandle}/users - List all users with group memberships
     @http:ResourceConfig {
         auth: {
-            scopes: ["user_mgt:manage_users", "user_mgt:view"]
+            scopes: [auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
         }
     }
     resource function get orgs/[string orgHandle]/users()
@@ -1409,7 +1408,7 @@ service /auth on httpListener {
     // POST /auth/orgs/{orgHandle}/users - Create a new user
     @http:ResourceConfig {
         auth: {
-            scopes: ["user_mgt:manage_users"]
+            scopes: [auth:PERMISSION_USER_MANAGE_USERS]
         }
     }
     resource function post orgs/[string orgHandle]/users(@http:Payload json payload)
@@ -1493,7 +1492,7 @@ service /auth on httpListener {
     // DELETE /auth/orgs/{orgHandle}/users/{userId} - Delete a user
     @http:ResourceConfig {
         auth: {
-            scopes: ["user_mgt:manage_users"]
+            scopes: [auth:PERMISSION_USER_MANAGE_USERS]
         }
     }
     resource function delete orgs/[string orgHandle]/users/[string userId](http:Request req)
@@ -1558,7 +1557,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_roles"]
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
         ]
     }
@@ -1598,7 +1597,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_roles"]
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
         ]
     }
@@ -1651,7 +1650,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_roles"]
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
         ]
     }
@@ -1704,7 +1703,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_roles"]
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
         ]
     }
@@ -1749,7 +1748,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_roles"]
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
         ]
     }
@@ -1844,7 +1843,7 @@ service /auth on httpListener {
                         secret: defaultJwtHMACSecret
                     }
                 },
-                scopes: ["user_mgt:manage_users"]
+                scopes: [auth:PERMISSION_USER_MANAGE_USERS]
             }
         ]
     }

@@ -108,7 +108,7 @@ service /graphql on graphqlListener {
             
             // Check if user has permission to view this integration in this environment
             if !check auth:hasAnyPermission(userContext.userId, 
-                ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+                [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
                 return []; // No access to this integration in this environment
             }
             
@@ -163,7 +163,7 @@ service /graphql on graphqlListener {
         );
 
         // Check permission to view this integration
-        if !check auth:hasPermission(userContext.userId, "integration_mgt:view", scope) {
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_VIEW, scope) {
             return (); // No access - return 404 (same as not found)
         }
 
@@ -195,7 +195,7 @@ service /graphql on graphqlListener {
         );
 
         // Check permission to view this integration deployment
-        if !check auth:hasPermission(userContext.userId, "integration_mgt:view", scope) {
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_VIEW, scope) {
             return (); // No access - return 404 (same as not found)
         }
 
@@ -225,7 +225,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to runtime services");
         }
 
@@ -249,7 +249,7 @@ service /graphql on graphqlListener {
 
         // Verify user has view, edit, or manage permission
         // TODO use constants for permission names
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component services");
         }
 
@@ -276,7 +276,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to runtime listeners");
         }
 
@@ -299,7 +299,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             // TODO add audit log and return empty list
             return error("Access denied to component listeners");
         }
@@ -323,7 +323,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component REST APIs");
         }
 
@@ -346,7 +346,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component Carbon Apps");
         }
 
@@ -369,7 +369,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component inbound endpoints");
         }
 
@@ -392,7 +392,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component endpoints");
         }
 
@@ -415,7 +415,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component sequences");
         }
 
@@ -438,7 +438,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component proxy services");
         }
 
@@ -461,7 +461,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component tasks");
         }
 
@@ -484,7 +484,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component templates");
         }
 
@@ -507,7 +507,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component message stores");
         }
 
@@ -530,7 +530,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component message processors");
         }
 
@@ -553,7 +553,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component local entries");
         }
 
@@ -576,7 +576,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Access denied to component data services");
         }
 
@@ -603,7 +603,7 @@ service /graphql on graphqlListener {
 
         // Check permission to delete this integration's runtime (mutation = explicit error)
         // TODO check if correct permission name is used
-        if !check auth:hasPermission(userContext.userId, "integration_mgt:delete", scope) {
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
             return error("Access denied: insufficient permissions to delete runtime");
         }
 
@@ -622,14 +622,14 @@ service /graphql on graphqlListener {
         // Check if user can manage environments based on production status
         if environment.critical {
             // Production environment requires full management permission
-            if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
                 return error("Access denied: insufficient permissions to create production environments");
             }
         } else {
             // Non-production environment requires manage_nonprod or manage permission
             // TODO Replace with hasAnyPermission call
-            boolean canManageNonProd = check auth:hasPermission(userContext.userId, "environment_mgt:manage_nonprod", scope);
-            boolean canManageFull = check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope);
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope);
             if !canManageNonProd && !canManageFull {
                 return error("Access denied: insufficient permissions to create environments");
             }
@@ -717,13 +717,13 @@ service /graphql on graphqlListener {
         // Check permission based on production status
         if env.critical {
             // Production environment requires full management permission
-            if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
                 return error("Access denied: insufficient permissions to delete production environments");
             }
         } else {
             // Non-production environment requires manage_nonprod or manage permission
-            boolean canManageNonProd = check auth:hasPermission(userContext.userId, "environment_mgt:manage_nonprod", scope);
-            boolean canManageFull = check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope);
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope);
             if !canManageNonProd && !canManageFull {
                 return error("Access denied: insufficient permissions to delete environments");
             }
@@ -752,13 +752,13 @@ service /graphql on graphqlListener {
 
         if targetIsCritical {
             // Production environment requires full management permission
-            if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
                 return error("Access denied: insufficient permissions to update production environments");
             }
         } else {
             // Non-production environment requires manage_nonprod or manage permission
-            boolean canManageNonProd = check auth:hasPermission(userContext.userId, "environment_mgt:manage_nonprod", scope);
-            boolean canManageFull = check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope);
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope);
             if !canManageNonProd && !canManageFull {
                 return error("Access denied: insufficient permissions to update environments");
             }
@@ -783,7 +783,7 @@ service /graphql on graphqlListener {
         types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
 
         // Changing production status is a critical operation - always requires full management permission
-        if !check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope) {
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
             return error("Access denied: full environment management permission required to change production status");
         }
 
@@ -936,7 +936,7 @@ service /graphql on graphqlListener {
         types:AccessScope scope = auth:buildScopeFromContext(component.projectId);
 
         // Check if user has permission to manage integrations in this project
-        if !check auth:hasPermission(userContext.userId, "integration_mgt:manage", scope) {
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
             return error("Insufficient permissions to create component in this project");
         }
 
@@ -1006,7 +1006,7 @@ service /graphql on graphqlListener {
         // Check if user has permission to view this integration
         // Users with edit or manage permissions should also be able to view
         if !check auth:hasAnyPermission(userContext.userId, 
-            ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return (); // Return null for no access (404 pattern for queries)
         }
 
@@ -1041,7 +1041,7 @@ service /graphql on graphqlListener {
         // 2. Build scope and check if user has permission to manage this integration
         types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId);
         
-        if !check auth:hasPermission(userContext.userId, "integration_mgt:manage", scope) {
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
             return {
                 status: "FAILED",
                 canDelete: false,
@@ -1058,7 +1058,7 @@ service /graphql on graphqlListener {
             foreach string envId in environmentsWithRuntimes {
                 // TODO remove redundant permissions check
                 types:AccessScope envScope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = envId);
-                if !check auth:hasPermission(userContext.userId, "integration_mgt:manage", envScope) {
+                if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, envScope) {
                     return {
                         status: "FAILED",
                         canDelete: false,
@@ -1113,7 +1113,7 @@ service /graphql on graphqlListener {
 
         // Check if user has permission to edit this integration (edit or manage)
         if !check auth:hasAnyPermission(userContext.userId, 
-            ["integration_mgt:edit", "integration_mgt:manage"], scope) {
+            [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Insufficient permissions to update this component");
         }
 
@@ -1138,7 +1138,7 @@ service /graphql on graphqlListener {
         // Check if user has permission to view this integration
         // Users with edit or manage permissions should also be able to view artifacts
         if !check auth:hasAnyPermission(userContext.userId, 
-            ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Insufficient permissions to view component artifacts");
         }
 
