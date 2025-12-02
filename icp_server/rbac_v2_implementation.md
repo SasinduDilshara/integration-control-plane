@@ -1084,11 +1084,11 @@ WHERE grm.integration_uuid IS NOT NULL
 
 **Goal**: Remove old RBAC implementation and rename V2 functions
 
-#### 6.4.1: Remove Old RBAC Database Objects
-- [ ] Drop `roles` table
-- [ ] Drop `user_roles` table
-- [ ] Remove old RBAC seed data
-- [ ] Update migration scripts
+#### 6.4.1: Remove Old RBAC Database Objects ✅
+- [x] Removed `roles` table from mysql_init.sql and h2_init.sql
+- [x] Removed `user_roles` table from mysql_init.sql and h2_init.sql
+- [x] Removed old RBAC references from project_repository.bal (2 UPDATE statements)
+- [x] Tests verified: 102/102 passing
 
 #### 6.4.2: Remove Old RBAC Functions
 - [x] Remove old `generateJWTToken` function

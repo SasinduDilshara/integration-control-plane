@@ -241,61 +241,6 @@ public isolated function getProjectIdByHandler(string projectHandler) returns st
     return projectRecords[0].project_id;
 }
 
-// Update project name and/or description
-public isolated function updateProject(string projectId, string? name, string? description) returns error? {
-    sql:ParameterizedQuery whereClause = ` WHERE project_id = ${projectId} `;
-    sql:ParameterizedQuery updateFields = ` SET `;
-    boolean hasUpdates = false;
-
-    if name is string {
-        updateFields = sql:queryConcat(updateFields, ` name = ${name} `);
-        hasUpdates = true;
-    }
-    if description is string {
-        if hasUpdates {
-            updateFields = sql:queryConcat(updateFields, `, description = ${description} `);
-        } else {
-            updateFields = sql:queryConcat(updateFields, ` description = ${description} `);
-            hasUpdates = true;
-        }
-    }
-
-    if !hasUpdates {
-        return error("No fields to update");
-    }
-
-    transaction {
-        // Update the project
-        sql:ParameterizedQuery updateQuery = sql:queryConcat(`UPDATE projects `, updateFields, whereClause);
-        sql:ExecutionResult _ = check dbClient->execute(updateQuery);
-
-        // If project name is being updated, update all associated role names
-        if name is string {
-            // Replace spaces with underscores in project name for role naming
-            string projectName = re `\s+`.replaceAll(name, "_");
-
-            // Update role names for all roles associated with this project
-            // Role name format: <project_name>:<env_type>:<privilege_level>
-            sql:ExecutionResult _ = check dbClient->execute(`
-                UPDATE roles 
-                SET role_name = CONCAT(${projectName}, ':', environment_type, ':', privilege_level),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE project_id = ${projectId}
-            `);
-
-            log:printInfo(string `Updated role names for project ${projectId} with new name: ${name}`);
-        }
-
-        check commit;
-        log:printInfo(string `Successfully updated project ${projectId}`);
-    } on fail error e {
-        log:printError(string `Failed to update project ${projectId}`, e);
-        return error(string `Failed to update project ${projectId}`, e);
-    }
-
-    return ();
-}
-
 // Update project with ProjectUpdateInput
 public isolated function updateProjectWithInput(types:ProjectUpdateInput project) returns error? {
     sql:ParameterizedQuery whereClause = ` WHERE project_id = ${project.id} `;
@@ -327,23 +272,6 @@ public isolated function updateProjectWithInput(types:ProjectUpdateInput project
         // Update the project
         sql:ParameterizedQuery updateQuery = sql:queryConcat(`UPDATE projects `, updateFields, whereClause);
         sql:ExecutionResult _ = check dbClient->execute(updateQuery);
-
-        // If project name is being updated, update all associated role names
-        if project?.name is string {
-            // Replace spaces with underscores in project name for role naming
-            string projectName = re `\s+`.replaceAll(project?.name ?: "", "_");
-
-            // Update role names for all roles associated with this project
-            // Role name format: <project_name>:<env_type>:<privilege_level>
-            sql:ExecutionResult _ = check dbClient->execute(`
-                UPDATE roles 
-                SET role_name = CONCAT(${projectName}, ':', environment_type, ':', privilege_level),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE project_id = ${project.id}
-            `);
-
-            log:printInfo(string `Updated role names for project ${project.id} with new name: ${project?.name ?: "unknown"}`);
-        }
 
         check commit;
         log:printInfo(string `Successfully updated project ${project.id}`);
