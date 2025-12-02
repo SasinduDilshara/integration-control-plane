@@ -88,16 +88,11 @@ service /graphql on graphqlListener {
     // ----------- Runtime Resources
     // Get all runtimes with optional filtering
     isolated resource function get runtimes(graphql:Context context, string? status, string? runtimeType, string? environmentId, string? projectId, string? componentId) returns types:Runtime[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // If specific componentId (integration) is provided, check access and return filtered
         if componentId is string {
+            // TODO need to check integration access with the environment as well
             boolean hasAccess = check storage:hasAccessToIntegration(userContext.userId, componentId);
             if !hasAccess {
                 return []; // No access to this specific integration
@@ -153,13 +148,7 @@ service /graphql on graphqlListener {
 
     // Get a specific runtime by ID
     isolated resource function get runtime(graphql:Context context, string runtimeId) returns types:Runtime?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Fetch the runtime to get its context
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -192,13 +181,7 @@ service /graphql on graphqlListener {
             string versionId,
             string environmentId
     ) returns types:ComponentDeployment?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -226,13 +209,7 @@ service /graphql on graphqlListener {
 
     // Get services for a specific runtime
     isolated resource function get services(graphql:Context context, string runtimeId) returns types:Service[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // First, fetch the runtime to verify access to its environment
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -259,15 +236,10 @@ service /graphql on graphqlListener {
 
     // Get services for a specific environment and component
     isolated resource function get servicesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Service[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
+        // TODO have a simpler db function for getting a component's project ID only
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
             return error("Integration not found");
@@ -282,6 +254,7 @@ service /graphql on graphqlListener {
         };
 
         // Verify user has view, edit, or manage permission
+        // TODO use constants for permission names
         if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
             return error("Access denied to component services");
         }
@@ -291,13 +264,7 @@ service /graphql on graphqlListener {
 
     // Get listeners for a specific runtime
     isolated resource function get listeners(graphql:Context context, string runtimeId) returns types:Listener[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // First, fetch the runtime to verify access to its environment
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -324,13 +291,7 @@ service /graphql on graphqlListener {
 
     // Get listeners for a specific environment and component
     isolated resource function get listenersByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Listener[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -348,6 +309,7 @@ service /graphql on graphqlListener {
 
         // Verify user has view, edit, or manage permission
         if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            // TODO add audit log and return empty list
             return error("Access denied to component listeners");
         }
 
@@ -356,13 +318,7 @@ service /graphql on graphqlListener {
 
     // Get REST APIs for a specific environment and component
     isolated resource function get restApisByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:RestApi[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -388,13 +344,7 @@ service /graphql on graphqlListener {
 
     // Get Carbon Apps for a specific environment and component
     isolated resource function get carbonAppsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:CarbonApp[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -420,13 +370,7 @@ service /graphql on graphqlListener {
 
     // Get Inbound Endpoints for a specific environment and component
     isolated resource function get inboundEndpointsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:InboundEndpoint[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -452,13 +396,7 @@ service /graphql on graphqlListener {
 
     // Get Endpoints for a specific environment and component
     isolated resource function get endpointsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Endpoint[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -484,13 +422,7 @@ service /graphql on graphqlListener {
 
     // Get Sequences for a specific environment and component
     isolated resource function get sequencesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Sequence[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -516,13 +448,7 @@ service /graphql on graphqlListener {
 
     // Get Proxy Services for a specific environment and component
     isolated resource function get proxyServicesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:ProxyService[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -548,13 +474,7 @@ service /graphql on graphqlListener {
 
     // Get Tasks for a specific environment and component
     isolated resource function get tasksByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Task[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -580,13 +500,7 @@ service /graphql on graphqlListener {
 
     // Get Templates for a specific environment and component
     isolated resource function get templatesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Template[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -612,13 +526,7 @@ service /graphql on graphqlListener {
 
     // Get Message Stores for a specific environment and component
     isolated resource function get messageStoresByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:MessageStore[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -644,13 +552,7 @@ service /graphql on graphqlListener {
 
     // Get Message Processors for a specific environment and component
     isolated resource function get messageProcessorsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:MessageProcessor[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -676,13 +578,7 @@ service /graphql on graphqlListener {
 
     // Get Local Entries for a specific environment and component
     isolated resource function get localEntriesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:LocalEntry[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -708,13 +604,7 @@ service /graphql on graphqlListener {
 
     // Get Data Services for a specific environment and component
     isolated resource function get dataServicesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:DataService[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -740,13 +630,7 @@ service /graphql on graphqlListener {
 
     // Delete a runtime by ID
     isolated remote function deleteRuntime(graphql:Context context, string runtimeId) returns boolean|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Fetch the runtime to get its context
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -763,6 +647,7 @@ service /graphql on graphqlListener {
         );
 
         // Check permission to delete this integration's runtime (mutation = explicit error)
+        // TODO check if correct permission name is used
         if !check auth:hasPermission(userContext.userId, "integration_mgt:delete", scope) {
             return error("Access denied: insufficient permissions to delete runtime");
         }
@@ -774,13 +659,7 @@ service /graphql on graphqlListener {
     // ----------- Environment Resources
     // Create a new environment (super admin only)
     isolated remote function createEnvironment(graphql:Context context, types:EnvironmentInput environment) returns types:Environment|error? {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Build org-level scope for permission check
         types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
@@ -793,6 +672,7 @@ service /graphql on graphqlListener {
             }
         } else {
             // Non-production environment requires manage_nonprod or manage permission
+            // TODO Replace with hasAnyPermission call
             boolean canManageNonProd = check auth:hasPermission(userContext.userId, "environment_mgt:manage_nonprod", scope);
             boolean canManageFull = check auth:hasPermission(userContext.userId, "environment_mgt:manage", scope);
             if !canManageNonProd && !canManageFull {
@@ -811,13 +691,7 @@ service /graphql on graphqlListener {
     // Note: orgUuid, type, and projectId parameters are accepted for frontend compatibility
     // but ignored since environments are global (not org-specific)
     isolated resource function get environments(graphql:Context context, string? orgUuid, string? 'type, string? projectId) returns types:Environment[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get user's accessible environments (filtered by role mappings)
         // If user has any role mapping, they can see environments within their scope
@@ -874,13 +748,7 @@ service /graphql on graphqlListener {
 
     // Delete an environment (requires management permission based on environment type)
     isolated remote function deleteEnvironment(graphql:Context context, string environmentId) returns boolean|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Fetch environment to check its production status
         types:Environment? env = check storage:getEnvironmentById(environmentId);
@@ -912,13 +780,7 @@ service /graphql on graphqlListener {
 
     // Update environment name, description, and/or critical status (requires management permission)
     isolated remote function updateEnvironment(graphql:Context context, string environmentId, string? name, string? description, boolean? critical) returns types:Environment?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Fetch current environment to check its production status
         types:Environment? currentEnv = check storage:getEnvironmentById(environmentId);
@@ -954,13 +816,7 @@ service /graphql on graphqlListener {
     // Update environment production status (requires full management permission)
     // This is a critical operation that always requires the highest permission level
     isolated remote function updateEnvironmentProductionStatus(graphql:Context context, string environmentId, boolean isProduction) returns types:Environment?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Verify environment exists
         types:Environment? env = check storage:getEnvironmentById(environmentId);
@@ -983,13 +839,7 @@ service /graphql on graphqlListener {
     //------------- Project Resources
     // Create a new project
     isolated remote function createProject(graphql:Context context, types:ProjectInput project) returns types:Project|error? {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Check permission at org level - requires project_mgt:manage
         boolean canManage = check auth:canManageProject(userContext.userId);
@@ -1003,13 +853,7 @@ service /graphql on graphqlListener {
 
     // Get all projects (filtered by user's accessible projects via RBAC v2)
     isolated resource function get projects(graphql:Context context, int? orgId) returns types:Project[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get accessible projects via access resolver
         // This returns all projects where user has ANY role assignment (any permission domain)
@@ -1032,13 +876,7 @@ service /graphql on graphqlListener {
 
     // Get a specific project by ID with optional orgId filter
     isolated resource function get project(graphql:Context context, int? orgId, string projectId) returns types:Project?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Use access resolver to check project access (handles ANY role assignment)
         auth:ProjectAccessInfo accessInfo = check auth:resolveProjectAccess(userContext.userId, projectId);
@@ -1071,6 +909,7 @@ service /graphql on graphqlListener {
         // }
 
         // Call storage layer to check eligibility
+        // TODO check the correct permission
         return check storage:checkProjectCreationEligibility(orgId, orgHandler);
     }
 
@@ -1089,13 +928,7 @@ service /graphql on graphqlListener {
 
     // Delete a project
     isolated remote function deleteProject(graphql:Context context, int orgId, string projectId) returns types:DeleteResponse|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Check permission at project level - requires project_mgt:manage (higher bar than edit)
         boolean canManage = check auth:canManageProject(userContext.userId, projectId);
@@ -1122,15 +955,10 @@ service /graphql on graphqlListener {
 
     // Update project name and/or description
     isolated remote function updateProject(graphql:Context context, types:ProjectUpdateInput project) returns types:Project|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Check permission at project level - requires project_mgt:edit or project_mgt:manage
+        // TODO Replace with hasAnyPermission call
         boolean canEdit = check auth:canEditProject(userContext.userId, project.id);
         if !canEdit {
             return error("Insufficient permissions to update project");
@@ -1147,13 +975,7 @@ service /graphql on graphqlListener {
     // ----------- Component Resources
     // Create a new component
     isolated remote function createComponent(graphql:Context context, types:ComponentInput component) returns types:Component|error? {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Build scope at project level (creating integration in a project)
         types:AccessScope scope = auth:buildScopeFromContext(component.projectId);
@@ -1186,13 +1008,7 @@ service /graphql on graphqlListener {
 
     // Get all components with optional project filter
     isolated resource function get components(graphql:Context context, string orgHandler, string? projectId, types:ComponentOptionsInput? options) returns types:Component[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get accessible integrations (with optional project filter)
         // This returns integrations where user has ANY role assignment (permission-agnostic)
@@ -1212,13 +1028,7 @@ service /graphql on graphqlListener {
 
     // Get a specific component by ID or by projectId + componentHandler
     isolated resource function get component(graphql:Context context, string? componentId, string? projectId, string? componentHandler) returns types:Component?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         types:Component? component = ();
 
@@ -1250,18 +1060,7 @@ service /graphql on graphqlListener {
 
     // Delete a component V2 - with detailed response
     isolated remote function deleteComponentV2(graphql:Context context, string orgHandler, string componentId, string projectId) returns types:DeleteComponentV2Response|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return {
-                status: "FAILED",
-                canDelete: false,
-                message: "Authorization header missing in request",
-                encodedData: ""
-            };
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // 1. Check if component exists and belongs to the specified project
         types:Component? component = check storage:getComponentById(componentId);
@@ -1302,6 +1101,7 @@ service /graphql on graphqlListener {
         if environmentsWithRuntimes.length() > 0 {
             // Check if user has manage permission in ALL environments where the component has runtimes
             foreach string envId in environmentsWithRuntimes {
+                // TODO remove redundant permissions check
                 types:AccessScope envScope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = envId);
                 if !check auth:hasPermission(userContext.userId, "integration_mgt:manage", envScope) {
                     return {
@@ -1342,13 +1142,7 @@ service /graphql on graphqlListener {
 
     // Update component using ComponentUpdateInput object
     isolated remote function updateComponent(graphql:Context context, types:ComponentUpdateInput component) returns types:Component|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Extract values from ComponentUpdateInput
         string targetComponentId = component.id;
@@ -1378,13 +1172,7 @@ service /graphql on graphqlListener {
 
     // Get available artifact types for a component
     isolated resource function get componentArtifactTypes(graphql:Context context, string componentId, string? environmentId = ()) returns types:ArtifactTypeCount[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context V2 for RBAC
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to check access and type
         types:Component? component = check storage:getComponentById(componentId);
@@ -1538,4 +1326,14 @@ service /graphql on graphqlListener {
                 sourceLength = artifactConfig.configuration.length());
         return artifactConfig.configuration;
     }
+}
+
+isolated function extractUserContext(graphql:Context context) returns types:UserContextV2|error {
+    value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+    if authHeader !is string {
+        return error("Authorization header missing in request");
+    }
+
+    // Extract user context V2 for RBAC
+    return check auth:extractUserContextV2(authHeader);
 }
