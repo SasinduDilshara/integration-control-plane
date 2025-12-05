@@ -482,6 +482,8 @@ CREATE TABLE runtimes (
         'OFFLINE'
     ) NOT NULL DEFAULT 'OFFLINE',
     version VARCHAR(50) NULL,
+    runtime_hostname VARCHAR(255) NULL,
+    runtime_port VARCHAR(10) NULL,
     platform_name VARCHAR(50) NOT NULL DEFAULT 'ballerina',
     platform_version VARCHAR(50) NULL,
     platform_home VARCHAR(255) NULL,

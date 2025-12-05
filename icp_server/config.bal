@@ -83,6 +83,10 @@ configurable string opensearchUrl = "https://opensearch:9200";
 configurable string opensearchUsername = "admin";
 configurable string opensearchPassword = "Ballerina@123";
 
+// If true, HTTPS certificate validation will be disabled for calls to the icp artifacts API.
+// Keep this true for local/self-signed certs; set to false in production with a proper truststore.
+configurable boolean artifactsApiAllowInsecureTLS = true;
+
 // Build SSO configuration from configurable values
 public isolated function getSSOConfig() returns types:SSOConfig => {
     enabled: ssoEnabled,
