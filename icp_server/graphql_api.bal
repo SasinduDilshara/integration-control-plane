@@ -18,14 +18,18 @@ import icp_server.storage;
 import icp_server.types;
 import icp_server.utils;
 
+import ballerina/data.jsondata;
 import ballerina/graphql;
 import ballerina/http;
+import ballerina/jwt;
 import ballerina/lang.value;
 import ballerina/log;
 
 // GraphQL listener configuration
 // TODO: Enable SSL
 listener graphql:Listener graphqlListener = new (graphqlPort);
+
+const string ICP_ARTIFACTS_PATH = "/icp/artifacts";
 
 isolated function contextInit(http:RequestContext reqCtx, http:Request request) returns graphql:Context {
     string|error authorization = request.getHeader("Authorization");
@@ -35,6 +39,25 @@ isolated function contextInit(http:RequestContext reqCtx, http:Request request) 
     }
 
     return context;
+}
+
+// Helper: generate HMAC JWT used to call ICP internal APIs
+isolated function issueRuntimeHmacToken() returns string|error {
+    jwt:IssuerConfig issConfig = {
+        username: "icp-artifact-fetcher",
+        issuer: jwtIssuer,
+        expTime: <decimal>defaultTokenExpiryTime,
+        audience: jwtAudience,
+        signatureConfig: {algorithm: jwt:HS256, config: defaultRuntimeJwtHMACSecret}
+    };
+    issConfig.customClaims["scope"] = "runtime_agent";
+
+    string|jwt:Error hmacToken = jwt:issue(issConfig);
+    if hmacToken is jwt:Error {
+        log:printError("Failed to generate HMAC JWT for internal ICP API", hmacToken);
+        return error("Failed to generate authentication token");
+    }
+    return hmacToken;
 }
 
 // GraphQL service for runtime details
@@ -148,7 +171,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return (); // Component not found
+            return (); // Integration not found
         }
 
         // Verify user has access to the component's project and environment
@@ -200,7 +223,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -249,7 +272,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -273,7 +296,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -297,7 +320,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -321,7 +344,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -345,7 +368,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -369,7 +392,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -393,7 +416,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -417,7 +440,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -441,7 +464,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -465,7 +488,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -489,7 +512,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -513,7 +536,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -537,7 +560,7 @@ service /graphql on graphqlListener {
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project and environment
@@ -971,7 +994,7 @@ service /graphql on graphqlListener {
         }
 
         if component is () {
-            return (); // Component not found
+            return (); // Integration not found
         }
 
         // Verify user has access to the component's parent project
@@ -994,7 +1017,7 @@ service /graphql on graphqlListener {
         // Get component to check project access
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Check if user is admin in the project (in any environment)
@@ -1036,7 +1059,7 @@ service /graphql on graphqlListener {
             return {
                 status: "FAILED",
                 canDelete: false,
-                message: "Component not found",
+                message: "Integration not found",
                 encodedData: ""
             };
         }
@@ -1122,7 +1145,7 @@ service /graphql on graphqlListener {
         // Get component to check project access
         types:Component? existingComponent = check storage:getComponentById(targetComponentId);
         if existingComponent is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Check if user is admin in the project (in any environment)
@@ -1147,7 +1170,7 @@ service /graphql on graphqlListener {
         // Get component to check access and type
         types:Component? component = check storage:getComponentById(componentId);
         if component is () {
-            return error("Component not found");
+            return error("Integration not found");
         }
 
         // Verify user has access to the component's project
@@ -1157,5 +1180,145 @@ service /graphql on graphqlListener {
 
         // Return available artifact types based on component (only those with actual data)
         return check storage:getArtifactTypesForComponent(componentId, component.componentType, environmentId);
+    }
+
+    isolated resource function get artifactSourceByComponent(
+            graphql:Context context,
+            string componentId,
+            string artifactType,
+            string artifactName,
+            string? environmentId = (),
+            string? runtimeId = ()
+    ) returns string|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+
+        // Extract user context for RBAC
+        types:UserContext userContext = check utils:extractUserContext(authHeader);
+
+        // Get component to verify access
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return error("Integration not found");
+        }
+
+        // Verify user has access to the component's project
+        if !utils:hasAccessToProject(userContext, component.projectId) {
+            return error("Access denied to component");
+        }
+
+        // Get runtimes for this component (optionally filtered by environment)
+        types:Runtime[] runtimes;
+        if environmentId is string {
+            // Verify environment access
+            if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
+                return error("Access denied to environment");
+            }
+            runtimes = check storage:getRuntimes((), (), environmentId, component.projectId, componentId);
+        } else {
+            // Get runtimes from any environment the user has access to
+            runtimes = check storage:getRuntimes((), (), (), component.projectId, componentId);
+        }
+
+        if runtimes.length() == 0 {
+            return error("No runtimes found for this component");
+        }
+
+        // Select runtime: if runtimeId provided, use matching runtime; otherwise first available
+        types:Runtime runtime = runtimes[0];
+        if runtimeId is string {
+            boolean found = false;
+            foreach types:Runtime r in runtimes {
+                if r.runtimeId == runtimeId {
+                    runtime = r;
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return error(string `Runtime ${runtimeId} not found for component ${componentId}${environmentId is string ? string ` in environment ${environmentId}` : ""}`);
+            }
+        }
+
+        // Check if management endpoint is configured
+        string? managementHost = runtime.managementHostname;
+        string? managementPort = runtime.managementPort;
+
+        if managementHost is () {
+            return error("Management hostname not configured for this runtime");
+        }
+
+        // Build management API base URL
+        string baseUrl = string `https://${managementHost}`;
+        if managementPort is string {
+            baseUrl = string `${baseUrl}:${managementPort}`;
+        }
+
+        log:printInfo("Fetching artifact from runtime management API",
+                runtimeId = runtime.runtimeId,
+                managementUrl = baseUrl,
+                artifactType = artifactType,
+                artifactName = artifactName);
+
+        // Create management API client (toggle insecure TLS via configuration)
+        http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl);
+        if mgmtClient is error {
+            log:printError("Failed to create management API client", mgmtClient);
+            return error("Failed to create management API client");
+        }
+        // Generate an HMAC JWT (same mechanism as heartbeat) to call the ICP internal API
+        string hmacToken = check issueRuntimeHmacToken();
+
+        // Fetch artifact source via ICP Internal API (/icp/artifacts)
+        string artifactPath = string `${ICP_ARTIFACTS_PATH}?type=${artifactType}&name=${artifactName}`;
+        // Log outbound request details (truncate token for safety)
+        log:printDebug("Sending ICP internal API artifact request",
+                runtimeId = runtime.runtimeId,
+                managementUrl = baseUrl,
+                artifactPath = artifactPath,
+                accept = "application/json",
+                http:Response|error artifactResponse = mgmtClient->get(artifactPath, {
+                "Authorization": string `Bearer ${hmacToken}`,
+                "Accept": "application/json"
+                });
+
+        if artifactResponse is error {
+            log:printError("Failed to fetch artifact from management API", artifactResponse);
+            return error("Failed to fetch artifact from management API");
+        }
+
+        if artifactResponse.statusCode != http:STATUS_OK {
+            string|error errPayload = artifactResponse.getTextPayload();
+            if errPayload is error {
+                log:printError("ICP internal API artifact fetch returned non-OK status",
+                        status = artifactResponse.statusCode.toString(),
+                        runtimeId = runtime.runtimeId,
+                        artifactType = artifactType,
+                        artifactName = artifactName);
+                return error(string `ICP internal API artifact fetch failed with status ${artifactResponse.statusCode}`);
+            }
+            log:printError("ICP internal API artifact fetch returned non-OK status",
+                    status = artifactResponse.statusCode.toString(),
+                    runtimeId = runtime.runtimeId,
+                    artifactType = artifactType,
+                    artifactName = artifactName,
+                    response = errPayload);
+            return error(string `ICP internal API artifact fetch failed with status ${artifactResponse.statusCode}: ${errPayload}`);
+        }
+
+        // Parse JSON body and extract only the `configuration` field
+        json artifactConfigJson = check artifactResponse.getJsonPayload();
+        types:ArtifactResponse artifactConfig = check jsondata:parseAsType(artifactConfigJson);
+
+        log:printInfo("Successfully fetched artifact source",
+                runtimeId = runtime.runtimeId,
+                artifactType = artifactConfig.'type,
+                artifactName = artifactConfig.name,
+                sourceLength = artifactConfig.configuration.length());
+        return artifactConfig.configuration;
     }
 }

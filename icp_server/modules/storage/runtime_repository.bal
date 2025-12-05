@@ -41,6 +41,7 @@ public isolated function getRuntimes(string? status, string? runtimeType, string
         whereConditions = sql:queryConcat(whereConditions, ` AND component_id = ${componentId} `);
     }
     sql:ParameterizedQuery selectClause = ` SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version, 
+                 management_hostname, management_port,
                  platform_name, platform_version, platform_home, os_name, os_version, 
                  carbon_home, java_vendor, java_version, total_memory, free_memory, max_memory, used_memory, os_arch, server_name,
                  registration_time, last_heartbeat FROM runtimes `;
@@ -65,6 +66,7 @@ public isolated function getRuntimesByAccessibleEnvironments(types:UserContext u
         types:Runtime[] runtimeList = [];
         stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(`
             SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version, 
+                   management_hostname, management_port,
                    platform_name, platform_version, platform_home, os_name, os_version, 
                    carbon_home, java_vendor, java_version, total_memory, free_memory, max_memory, used_memory, os_arch, server_name,
                    registration_time, last_heartbeat FROM runtimes 
@@ -123,6 +125,7 @@ public isolated function getRuntimesByAccessibleEnvironments(types:UserContext u
 
     // Build the complete query
     sql:ParameterizedQuery selectClause = ` SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version, 
+                 management_hostname, management_port,
                  platform_name, platform_version, platform_home, os_name, os_version, 
                  carbon_home, java_vendor, java_version, total_memory, free_memory, max_memory, used_memory, os_arch, server_name,
                  registration_time, last_heartbeat FROM runtimes `;
@@ -145,6 +148,7 @@ public isolated function getRuntimesByAccessibleEnvironments(types:UserContext u
 public isolated function getRuntimeById(string runtimeId) returns types:Runtime?|error {
     stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(`
         SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version,
+               management_hostname, management_port,
                platform_name, platform_version, platform_home, os_name, os_version, 
                carbon_home, java_vendor, java_version, total_memory, free_memory, max_memory, used_memory, os_arch, server_name,
                registration_time, last_heartbeat 
@@ -630,6 +634,8 @@ public isolated function mapToRuntime(types:RuntimeDBRecord runtimeRecord) retur
         environment: check getEnvironmentById(runtimeRecord.environment_id),
         component: check getComponentById(runtimeRecord.component_id),
         version: runtimeRecord.version,
+        managementHostname: runtimeRecord.management_hostname,
+        managementPort: runtimeRecord.management_port,
         platformName: runtimeRecord.platform_name,
         platformVersion: runtimeRecord.platform_version,
         platformHome: runtimeRecord.platform_home,
