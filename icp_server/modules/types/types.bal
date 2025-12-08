@@ -650,6 +650,14 @@ public type CarbonApp record {
         name: "app_state"
     }
     string state = "Active"; // "Active", "Faulty"
+    // Artifacts packaged within the Carbon App (from heartbeat payload)
+    CarbonAppArtifact[] artifacts?;
+};
+
+// Artifact shape used inside CarbonApp
+public type CarbonAppArtifact record {
+    string name;
+    string 'type; // e.g., "api", "endpoint"
 };
 
 public type DataSource record {

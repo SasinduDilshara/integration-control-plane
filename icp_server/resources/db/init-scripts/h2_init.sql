@@ -1052,6 +1052,7 @@ CREATE TABLE runtime_carbon_apps (
     app_name VARCHAR(200) NOT NULL,
     version VARCHAR(50),
     state VARCHAR(20) NOT NULL DEFAULT 'Active' CHECK (state IN ('Active', 'Faulty')),
+    artifacts VARCHAR(4000), -- JSON array serialized as string (convert to JSON in app code when needed)
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_carbon_apps_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,

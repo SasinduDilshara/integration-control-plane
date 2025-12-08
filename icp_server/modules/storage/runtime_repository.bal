@@ -18,6 +18,7 @@ import icp_server.types as types;
 
 import ballerina/log;
 import ballerina/sql;
+import ballerina/lang.value as value;
 import ballerina/time;
 
 // Get filtered runtimes based on criteria
@@ -470,23 +471,54 @@ public isolated function getDataServicesForRuntime(string runtimeId) returns typ
 // Get carbon apps for a specific runtime
 public isolated function getCarbonAppsForRuntime(string runtimeId) returns types:CarbonApp[]|error {
     types:CarbonApp[] appList = [];
-    stream<types:CarbonAppRecordInDB, sql:Error?> appStream = dbClient->query(`
-        SELECT app_name, version, state
+    // Include artifacts column (serialized JSON string) if present
+    stream<record {string app_name; string version; types:DeploymentState state; string artifacts?;}, sql:Error?> appStream = dbClient->query(`
+        SELECT app_name, version, state, artifacts
         FROM runtime_carbon_apps 
         WHERE runtime_id = ${runtimeId}
     `);
 
-    check from types:CarbonAppRecordInDB appRecord in appStream
+    check from record {string app_name; string version; types:DeploymentState state; string artifacts?;} appRecord in appStream
         do {
             types:CarbonApp app = {
                 name: appRecord.app_name,
                 version: appRecord.version,
                 state: appRecord.state
             };
+            if appRecord.artifacts is string {
+                // Attempt to parse JSON string to CarbonAppArtifact[]
+                string artStr = <string>appRecord.artifacts;
+                json|error parsed = value:fromJsonString(artStr);
+                if parsed is json {
+                    types:CarbonAppArtifact[]|error arts = parseCarbonAppArtifacts(parsed);
+                    if arts is types:CarbonAppArtifact[] {
+                        app.artifacts = arts;
+                    }
+                }
+            }
             appList.push(app);
         };
 
     return appList;
+}
+
+// Parse a JSON value into CarbonAppArtifact[]; expects an array of objects with name and type
+isolated function parseCarbonAppArtifacts(json j) returns types:CarbonAppArtifact[]|error {
+    if j is json[] {
+        types:CarbonAppArtifact[] result = [];
+        foreach json item in j {
+            if item is map<json> {
+                string? name = <string?>item["name"];
+                string? typ = <string?>item["type"];
+                if name is string && typ is string {
+                    types:CarbonAppArtifact art = { name: name, 'type: typ };
+                    result.push(art);
+                }
+            }
+        }
+        return result;
+    }
+    return []; // Non-array or invalid -> empty list
 }
 
 // Get data sources for a specific runtime
