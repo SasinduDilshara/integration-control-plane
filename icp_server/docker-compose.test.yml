@@ -18,7 +18,7 @@ services:
     mysql-db:
         build:
             context: ./resources/db
-            dockerfile: Dockerfile
+            dockerfile: test.Dockerfile
         ports:
             - "3307:3306"
         container_name: icp-mysql-test

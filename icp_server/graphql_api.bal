@@ -14,9 +14,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.auth;
 import icp_server.storage;
 import icp_server.types;
-import icp_server.utils;
 
 import ballerina/data.jsondata;
 import ballerina/graphql;
@@ -87,65 +87,84 @@ service /graphql on graphqlListener {
 
     // ----------- Runtime Resources
     // Get all runtimes with optional filtering
-    isolated resource function get runtimes(graphql:Context context, string? status, string? runtimeType, string? environmentId, string? projectId, string? componentId) returns types:Runtime[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
+    // Note: componentId is required (always provided by frontend)
+    isolated resource function get runtimes(graphql:Context context, string? status, string? runtimeType, string? environmentId, string? projectId, string componentId) returns types:Runtime[]|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Step 1: Get projectId if not provided (infer from componentId)
+        string actualProjectId = projectId ?: "";
+        if actualProjectId == "" {
+            string|error projectIdResult = storage:getProjectIdByComponentId(componentId);
+            if projectIdResult is error {
+                return []; // Component not found
+            }
+            actualProjectId = projectIdResult;
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // If specific projectId and environmentId are provided, verify access
-        if projectId is string && environmentId is string {
-            if !utils:hasAccessToEnvironment(userContext, projectId, environmentId) {
-                return error("Access denied to environment");
+        // Step 2: If environmentId is specified, check access to that specific environment
+        if environmentId is string {
+            // Build scope with project, integration, and environment
+            types:AccessScope scope = auth:buildScopeFromContext(actualProjectId, integrationId = componentId, envId = environmentId);
+            
+            // Check if user has permission to view this integration in this environment
+            if !check auth:hasAnyPermission(userContext.userId, 
+                [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+                return []; // No access to this integration in this environment
             }
-            return check storage:getRuntimes(status, runtimeType, environmentId, projectId, componentId);
+            
+            // Fetch runtimes for the specified environment
+            return check storage:getRuntimes(status, runtimeType, environmentId, actualProjectId, componentId);
         }
 
-        // If only projectId is provided, filter by accessible environments in that project
-        if projectId is string {
-            if !utils:hasAccessToProject(userContext, projectId) {
-                return error("Access denied to project");
-            }
-            // Get accessible environment IDs for this project
-            string[] accessibleEnvIds = utils:getAccessibleEnvironmentIds(userContext, projectId);
+        // Step 3: If environmentId is NOT specified, resolve accessible environments
+        auth:EnvironmentAccessInfo envAccess = check auth:resolveEnvironmentAccess(
+            userContext.userId, 
+            projectId = actualProjectId, 
+            integrationId = componentId
+        );
 
-            // Get runtimes for each accessible environment and aggregate
-            types:Runtime[] allRuntimes = [];
-            foreach string envId in accessibleEnvIds {
-                types:Runtime[] envRuntimes = check storage:getRuntimes(status, runtimeType, envId, projectId, componentId);
-                allRuntimes.push(...envRuntimes);
-            }
-            return allRuntimes;
+        // If no restriction, user can access all environments - fetch all runtimes
+        if !envAccess.hasRestriction {
+            return check storage:getRuntimes(status, runtimeType, (), actualProjectId, componentId);
         }
 
-        // No specific filters - return runtimes for all accessible environments
-        // Use optimized batch query
-        return check storage:getRuntimesByAccessibleEnvironments(userContext);
+        // If blocked (empty allowed list), return empty
+        string[]? allowedEnvs = envAccess.allowedEnvironments;
+        if allowedEnvs is () || allowedEnvs.length() == 0 {
+            return [];
+        }
+
+        // Fetch runtimes for each allowed environment and combine
+        types:Runtime[] allRuntimes = [];
+        foreach string envId in allowedEnvs {
+            types:Runtime[] envRuntimes = check storage:getRuntimes(status, runtimeType, envId, actualProjectId, componentId);
+            allRuntimes.push(...envRuntimes);
+        }
+
+        return allRuntimes;
     }
 
     // Get a specific runtime by ID
     isolated resource function get runtime(graphql:Context context, string runtimeId) returns types:Runtime?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // First, fetch the runtime to get its project and environment
+        // Fetch the runtime to get its context
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
 
         if runtime is () {
             return (); // Runtime not found
         }
 
-        // Verify user has access to the runtime's project and environment
-        if !utils:hasAccessToEnvironment(userContext, runtime.component.projectId, runtime.environment.id) {
-            return error("Access denied to runtime");
+        // Build scope from runtime's context
+        types:AccessScope scope = auth:buildScopeFromContext(
+            runtime.component.projectId,
+            runtime.component.id,
+            runtime.environment.id
+        );
+
+        // Check permission to view this integration
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_VIEW, scope) {
+            return (); // No access - return 404 (same as not found)
         }
 
         return runtime;
@@ -160,23 +179,24 @@ service /graphql on graphqlListener {
             string versionId,
             string environmentId
     ) returns types:ComponentDeployment?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Get project ID for the component (lightweight query for access control)
+        string|error projectIdResult = storage:getProjectIdByComponentId(componentId);
+        if projectIdResult is error {
+            return (); // Component not found
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = auth:buildScopeFromContext(
+            projectIdResult,
+            componentId,
+            environmentId
+        );
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return (); // Integration not found
-        }
-
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to component deployment");
+        // Check permission to view this integration deployment
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_VIEW, scope) {
+            return (); // No access - return 404 (same as not found)
         }
 
         // Get deployment information from runtimes table
@@ -187,13 +207,7 @@ service /graphql on graphqlListener {
 
     // Get services for a specific runtime
     isolated resource function get services(graphql:Context context, string runtimeId) returns types:Service[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // First, fetch the runtime to verify access to its environment
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -202,9 +216,18 @@ service /graphql on graphqlListener {
             return error("Runtime not found");
         }
 
-        // Verify user has access to the runtime's project and environment
-        if !utils:hasAccessToEnvironment(userContext, runtime.component.projectId, runtime.environment.id) {
-            return error("Access denied to runtime");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: runtime.component.projectId,
+            integrationUuid: runtime.component.id,
+            envUuid: runtime.environment.id
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access runtime services without permission", userId = userContext.userId, runtimeId = runtimeId);
+            return [];
         }
 
         return check storage:getServicesForRuntime(runtimeId);
@@ -212,23 +235,23 @@ service /graphql on graphqlListener {
 
     // Get services for a specific environment and component
     isolated resource function get servicesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Service[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component services without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getServicesByEnvironmentAndComponent(environmentId, componentId);
@@ -236,13 +259,7 @@ service /graphql on graphqlListener {
 
     // Get listeners for a specific runtime
     isolated resource function get listeners(graphql:Context context, string runtimeId) returns types:Listener[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // First, fetch the runtime to verify access to its environment
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -251,9 +268,18 @@ service /graphql on graphqlListener {
             return error("Runtime not found");
         }
 
-        // Verify user has access to the runtime's project and environment
-        if !utils:hasAccessToEnvironment(userContext, runtime.component.projectId, runtime.environment.id) {
-            return error("Access denied to runtime");
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: runtime.component.projectId,
+            integrationUuid: runtime.component.id,
+            envUuid: runtime.environment.id
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access listeners without permission", userId = userContext.userId, runtimeId = runtimeId);
+            return [];
         }
 
         return check storage:getListenersForRuntime(runtimeId);
@@ -261,23 +287,23 @@ service /graphql on graphqlListener {
 
     // Get listeners for a specific environment and component
     isolated resource function get listenersByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Listener[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access listeners without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getListenersByEnvironmentAndComponent(environmentId, componentId);
@@ -285,23 +311,23 @@ service /graphql on graphqlListener {
 
     // Get REST APIs for a specific environment and component
     isolated resource function get restApisByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:RestApi[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component REST APIs without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getRestApisByEnvironmentAndComponent(environmentId, componentId);
@@ -309,23 +335,23 @@ service /graphql on graphqlListener {
 
     // Get Carbon Apps for a specific environment and component
     isolated resource function get carbonAppsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:CarbonApp[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component Carbon Apps without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getCarbonAppsByEnvironmentAndComponent(environmentId, componentId);
@@ -333,23 +359,23 @@ service /graphql on graphqlListener {
 
     // Get Inbound Endpoints for a specific environment and component
     isolated resource function get inboundEndpointsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:InboundEndpoint[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component inbound endpoints without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getInboundEndpointsByEnvironmentAndComponent(environmentId, componentId);
@@ -357,23 +383,23 @@ service /graphql on graphqlListener {
 
     // Get Endpoints for a specific environment and component
     isolated resource function get endpointsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Endpoint[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component endpoints without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getEndpointsByEnvironmentAndComponent(environmentId, componentId);
@@ -381,23 +407,23 @@ service /graphql on graphqlListener {
 
     // Get Sequences for a specific environment and component
     isolated resource function get sequencesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Sequence[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component sequences without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getSequencesByEnvironmentAndComponent(environmentId, componentId);
@@ -405,23 +431,23 @@ service /graphql on graphqlListener {
 
     // Get Proxy Services for a specific environment and component
     isolated resource function get proxyServicesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:ProxyService[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component proxy services without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getProxyServicesByEnvironmentAndComponent(environmentId, componentId);
@@ -429,23 +455,23 @@ service /graphql on graphqlListener {
 
     // Get Tasks for a specific environment and component
     isolated resource function get tasksByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Task[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component tasks without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getTasksByEnvironmentAndComponent(environmentId, componentId);
@@ -453,23 +479,23 @@ service /graphql on graphqlListener {
 
     // Get Templates for a specific environment and component
     isolated resource function get templatesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Template[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component templates without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getTemplatesByEnvironmentAndComponent(environmentId, componentId);
@@ -477,23 +503,23 @@ service /graphql on graphqlListener {
 
     // Get Message Stores for a specific environment and component
     isolated resource function get messageStoresByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:MessageStore[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component message stores without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getMessageStoresByEnvironmentAndComponent(environmentId, componentId);
@@ -501,23 +527,23 @@ service /graphql on graphqlListener {
 
     // Get Message Processors for a specific environment and component
     isolated resource function get messageProcessorsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:MessageProcessor[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component message processors without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getMessageProcessorsByEnvironmentAndComponent(environmentId, componentId);
@@ -525,23 +551,23 @@ service /graphql on graphqlListener {
 
     // Get Local Entries for a specific environment and component
     isolated resource function get localEntriesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:LocalEntry[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component local entries without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getLocalEntriesByEnvironmentAndComponent(environmentId, componentId);
@@ -549,23 +575,23 @@ service /graphql on graphqlListener {
 
     // Get Data Services for a specific environment and component
     isolated resource function get dataServicesByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:DataService[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
 
-        // Get component to verify access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
 
-        // Verify user has access to the component's project and environment
-        if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-            return error("Access denied to environment");
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component data services without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
         }
 
         return check storage:getDataServicesByEnvironmentAndComponent(environmentId, componentId);
@@ -573,24 +599,25 @@ service /graphql on graphqlListener {
 
     // Delete a runtime by ID
     isolated remote function deleteRuntime(graphql:Context context, string runtimeId) returns boolean|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // First, fetch the runtime to get its project and environment
+        // Fetch the runtime to get its context
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
 
         if runtime is () {
             return error("Runtime not found");
         }
 
-        // Verify user has admin access to the runtime's project and environment
-        if !utils:hasAdminAccess(userContext, runtime.component.projectId, runtime.environment.id) {
-            return error("Admin access required to delete runtime");
+        // Build scope from runtime's context
+        types:AccessScope scope = auth:buildScopeFromContext(
+            runtime.component.projectId,
+            runtime.component.id,
+            runtime.environment.id
+        );
+
+        // Check permission to delete this integration's runtime (mutation = explicit error)
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+            return error("Access denied: insufficient permissions to delete runtime");
         }
 
         check storage:deleteRuntime(runtimeId);
@@ -600,17 +627,22 @@ service /graphql on graphqlListener {
     // ----------- Environment Resources
     // Create a new environment (super admin only)
     isolated remote function createEnvironment(graphql:Context context, types:EnvironmentInput environment) returns types:Environment|error? {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
 
-        // Only super admins can create environments
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to create environments");
+        // Check if user can manage environments based on production status
+        if environment.critical {
+            // Production environment requires full management permission
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
+                return error("Access denied: insufficient permissions to create production environments");
+            }
+        } else {
+            // Non-production environment requires manage_nonprod or manage permission
+            if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, auth:PERMISSION_ENVIRONMENT_MANAGE], scope) {
+                return error("Access denied: insufficient permissions to create environments");
+            }
         }
 
         // Set created_by to the current user's ID
@@ -624,107 +656,146 @@ service /graphql on graphqlListener {
     // Note: orgUuid, type, and projectId parameters are accepted for frontend compatibility
     // but ignored since environments are global (not org-specific)
     isolated resource function get environments(graphql:Context context, string? orgUuid, string? 'type, string? projectId) returns types:Environment[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Get user's accessible environments (filtered by role mappings)
+        // If user has any role mapping, they can see environments within their scope
+        types:UserEnvironmentAccess[] accessibleEnvs = 
+            check storage:getUserEnvironmentRestrictions(userContext.userId);
 
-        // Get all environment IDs where user has any role (across all projects)
-        // Note: Parameters orgUuid, type, projectId are ignored - environments are global
-        string[]|error accessibleEnvironmentIds = utils:getAccessibleEnvironmentIdsByType(userContext);
-        if accessibleEnvironmentIds is error {
-            log:printError("Failed to get accessible environment IDs", accessibleEnvironmentIds);
-            return error("Failed to get accessible environment IDs");
-        }
-
-        // Return empty array if user has no access to any environment
-        if accessibleEnvironmentIds.length() == 0 {
+        // Check if user has any access at all
+        if accessibleEnvs.length() == 0 {
+            log:printWarn("Attempt to access environments without role mappings", userId = userContext.userId);
             return [];
         }
 
-        // Fetch environments by accessible environment IDs
-        types:Environment[] environments = check storage:getEnvironmentsByIds(accessibleEnvironmentIds);
+        // Build environment ID list from access mappings:
+        // If ANY mapping has env_uuid = NULL, user gets all environments
+        // Otherwise, collect specific env_uuid values
+        
+        boolean hasUnrestrictedAccess = false;
+        string[] envIds = [];
+        
+        foreach types:UserEnvironmentAccess envAccess in accessibleEnvs {
+            if envAccess.envUuid is () {
+                // env_uuid is NULL = unrestricted access to all environments
+                hasUnrestrictedAccess = true;
+                break;
+            } else if envAccess.envUuid is string {
+                // Specific environment access
+                string envId = <string>envAccess.envUuid;
+                if envIds.indexOf(envId) is () {
+                    envIds.push(envId);
+                }
+            }
+        }
 
-        // The id alias is already set in the storage layer
+        // Fetch environments based on access type
+        types:Environment[] environments = [];
+        if hasUnrestrictedAccess {
+            // User has unrestricted access - fetch all environments
+            environments = check storage:getAllEnvironments();
+        } else {
+            // User has access to specific environments only (envIds must have at least one item)
+            environments = check storage:getEnvironmentsByIds(envIds);
+        }
+
+        // Filter by type if provided (prod = critical, non-prod = non-critical)
+        if 'type is string {
+            if 'type == "prod" {
+                environments = environments.filter(env => env.critical);
+            } else if 'type == "non-prod" {
+                environments = environments.filter(env => !env.critical);
+            }
+        }
+
         return environments;
     }
 
-    // Get all environments where user has admin access (for permission management)
-    isolated resource function get adminEnvironments(graphql:Context context) returns types:Environment[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Get all environment IDs where user is admin (across all projects)
-        string[] adminEnvironmentIds = utils:getAdminEnvironmentIdsByType(userContext);
-
-        // Return empty array if user is not admin in any environment
-        if adminEnvironmentIds.length() == 0 {
-            return [];
-        }
-
-        // Fetch environments by admin environment IDs
-        return check storage:getEnvironmentsByIds(adminEnvironmentIds);
-    }
-
-    // Delete an environment (super admin only)
+    // Delete an environment (requires management permission based on environment type)
     isolated remote function deleteEnvironment(graphql:Context context, string environmentId) returns boolean|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Fetch environment to check its production status
+        types:Environment? env = check storage:getEnvironmentById(environmentId);
+        if env is () {
+            return error("Environment not found");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
 
-        // Only super admins can delete environments
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to delete environments");
+        // Check permission based on production status
+        if env.critical {
+            // Production environment requires full management permission
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
+                return error("Access denied: insufficient permissions to delete production environments");
+            }
+        } else {
+            // Non-production environment requires manage_nonprod or manage permission
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope);
+            if !canManageNonProd && !canManageFull {
+                return error("Access denied: insufficient permissions to delete environments");
+            }
         }
 
         check storage:deleteEnvironment(environmentId);
         return true;
     }
 
-    // Update environment name, description, and/or critical status (super admin only)
+    // Update environment name, description, and/or critical status (requires management permission)
     isolated remote function updateEnvironment(graphql:Context context, string environmentId, string? name, string? description, boolean? critical) returns types:Environment?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Fetch current environment to check its production status
+        types:Environment? currentEnv = check storage:getEnvironmentById(environmentId);
+        if currentEnv is () {
+            return error("Environment not found");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
 
-        // Only super admins can update environments
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to update environments");
+        // If changing critical flag, check permission for the target state
+        // Otherwise, check permission for the current state
+        boolean targetIsCritical = critical ?: currentEnv.critical;
+
+        if targetIsCritical {
+            // Production environment requires full management permission
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
+                return error("Access denied: insufficient permissions to update production environments");
+            }
+        } else {
+            // Non-production environment requires manage_nonprod or manage permission
+            boolean canManageNonProd = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, scope);
+            boolean canManageFull = check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope);
+            if !canManageNonProd && !canManageFull {
+                return error("Access denied: insufficient permissions to update environments");
+            }
         }
 
         check storage:updateEnvironment(environmentId, name, description, critical);
         return check storage:getEnvironmentById(environmentId);
     }
 
-    // Update environment production status (super admin only)
+    // Update environment production status (requires full management permission)
+    // This is a critical operation that always requires the highest permission level
     isolated remote function updateEnvironmentProductionStatus(graphql:Context context, string environmentId, boolean isProduction) returns types:Environment?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Verify environment exists
+        types:Environment? env = check storage:getEnvironmentById(environmentId);
+        if env is () {
+            return error("Environment not found");
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
 
-        // Only super admins can update environment production status
-        if !userContext.isSuperAdmin {
-            return error("Super admin access required to update environment production status");
+        // Changing production status is a critical operation - always requires full management permission
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
+            return error("Access denied: full environment management permission required to change production status");
         }
 
         check storage:updateEnvironmentProductionStatus(environmentId, isProduction);
@@ -734,87 +805,52 @@ service /graphql on graphqlListener {
     //------------- Project Resources
     // Create a new project
     isolated remote function createProject(graphql:Context context, types:ProjectInput project) returns types:Project|error? {
-        // Extract user context to get the creating user's information
-        // value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+        // Check permission at org level - requires project_mgt:manage
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_PROJECT_MANAGE, scope) {
+            return error("Insufficient permissions to create projects");
         }
 
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Check if user is super admin or project author
-        if !userContext.isSuperAdmin && !userContext.isProjectAuthor {
-            return error("Project author access required to create projects");
-        }
-
-        // Create project and auto-assign admin roles to creating user
+        // Create project and auto-assign creator to project admin group
         return check storage:createProject(project, userContext);
     }
 
-    // Get all projects (filtered by user's accessible projects via RBAC)
+    // Get all projects (filtered by user's accessible projects via RBAC v2)
     isolated resource function get projects(graphql:Context context, int? orgId) returns types:Project[]|error {
-        // value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        // if authHeader !is string {
-        //     return error("Authorization header missing in request");
-        // }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        // types:UserContext userContext = check utils:extractUserContext(authHeader);
-        // string[] accessibleProjectIds = utils:getAccessibleProjectIds(userContext);
-
-        // Get projects filtered by user's access
-        types:Project[] allProjects = check storage:getProjects();
-
-        // Filter by orgId if provided
-        if orgId is int {
-            types:Project[] filteredProjects = [];
-            foreach types:Project project in allProjects {
-                if project.orgId == orgId {
-                    filteredProjects.push(project);
-                }
-            }
-            return filteredProjects;
+        // Get accessible projects via access resolver
+        // This returns all projects where user has ANY role assignment (any permission domain)
+        // Includes users who only have observability_mgt:view_logs or other non-project permissions
+        types:UserProjectAccess[] accessibleProjects = 
+            check auth:getAccessibleProjects(userContext.userId);
+        
+        if accessibleProjects.length() == 0 {
+            return []; // User has no project access
         }
 
-        return allProjects;
-    }
+        string[] accessibleProjectIds = accessibleProjects.map(p => p.projectUuid);
 
-    // Get projects where user has admin access (for permission management)
-    isolated resource function get adminProjects(graphql:Context context) returns types:Project[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        // Fetch only accessible projects with SQL IN clause (efficient DB filtering)
+        types:Project[] filteredProjects = 
+            check storage:getProjectsByIds(accessibleProjectIds, orgId);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Get project IDs where user is admin
-        string[] adminProjectIds = utils:getAdminProjectIds(userContext);
-
-        // Return empty array if user is not admin in any project
-        if adminProjectIds.length() == 0 {
-            return [];
-        }
-
-        // Fetch projects by admin project IDs
-        return check storage:getProjectsByIds(adminProjectIds);
+        return filteredProjects;
     }
 
     // Get a specific project by ID with optional orgId filter
     isolated resource function get project(graphql:Context context, int? orgId, string projectId) returns types:Project?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Verify user has access to this project
-        if !utils:hasAccessToProject(userContext, projectId) {
-            return error("Access denied to project");
+        // Use access resolver to check project access (handles ANY role assignment)
+        auth:ProjectAccessInfo accessInfo = check auth:resolveProjectAccess(userContext.userId, projectId);
+        
+        if !accessInfo.hasAccess {
+            log:printWarn("Attempt to access project without permission", userId = userContext.userId, projectId = projectId);
+            return (); // No access - return null (404 pattern for queries)
         }
 
         types:Project? project = check storage:getProjectById(projectId);
@@ -833,15 +869,13 @@ service /graphql on graphqlListener {
 
     // Check project creation eligibility for an organization
     isolated resource function get projectCreationEligibility(graphql:Context context, int orgId, string orgHandler) returns types:ProjectCreationEligibility|error {
-        // Note: This endpoint might not require authentication depending on business requirements
-        // For now, we'll allow it without authentication to match the example
-        // value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        // if authHeader !is string {
-        //     return error("Authorization header missing in request");
-        // }
-
         // Call storage layer to check eligibility
-        return check storage:checkProjectCreationEligibility(orgId, orgHandler);
+        types:UserContextV2 userContext = check extractUserContext(context);
+        types:AccessScope scope = {orgUuid: orgId};
+        boolean isEligible = check auth:hasPermission(userContext.userId, auth:PERMISSION_PROJECT_MANAGE, scope);
+        return {
+            isProjectCreationAllowed: isEligible
+        };
     }
 
     // Check project handler availability for an organization
@@ -859,16 +893,13 @@ service /graphql on graphqlListener {
 
     // Delete a project
     isolated remote function deleteProject(graphql:Context context, int orgId, string projectId) returns types:DeleteResponse|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Check if user is super admin or project author
-        if !userContext.isSuperAdmin && !userContext.isProjectAuthor {
-            return error("Project author access required to delete projects");
+        // Build org-level scope for permission check
+        types:AccessScope scope = {orgUuid: orgId, projectUuid: projectId};
+        // Check permission at project level - requires project_mgt:manage 
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_PROJECT_MANAGE, scope)  {
+            return error("Insufficient permissions to delete project");
         }
 
         // Check if the project has any components
@@ -890,16 +921,13 @@ service /graphql on graphqlListener {
 
     // Update project name and/or description
     isolated remote function updateProject(graphql:Context context, types:ProjectUpdateInput project) returns types:Project|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Check if user is super admin or project author
-        if !userContext.isSuperAdmin && !userContext.isProjectAuthor {
-            return error("Project author access required to update projects");
+        // Build project-level scope for permission check
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID, projectUuid: project.id};
+        // Check permission at project level - requires project_mgt:edit or project_mgt:manage
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE], scope) {
+            return error("Insufficient permissions to update project");
         }
 
         check storage:updateProjectWithInput(project);
@@ -913,16 +941,14 @@ service /graphql on graphqlListener {
     // ----------- Component Resources
     // Create a new component
     isolated remote function createComponent(graphql:Context context, types:ComponentInput component) returns types:Component|error? {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
+        types:UserContextV2 userContext = check extractUserContext(context);
 
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        // Build scope at project level (creating integration in a project)
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId);
 
-        // Check if user is admin in the project (in any environment)
-        if !utils:isAdminInAnyEnvironment(userContext, component.projectId) {
-            return error("Admin access required in project to create components");
+        // Check if user has permission to manage integrations in this project
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+            return error("Insufficient permissions to create component in this project");
         }
 
         // Validate component name format (3-64 characters, alphanumeric, hyphens, underscores)
@@ -948,39 +974,27 @@ service /graphql on graphqlListener {
 
     // Get all components with optional project filter
     isolated resource function get components(graphql:Context context, string orgHandler, string? projectId, types:ComponentOptionsInput? options) returns types:Component[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Get accessible integrations (with optional project filter)
+        // This returns integrations where user has ANY role assignment (permission-agnostic)
+        types:UserIntegrationAccess[] accessibleIntegrations = 
+            check storage:getUserAccessibleIntegrations(userContext.userId, projectId);
+
+        // Extract integration IDs
+        string[] integrationIds = accessibleIntegrations.map(i => i.integrationUuid);
+
+        // Return empty if no access
+        if integrationIds.length() == 0 {
+            return [];
         }
 
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // If projectId is provided, verify access to that specific project
-        if projectId is string {
-            if !utils:hasAccessToProject(userContext, projectId) {
-                return error("Access denied to project");
-            }
-            return check storage:getComponents(projectId, options);
-        }
-
-        // If no projectId filter, return components for all accessible projects
-        // Get all accessible project IDs
-        string[] accessibleProjectIds = utils:getAccessibleProjectIds(userContext);
-
-        // Use optimized batch query with WHERE IN clause
-        return check storage:getComponentsByProjectIds(accessibleProjectIds, options);
+        return check storage:getComponentsByIds(integrationIds);
     }
 
     // Get a specific component by ID or by projectId + componentHandler
     isolated resource function get component(graphql:Context context, string? componentId, string? projectId, string? componentHandler) returns types:Component?|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         types:Component? component = ();
 
@@ -997,61 +1011,23 @@ service /graphql on graphqlListener {
             return (); // Integration not found
         }
 
-        // Verify user has access to the component's parent project
-        if !utils:hasAccessToProject(userContext, component.projectId) {
-            return error("Access denied to component");
+        // Build scope with project and integration context
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = component.id);
+
+        // Check if user has permission to view this integration
+        // Users with edit or manage permissions should also be able to view
+        if !check auth:hasAnyPermission(userContext.userId, 
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component without permission", userId = userContext.userId, componentId = component.id);
+            return (); // Return null for no access (404 pattern for queries)
         }
 
         return component;
     }
 
-    // Delete a component
-    isolated remote function deleteComponent(graphql:Context context, string componentId) returns boolean|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
-
-        // Get component to check project access
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
-
-        // Check if user is admin in the project (in any environment)
-        if !utils:isAdminInAnyEnvironment(userContext, component.projectId) {
-            return error("Admin access required in project to delete components");
-        }
-
-        // Get all environments where this component has runtimes
-        string[] environmentsWithRuntimes = check storage:getEnvironmentIdsWithRuntimes(componentId);
-
-        // Check if user is admin in ALL environments where the component has runtimes
-        foreach string envId in environmentsWithRuntimes {
-            if !utils:hasAdminAccess(userContext, component.projectId, envId) {
-                return error(string `Cannot delete component: it has runtimes in environment ${envId} where you don't have admin access`);
-            }
-        }
-
-        check storage:deleteComponent(componentId);
-        return true;
-    }
-
     // Delete a component V2 - with detailed response
     isolated remote function deleteComponentV2(graphql:Context context, string orgHandler, string componentId, string projectId) returns types:DeleteComponentV2Response|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return {
-                status: "FAILED",
-                canDelete: false,
-                message: "Authorization header missing in request",
-                encodedData: ""
-            };
-        }
-
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // 1. Check if component exists and belongs to the specified project
         types:Component? component = check storage:getComponentById(componentId);
@@ -1074,12 +1050,14 @@ service /graphql on graphqlListener {
             };
         }
 
-        // 2. Check if user has admin access to the project
-        if !utils:isAdminInAnyEnvironment(userContext, component.projectId) {
+        // 2. Build scope and check if user has permission to manage this integration
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId);
+        
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
             return {
                 status: "FAILED",
                 canDelete: false,
-                message: "Admin access required in project to delete components",
+                message: "Insufficient permissions to delete this component",
                 encodedData: ""
             };
         }
@@ -1088,13 +1066,14 @@ service /graphql on graphqlListener {
         string[] environmentsWithRuntimes = check storage:getEnvironmentIdsWithRuntimes(componentId);
 
         if environmentsWithRuntimes.length() > 0 {
-            // Check if user is admin in ALL environments where the component has runtimes
+            // Check if user has manage permission in ALL environments where the component has runtimes
             foreach string envId in environmentsWithRuntimes {
-                if !utils:hasAdminAccess(userContext, component.projectId, envId) {
+                types:AccessScope envScope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = envId);
+                if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, envScope) {
                     return {
                         status: "FAILED",
                         canDelete: false,
-                        message: string `Cannot delete component: it has runtimes in environment ${envId} where you don't have admin access`,
+                        message: string `Cannot delete component: it has runtimes in environment ${envId} where you don't have manage permission`,
                         encodedData: ""
                     };
                 }
@@ -1129,12 +1108,7 @@ service /graphql on graphqlListener {
 
     // Update component using ComponentUpdateInput object
     isolated remote function updateComponent(graphql:Context context, types:ComponentUpdateInput component) returns types:Component|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Extract values from ComponentUpdateInput
         string targetComponentId = component.id;
@@ -1142,15 +1116,16 @@ service /graphql on graphqlListener {
         string? targetDisplayName = component.displayName;
         string? targetDescription = component.description;
 
-        // Get component to check project access
-        types:Component? existingComponent = check storage:getComponentById(targetComponentId);
-        if existingComponent is () {
-            return error("Integration not found");
-        }
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(targetComponentId);
 
-        // Check if user is admin in the project (in any environment)
-        if !utils:isAdminInAnyEnvironment(userContext, existingComponent.projectId) {
-            return error("Admin access required in project to update components");
+        // Build scope with project and integration context
+        types:AccessScope scope = auth:buildScopeFromContext(projectId, integrationId = targetComponentId);
+
+        // Check if user has permission to edit this integration (edit or manage)
+        if !check auth:hasAnyPermission(userContext.userId, 
+            [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            return error("Insufficient permissions to update this component");
         }
 
         // Call the existing backend method to maintain consistency
@@ -1160,12 +1135,7 @@ service /graphql on graphqlListener {
 
     // Get available artifact types for a component
     isolated resource function get componentArtifactTypes(graphql:Context context, string componentId, string? environmentId = ()) returns types:ArtifactTypeCount[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        types:UserContextV2 userContext = check extractUserContext(context);
 
         // Get component to check access and type
         types:Component? component = check storage:getComponentById(componentId);
@@ -1173,9 +1143,15 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project
-        if !utils:hasAccessToProject(userContext, component.projectId) {
-            return error("Access denied to component");
+        // Build scope with project and integration context (and optional environment)
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
+
+        // Check if user has permission to view this integration
+        // Users with edit or manage permissions should also be able to view artifacts
+        if !check auth:hasAnyPermission(userContext.userId, 
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component artifact types without permission", userId = userContext.userId, componentId = componentId, environmentId = environmentId);
+            return [];
         }
 
         // Return available artifact types based on component (only those with actual data)
@@ -1196,7 +1172,7 @@ service /graphql on graphqlListener {
         }
 
         // Extract user context for RBAC
-        types:UserContext userContext = check utils:extractUserContext(authHeader);
+        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
 
         // Get component to verify access
         types:Component? component = check storage:getComponentById(componentId);
@@ -1204,23 +1180,15 @@ service /graphql on graphqlListener {
             return error("Integration not found");
         }
 
-        // Verify user has access to the component's project
-        if !utils:hasAccessToProject(userContext, component.projectId) {
-            return error("Access denied to component");
+        // Verify user has the permisions
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
+        if !check auth:hasAnyPermission(userContext.userId, 
+            ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Insufficient permissions to view component artifacts");
         }
 
-        // Get runtimes for this component (optionally filtered by environment)
-        types:Runtime[] runtimes;
-        if environmentId is string {
-            // Verify environment access
-            if !utils:hasAccessToEnvironment(userContext, component.projectId, environmentId) {
-                return error("Access denied to environment");
-            }
-            runtimes = check storage:getRuntimes((), (), environmentId, component.projectId, componentId);
-        } else {
-            // Get runtimes from any environment the user has access to
-            runtimes = check storage:getRuntimes((), (), (), component.projectId, componentId);
-        }
+        // Get runtimes for this component (optionally filtered by environment if environmentId !is ())
+        types:Runtime[] runtimes = check storage:getRuntimes((), (), environmentId, component.projectId, componentId);
 
         if runtimes.length() == 0 {
             return error("No runtimes found for this component");
@@ -1322,4 +1290,14 @@ service /graphql on graphqlListener {
                 sourceLength = artifactConfig.configuration.length());
         return artifactConfig.configuration;
     }
+}
+
+isolated function extractUserContext(graphql:Context context) returns types:UserContextV2|error {
+    value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+    if authHeader !is string {
+        return error("Authorization header missing in request");
+    }
+
+    // Extract user context V2 for RBAC
+    return check auth:extractUserContextV2(authHeader);
 }

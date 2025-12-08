@@ -708,7 +708,7 @@ public type Project record {
     int orgId;
 
     string name;
-    string version;
+    string? version;
 
     @sql:Column {
         name: "created_date"
@@ -1410,14 +1410,6 @@ public type Credentials record {
     string password;
 };
 
-public type LoginResponse record {|
-    boolean isNewUser = false;
-    string token?;
-    int expiresIn?;
-    string username?;
-    Role[] roles?;
-|};
-
 // Request type for refresh token endpoint
 public type RefreshTokenRequest record {
     string refreshToken;
@@ -1531,36 +1523,13 @@ public type UserCredentials record {
     string? updatedAt?;
 };
 
-// Privilege level enum
-public enum PrivilegeLevel {
-    ADMIN = "admin",
-    DEVELOPER = "developer"
-};
-
-// Environment type enum
-public enum EnvironmentType {
-    PROD = "prod",
-    NON_PROD = "non-prod"
-};
-
-// === User Context for RBAC ===
-
-// Simplified role info extracted from JWT for authorization checks
-// Contains only the minimal information needed for authorization decisions
-public type RoleInfo record {
-    string projectId;
-    EnvironmentType environmentType;
-    PrivilegeLevel privilegeLevel;
-};
-
-// User context extracted from JWT token for RBAC
-public type UserContext record {
+// UserContext V2 - RBAC V2 permission-based authorization
+// Used with new permission-based JWT tokens
+public type UserContextV2 record {
     string userId;
     string username;
     string displayName;
-    RoleInfo[] roles;
-    boolean isSuperAdmin = false; // Global admin with access to all resources
-    boolean isProjectAuthor = false; // Can create/update/delete projects
+    string[] permissions; // Flat list of permission names from JWT
 };
 
 // Database role record type
@@ -1576,11 +1545,11 @@ public type Role record {
     @sql:Column {
         name: "environment_type"
     }
-    EnvironmentType environmentType;
+    string environmentType;
     @sql:Column {
         name: "privilege_level"
     }
-    PrivilegeLevel privilegeLevel;
+    string privilegeLevel;
     @sql:Column {
         name: "role_name"
     }
@@ -1595,36 +1564,11 @@ public type Role record {
     string? updatedAt?;
 };
 
-// User with roles for API responses
-public type UserWithRoles record {
-    *User; // Type inclusion - includes all fields from User
-    Role[] roles;
-};
-
 // Input type for creating a new user
 public type CreateUserInput record {
     string username;
     string displayName;
     string password;
-};
-
-// Input type for updating user roles
-public type UpdateUserRolesInput record {
-    string userId;
-    RoleAssignment[] roles;
-};
-
-// Role assignment for a specific project-environment type combination
-public type RoleAssignment record {
-    string projectId;
-    EnvironmentType environmentType;
-    PrivilegeLevel privilegeLevel;
-};
-
-// Request body for updating user roles and permissions
-public type UpdateUserRolesRequest record {
-    RoleAssignment[] roles;
-    boolean? isProjectAuthor?; // Optional: only super admins can update this
 };
 
 // Input type for updating user profile (display name)

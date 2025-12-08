@@ -144,46 +144,6 @@ CREATE TABLE environments (
 );
 
 -- ============================================================================
--- ROLES & USER ROLES
--- ============================================================================
-
-CREATE TABLE roles (
-    role_id CHAR(36) NOT NULL PRIMARY KEY,
-    project_id CHAR(36) NOT NULL,
-    environment_type VARCHAR(20) NOT NULL,
-    privilege_level VARCHAR(20) NOT NULL,
-    role_name VARCHAR(200) NOT NULL UNIQUE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_roles_project FOREIGN KEY (project_id) REFERENCES projects (project_id) ON DELETE CASCADE,
-    CONSTRAINT uk_role_project_env_type_priv UNIQUE (
-        project_id,
-        environment_type,
-        privilege_level
-    )
-);
-
-CREATE INDEX idx_roles_role_name ON roles (role_name);
-
-CREATE INDEX idx_roles_project_id ON roles (project_id);
-
-CREATE INDEX idx_roles_environment_type ON roles (environment_type);
-
-CREATE TABLE user_roles (
-    user_id CHAR(36) NOT NULL,
-    role_id CHAR(36) NOT NULL,
-    assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    assigned_by CHAR(36),
-    PRIMARY KEY (user_id, role_id),
-    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles (role_id) ON DELETE CASCADE
-);
-
-CREATE INDEX idx_user_roles_user_id ON user_roles (user_id);
-
-CREATE INDEX idx_user_roles_role_id ON user_roles (role_id);
-
--- ============================================================================
 -- RBAC V2 - GROUP-BASED AUTHORIZATION
 -- ============================================================================
 
@@ -206,13 +166,16 @@ CREATE INDEX idx_user_groups_group_name ON user_groups (group_name);
 CREATE TABLE roles_v2 (
     role_id VARCHAR(36) PRIMARY KEY,
     role_name VARCHAR(255) NOT NULL,
+    org_id INT NOT NULL DEFAULT 1,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_role_name UNIQUE (role_name)
+    CONSTRAINT fk_roles_v2_org FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE,
+    CONSTRAINT unique_role_name_org UNIQUE (role_name, org_id)
 );
 
 CREATE INDEX idx_roles_v2_role_name ON roles_v2 (role_name);
+CREATE INDEX idx_roles_v2_org_id ON roles_v2 (org_id);
 
 -- Permissions table with domain grouping
 CREATE TABLE permissions (
@@ -243,7 +206,7 @@ CREATE INDEX idx_permissions_name ON permissions (permission_name);
 
 -- Group-User mapping (Many-to-Many)
 CREATE TABLE group_user_mapping (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     group_id VARCHAR(36) NOT NULL,
     user_uuid VARCHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -258,7 +221,7 @@ CREATE INDEX idx_group_user_group_id ON group_user_mapping (group_id);
 
 -- Group-Role mapping with context (Many-to-Many with hierarchical scoping)
 CREATE TABLE group_role_mapping (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     group_id VARCHAR(36) NOT NULL,
     role_id VARCHAR(36) NOT NULL,
     org_uuid INT,
@@ -304,7 +267,7 @@ CREATE INDEX idx_grp_role_group_env ON group_role_mapping (group_id, env_uuid);
 
 -- Role-Permission mapping (Many-to-Many)
 CREATE TABLE role_permission_mapping (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     role_id VARCHAR(36) NOT NULL,
     permission_id VARCHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -453,28 +416,17 @@ WHERE
 -- RBAC V2 SEED DATA
 -- ============================================================================
 
+-- Insert default organization (required for foreign key constraints)
+INSERT INTO organizations (org_id, org_name, org_handle)
+VALUES (1, 'Default Organization', 'default');
+
 -- Insert pre-defined roles
-INSERT INTO
-    roles_v2 (
-        role_id,
-        role_name,
-        description
-    )
-VALUES (
-        RANDOM_UUID (),
-        'Super Admin',
-        'Full access to all resources and permissions'
-    ),
-    (
-        RANDOM_UUID (),
-        'Admin',
-        'Administrative access to projects and integrations'
-    ),
-    (
-        RANDOM_UUID (),
-        'Developer',
-        'Development access with limited permissions'
-    );
+INSERT INTO roles_v2 (role_id, role_name, org_id, description) VALUES
+(RANDOM_UUID(), 'Super Admin', 1, 'Full access to all resources and permissions'),
+(RANDOM_UUID(), 'Admin', 1, 'Administrative access to projects and integrations'),
+(RANDOM_UUID(), 'Developer', 1, 'Development access with limited permissions'),
+(RANDOM_UUID(), 'Project Admin', 1, 'Administrative access to a specific project'),
+(RANDOM_UUID(), 'Viewer', 1, 'Read-only access with view permissions only');
 
 -- Insert permissions for all domains
 INSERT INTO
@@ -651,16 +603,65 @@ SELECT (
             role_name = 'Developer'
     ), permission_id
 FROM permissions
-WHERE
-    permission_name IN (
-        'integration_mgt:view',
-        'integration_mgt:edit',
-        'environment_mgt:manage_nonprod',
-        'project_mgt:view',
-        'project_mgt:edit',
-        'observability_mgt:view_logs',
-        'observability_mgt:view_insights'
-    );
+WHERE permission_name IN (
+    'integration_mgt:view',
+    'integration_mgt:edit',
+    'environment_mgt:manage_nonprod',
+    'project_mgt:view',
+    'project_mgt:edit',
+    'observability_mgt:view_logs',
+    'observability_mgt:view_insights'
+);
+
+-- Map Project Admin to project-specific admin permissions
+INSERT INTO role_permission_mapping (role_id, permission_id)
+SELECT 
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Project Admin'),
+    permission_id
+FROM permissions
+WHERE permission_name IN (
+    'project_mgt:manage',
+    'integration_mgt:manage',
+    'user_mgt:update_group_roles'
+);
+
+-- Map Viewer to view-only permissions
+INSERT INTO role_permission_mapping (role_id, permission_id)
+SELECT 
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Viewer'),
+    permission_id
+FROM permissions
+WHERE permission_name IN (
+    'integration_mgt:view',
+    'project_mgt:view',
+    'observability_mgt:view_logs',
+    'observability_mgt:view_insights'
+);
+
+-- Insert default admin user (required for group assignments)
+INSERT INTO users (user_id, username, display_name, is_super_admin)
+VALUES ('550e8400-e29b-41d4-a716-446655440000', 'admin', 'System Administrator', TRUE);
+
+-- Create default groups
+INSERT INTO user_groups (group_id, group_name, org_uuid, description) VALUES
+(RANDOM_UUID(), 'Super Admins', 1, 'Group for super administrators with full access'),
+(RANDOM_UUID(), 'Administrators', 1, 'Group for administrators'),
+(RANDOM_UUID(), 'Developers', 1, 'Group for developers');
+
+-- Assign super admin user to Super Admins group
+INSERT INTO group_user_mapping (group_id, user_uuid)
+VALUES (
+    (SELECT group_id FROM user_groups WHERE group_name = 'Super Admins'),
+    '550e8400-e29b-41d4-a716-446655440000'
+);
+
+-- Map Super Admins group to Super Admin role at org level
+INSERT INTO group_role_mapping (group_id, role_id, org_uuid)
+VALUES (
+    (SELECT group_id FROM user_groups WHERE group_name = 'Super Admins'),
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Super Admin'),
+    1
+);
 
 -- ============================================================================
 -- RUNTIMES & ARTIFACTS
@@ -1287,16 +1288,9 @@ CREATE INDEX idx_system_config_updated_at ON system_config (updated_at);
 -- SAMPLE DATA FOR TESTING
 -- ============================================================================
 
--- Insert default organization
-INSERT INTO
-    organizations (org_id, org_name, org_handle)
-VALUES (
-        1,
-        'Default Organization',
-        'default'
-    );
+-- Note: Default organization and super admin user are created in RBAC V2 SEED DATA section above
 
--- Insert a default admin user for testing
+-- Insert additional test users
 INSERT INTO
     users (
         user_id,
@@ -1305,12 +1299,6 @@ INSERT INTO
         is_super_admin
     )
 VALUES (
-        '550e8400-e29b-41d4-a716-446655440000',
-        'admin',
-        'System Administrator',
-        TRUE
-    ),
-    (
         '660e8400-e29b-41d4-a716-446655440002',
         'testuser',
         'Test User for Role Management',
@@ -1437,72 +1425,6 @@ VALUES (
         TRUE,
         'prod',
         '550e8400-e29b-41d4-a716-446655440000'
-    );
-
--- Insert sample roles with format: <project_name>:<env_type>:<privilege_level>
-INSERT INTO
-    roles (
-        role_id,
-        project_id,
-        environment_type,
-        privilege_level,
-        role_name
-    )
-VALUES (
-        '850e8400-e29b-41d4-a716-446655440001',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'non-prod',
-        'admin',
-        'sample_project:non-prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440002',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'non-prod',
-        'developer',
-        'sample_project:non-prod:developer'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440003',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'prod',
-        'admin',
-        'sample_project:prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440004',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'prod',
-        'developer',
-        'sample_project:prod:developer'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440005',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'non-prod',
-        'admin',
-        'sample_project_2:non-prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440006',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'non-prod',
-        'developer',
-        'sample_project_2:non-prod:developer'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440007',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'prod',
-        'admin',
-        'sample_project_2:prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440008',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'prod',
-        'developer',
-        'sample_project_2:prod:developer'
     );
 
 -- Insert sample refresh token for admin user (for testing)

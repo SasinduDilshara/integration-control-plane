@@ -57,82 +57,59 @@ public isolated function getRuntimes(string? status, string? runtimeType, string
     return runtimeList;
 }
 
-// Get all runtimes for multiple project+environment combinations (RBAC-aware batch query)
-// Updated to work with environment-type-based role model
-public isolated function getRuntimesByAccessibleEnvironments(types:UserContext userContext) returns types:Runtime[]|error {
-    types:RoleInfo[] roles = userContext.roles;
-    // Super admin: return all runtimes without filtering
-    if userContext.isSuperAdmin {
-        types:Runtime[] runtimeList = [];
-        stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(`
-            SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version, 
-                   runtime_hostname, runtime_port,
-                   platform_name, platform_version, platform_home, os_name, os_version, 
-                   carbon_home, java_vendor, java_version, total_memory, free_memory, max_memory, used_memory, os_arch, server_name,
-                   registration_time, last_heartbeat FROM runtimes 
-            ORDER BY registration_time DESC
-        `);
-
-        check from types:RuntimeDBRecord runtime in runtimeStream
-            do {
-                runtimeList.push(check mapToRuntime(runtime));
-            };
-
-        return runtimeList;
-    }
-
-    // Return empty array if no roles provided
-    if roles.length() == 0 {
+// Get runtimes for multiple integrations in a single batch query (optimized for RBAC v2)
+// This eliminates N+1 query pattern by using SQL IN clause
+public isolated function getRuntimesByIntegrationIds(
+    string[] integrationIds,
+    string? status = (),
+    string? runtimeType = (),
+    string? environmentId = (),
+    string? projectId = ()
+) returns types:Runtime[]|error {
+    // Return empty array if no integration IDs provided
+    if integrationIds.length() == 0 {
         return [];
     }
 
-    // Get all environments to determine which ones the user has access to
-    types:Environment[]|error allEnvironments = getEnvironments();
-    if allEnvironments is error {
-        log:printError("Failed to fetch environments for runtime access check", allEnvironments);
-        return [];
-    }
-
-    // Build list of accessible environment IDs based on user's environment type permissions
-    string[] accessibleEnvironmentIds = [];
-    foreach types:Environment env in allEnvironments {
-        final types:EnvironmentType envType = env.critical ? types:PROD : types:NON_PROD;
-
-        // Check if user has any role for this environment type
-        boolean hasAccess = roles.some(isolated function(types:RoleInfo role) returns boolean {
-            return role.environmentType == envType;
-        });
-
-        if hasAccess {
-            accessibleEnvironmentIds.push(env.id);
-        }
-    }
-
-    // Return empty array if no accessible environments
-    if accessibleEnvironmentIds.length() == 0 {
-        return [];
-    }
-
-    // Build WHERE clause for accessible environments
-    sql:ParameterizedQuery whereClause = ` WHERE environment_id IN (`;
-    foreach int i in 0 ..< accessibleEnvironmentIds.length() {
+    types:Runtime[] runtimeList = [];
+    
+    // Build WHERE clause with IN condition for component_id
+    sql:ParameterizedQuery whereClause = ` WHERE 1=1 `;
+    sql:ParameterizedQuery whereConditions = ` `;
+    
+    // Add component_id IN clause
+    sql:ParameterizedQuery inClause = ` AND component_id IN (`;
+    foreach int i in 0 ..< integrationIds.length() {
         if i > 0 {
-            whereClause = sql:queryConcat(whereClause, `, `);
+            inClause = sql:queryConcat(inClause, `, `);
         }
-        whereClause = sql:queryConcat(whereClause, `${accessibleEnvironmentIds[i]}`);
+        inClause = sql:queryConcat(inClause, `${integrationIds[i]}`);
     }
-    whereClause = sql:queryConcat(whereClause, `) `);
-
-    // Build the complete query
+    inClause = sql:queryConcat(inClause, `) `);
+    whereConditions = sql:queryConcat(whereConditions, inClause);
+    
+    // Add optional filters
+    if status is string {
+        whereConditions = sql:queryConcat(whereConditions, ` AND status = ${status} `);
+    }
+    if runtimeType is string {
+        whereConditions = sql:queryConcat(whereConditions, ` AND runtime_type = ${runtimeType} `);
+    }
+    if environmentId is string {
+        whereConditions = sql:queryConcat(whereConditions, ` AND environment_id = ${environmentId} `);
+    }
+    if projectId is string {
+        whereConditions = sql:queryConcat(whereConditions, ` AND project_id = ${projectId} `);
+    }
+    
     sql:ParameterizedQuery selectClause = ` SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version, 
                  runtime_hostname, runtime_port,
                  platform_name, platform_version, platform_home, os_name, os_version, 
                  carbon_home, java_vendor, java_version, total_memory, free_memory, max_memory, used_memory, os_arch, server_name,
                  registration_time, last_heartbeat FROM runtimes `;
-    sql:ParameterizedQuery orderByClause = ` ORDER BY registration_time DESC`;
-    sql:ParameterizedQuery query = sql:queryConcat(selectClause, whereClause, orderByClause);
-
-    types:Runtime[] runtimeList = [];
+    sql:ParameterizedQuery orderByClause = ` ORDER BY registration_time DESC `;
+    sql:ParameterizedQuery query = sql:queryConcat(selectClause, whereClause, whereConditions, orderByClause);
+    
     stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(query);
 
     check from types:RuntimeDBRecord runtime in runtimeStream
@@ -140,7 +117,6 @@ public isolated function getRuntimesByAccessibleEnvironments(types:UserContext u
             runtimeList.push(check mapToRuntime(runtime));
         };
 
-    log:printDebug(string `Found ${runtimeList.length()} runtimes for ${accessibleEnvironmentIds.length()} accessible environments`);
     return runtimeList;
 }
 

@@ -14,9 +14,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.auth;
 import icp_server.storage as storage;
 import icp_server.types as types;
-import icp_server.utils;
+import icp_server.utils as utils;
 
 import ballerina/http;
 import ballerina/jwt;
@@ -100,7 +101,7 @@ service /auth on httpListener {
             if userDetails is sql:NoRowsError {
                 // New user
                 log:printInfo(string `User ${username} authenticated but not found in users table, creating user record`);
-                error? createResult = storage:createUser(userId, username, displayName);
+                json|error? createResult = storage:createUserV2(userId, username, displayName, []);
                 if createResult is error {
                     log:printError("Error creating user in database", createResult, username = username);
                     return utils:createInternalServerError("Error creating user record");
@@ -113,23 +114,17 @@ service /auth on httpListener {
                     return utils:createInternalServerError("Error getting user details");
                 }
 
-                //TODO Handle roles for new users
             } else {
                 log:printError("Error getting user details", userDetails);
                 return utils:createInternalServerError("Error getting user details");
             }
         }
 
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
-        if userRoles is error {
-            log:printError("Error getting user roles", userRoles);
-            return utils:createInternalServerError("Error getting user roles");
-        }
-
-        // Generate JWT token using utility function
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate JWT token using V2 utility function with permissions
+        string|error jwtToken = auth:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -141,10 +136,17 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error generating JWT token");
         }
 
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
+        }
+
         // Generate refresh token
-        string refreshToken = utils:generateRefreshToken();
-        string tokenId = utils:generateTokenId();
-        string tokenHash = utils:hashRefreshToken(refreshToken);
+        string refreshToken = auth:generateRefreshToken();
+        string tokenId = auth:generateTokenId();
+        string tokenHash = auth:hashRefreshToken(refreshToken);
 
         // Extract user agent and IP address from request
         string|http:HeaderNotFoundError userAgentHeader = req.getHeader("User-Agent");
@@ -173,7 +175,7 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error storing refresh token");
         }
 
-        log:printInfo("Login successful for user", username = username, isSuperAdmin = userDetails.isSuperAdmin, isProjectAuthor = userDetails.isProjectAuthor);
+        log:printInfo("Login successful for user", username = username, permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
@@ -182,9 +184,7 @@ service /auth on httpListener {
                 refreshTokenExpiresIn: refreshTokenExpiryTime,
                 username: username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor,
+                permissions: userPermissions,
                 isOidcUser: false
             }
         };
@@ -211,7 +211,7 @@ service /auth on httpListener {
         }
 
         // Exchange authorization code for tokens
-        types:OIDCTokenResponse|http:Unauthorized|http:InternalServerError tokenResponse = utils:exchangeCodeForTokens(request.code, ssoConfig);
+        types:OIDCTokenResponse|http:Unauthorized|http:InternalServerError tokenResponse = auth:exchangeCodeForTokens(request.code, ssoConfig);
 
         if tokenResponse is http:Unauthorized|http:InternalServerError {
             return tokenResponse;
@@ -221,14 +221,14 @@ service /auth on httpListener {
 
         // Decode and validate ID token
         types:OIDCIdTokenClaims|http:Unauthorized|http:InternalServerError claims =
-            utils:decodeAndValidateIdToken(tokenResponse.id_token, ssoConfig);
+            auth:decodeAndValidateIdToken(tokenResponse.id_token, ssoConfig);
 
         if claims is http:Unauthorized|http:InternalServerError {
             return claims;
         }
 
         // Extract user information
-        types:ExtractedUserInfo|http:InternalServerError userInfo = utils:extractUserInfo(claims, ssoConfig);
+        types:ExtractedUserInfo|http:InternalServerError userInfo = auth:extractUserInfo(claims, ssoConfig);
 
         if userInfo is http:InternalServerError {
             return userInfo;
@@ -243,7 +243,7 @@ service /auth on httpListener {
                         userId = userInfo.userId,
                         username = userInfo.username);
 
-                error? createResult = storage:createUser(userInfo.userId, userInfo.username, userInfo.displayName);
+                json|error? createResult = storage:createUserV2(userInfo.userId, userInfo.username, userInfo.displayName, []);
                 if createResult is error {
                     log:printError("Error creating OIDC user in database", createResult,
                             username = userInfo.username);
@@ -262,17 +262,11 @@ service /auth on httpListener {
             }
         }
 
-        // Fetch user roles
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
-        if userRoles is error {
-            log:printError("Error getting user roles for OIDC user", userRoles);
-            return utils:createInternalServerError("Error getting user roles");
-        }
-
-        // Generate JWT token using utility function
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate JWT token using V2 utility function with permissions
+        string|error jwtToken = auth:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -284,10 +278,17 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error generating JWT token");
         }
 
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions for OIDC user", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
+        }
+
         // Generate refresh token
-        string refreshToken = utils:generateRefreshToken();
-        string tokenId = utils:generateTokenId();
-        string tokenHash = utils:hashRefreshToken(refreshToken);
+        string refreshToken = auth:generateRefreshToken();
+        string tokenId = auth:generateTokenId();
+        string tokenHash = auth:hashRefreshToken(refreshToken);
 
         // Extract user agent and IP address from request
         string|http:HeaderNotFoundError userAgentHeader = req.getHeader("User-Agent");
@@ -317,7 +318,7 @@ service /auth on httpListener {
         }
 
         // Return login response
-        log:printInfo("OIDC login successful", username = userInfo.username, isSuperAdmin = userDetails.isSuperAdmin, isProjectAuthor = userDetails.isProjectAuthor);
+        log:printInfo("OIDC login successful", username = userInfo.username, permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
@@ -326,9 +327,7 @@ service /auth on httpListener {
                 refreshTokenExpiresIn: refreshTokenExpiryTime,
                 username: userInfo.username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor,
+                permissions: userPermissions,
                 isOidcUser: true
             }
         };
@@ -349,38 +348,28 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function post 'renew\-token(@http:Header {name: http:AUTH_HEADER} string? authHeader) returns http:Ok|http:Unauthorized|http:InternalServerError {
+    isolated resource function post 'renew\-token(http:Request req) returns http:Ok|http:Unauthorized|http:InternalServerError {
         log:printInfo("Token renewal requested");
 
-        if authHeader is () {
-            log:printError("Authorization header missing in token renewal request");
-            return utils:createUnauthorizedError("Authorization header required");
-        }
-
-        // Extract user context from current token
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
+        // Extract user context from current token (V2)
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
         if userContext is error {
             log:printError("Failed to extract user context for token renewal", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
         }
 
-        // Fetch latest user details and roles from database
+        // Fetch latest user details from database
         types:User|error userDetails = storage:getUserDetailsById(userContext.userId);
         if userDetails is error {
             log:printError("Error fetching user details for token renewal", userDetails, userId = userContext.userId);
             return utils:createInternalServerError("Failed to fetch user details");
         }
 
-        types:Role[]|error userRoles = storage:getUserRoles(userContext.userId);
-        if userRoles is error {
-            log:printError("Error fetching user roles for token renewal", userRoles, userId = userContext.userId);
-            return utils:createInternalServerError("Failed to fetch user roles");
-        }
-
-        // Generate JWT token using utility function
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate JWT token using V2 utility function with fresh permissions
+        string|error jwtToken = auth:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -392,16 +381,21 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error generating JWT token");
         }
 
-        log:printInfo("Token renewed successfully", username = userDetails.username, roleCount = userRoles.length());
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions for token renewal", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
+        }
+
+        log:printInfo("Token renewed successfully", username = userDetails.username, permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
                 expiresIn: defaultTokenExpiryTime,
                 username: userDetails.username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor
+                permissions: userPermissions
             }
         };
     }
@@ -418,7 +412,7 @@ service /auth on httpListener {
         }
 
         // Hash the provided refresh token to compare with stored hash
-        string tokenHash = utils:hashRefreshToken(request.refreshToken);
+        string tokenHash = auth:hashRefreshToken(request.refreshToken);
 
         // Validate refresh token and get user details
         types:User|error userDetails = storage:validateRefreshToken(tokenHash);
@@ -427,17 +421,11 @@ service /auth on httpListener {
             return utils:createUnauthorizedError("Invalid or expired refresh token");
         }
 
-        // Fetch user roles
-        types:Role[]|error userRoles = storage:getUserRoles(userDetails.userId);
-        if userRoles is error {
-            log:printError("Error fetching user roles for refresh token", userRoles, userId = userDetails.userId);
-            return utils:createInternalServerError("Failed to fetch user roles");
-        }
-
-        // Generate new JWT access token
-        string|error jwtToken = utils:generateJWTToken(
-                userDetails,
-                userRoles,
+        // Generate new JWT access token using V2 with permissions
+        string|error jwtToken = auth:generateJWTTokenV2(
+                userDetails.userId,
+                userDetails.username,
+                userDetails.displayName,
                 frontendJwtIssuer,
                 defaultTokenExpiryTime,
                 frontendJwtAudience,
@@ -449,11 +437,19 @@ service /auth on httpListener {
             return utils:createInternalServerError("Error generating JWT token");
         }
 
+        // Get user permissions for response
+        string[]|error userPermissions = auth:getUserPermissionNames(userDetails.userId);
+        if userPermissions is error {
+            log:printError("Error getting user permissions for refresh token", userPermissions, userId = userDetails.userId);
+            return utils:createInternalServerError("Error getting user permissions");
+        }
+
         // If rotation is disabled, return response with same refresh token
         if !enableRefreshTokenRotation {
             log:printInfo("Token refreshed without rotation",
                     username = userDetails.username,
-                    userId = userDetails.userId);
+                    userId = userDetails.userId,
+                    permissionCount = userPermissions.length());
             return <http:Ok>{
                 body: {
                     token: jwtToken,
@@ -462,17 +458,15 @@ service /auth on httpListener {
                     refreshTokenExpiresIn: refreshTokenExpiryTime,
                     username: userDetails.username,
                     displayName: userDetails.displayName,
-                    roles: userRoles,
-                    isSuperAdmin: userDetails.isSuperAdmin,
-                    isProjectAuthor: userDetails.isProjectAuthor
+                    permissions: userPermissions
                 }
             };
         }
 
         // Rotation is enabled - generate new refresh token
-        string newRefreshToken = utils:generateRefreshToken();
-        string newTokenId = utils:generateTokenId();
-        string newTokenHash = utils:hashRefreshToken(newRefreshToken);
+        string newRefreshToken = auth:generateRefreshToken();
+        string newTokenId = auth:generateTokenId();
+        string newTokenHash = auth:hashRefreshToken(newRefreshToken);
 
         // Extract user agent and IP address from request
         string|http:HeaderNotFoundError userAgentHeader = req.getHeader("User-Agent");
@@ -510,7 +504,8 @@ service /auth on httpListener {
 
         log:printInfo("Token refreshed with rotation",
                 username = userDetails.username,
-                userId = userDetails.userId);
+                userId = userDetails.userId,
+                permissionCount = userPermissions.length());
         return <http:Ok>{
             body: {
                 token: jwtToken,
@@ -519,9 +514,7 @@ service /auth on httpListener {
                 refreshTokenExpiresIn: refreshTokenExpiryTime,
                 username: userDetails.username,
                 displayName: userDetails.displayName,
-                roles: userRoles,
-                isSuperAdmin: userDetails.isSuperAdmin,
-                isProjectAuthor: userDetails.isProjectAuthor
+                permissions: userPermissions
             }
         };
     }
@@ -541,16 +534,11 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function post 'revoke\-token(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:RevokeTokenRequest request) returns http:Ok|http:Unauthorized|http:BadRequest|http:InternalServerError {
+    isolated resource function post 'revoke\-token(http:Request req, types:RevokeTokenRequest request) returns http:Ok|http:Unauthorized|http:BadRequest|http:InternalServerError {
         log:printInfo("Token revocation requested");
 
-        if authHeader is () {
-            log:printError("Authorization header missing in revoke token request");
-            return utils:createUnauthorizedError("Authorization header required");
-        }
-
         // Extract user context from current JWT
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
         if userContext is error {
             log:printError("Failed to extract user context for token revocation", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
@@ -566,7 +554,7 @@ service /auth on httpListener {
             }
 
             // Hash the refresh token to match database storage
-            string tokenHash = utils:hashRefreshToken(refreshToken);
+            string tokenHash = auth:hashRefreshToken(refreshToken);
 
             // Revoke the specific refresh token
             error? revokeResult = storage:revokeRefreshToken(tokenHash);
@@ -623,7 +611,7 @@ service /auth on httpListener {
         }
 
         // Build authorization URL with state parameter for CSRF protection
-        string|error authorizationUrl = utils:buildAuthorizationUrl(ssoConfig, state);
+        string|error authorizationUrl = auth:buildAuthorizationUrl(ssoConfig, state);
         if authorizationUrl is error {
             log:printError("Error building authorization URL", authorizationUrl);
             return utils:createInternalServerError("Failed to generate authorization URL");
@@ -637,7 +625,8 @@ service /auth on httpListener {
         };
     }
 
-    // Get all users with their roles (filtered by shared project access where caller is admin)
+    // RBAC v2: Group Management Endpoints
+    // Get all groups for an organization
     @http:ResourceConfig {
         auth: [
             {
@@ -647,70 +636,37 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
             }
         ]
     }
-    isolated resource function get users(@http:Header {name: http:AUTH_HEADER} string? authHeader) returns http:Ok|http:Unauthorized|http:InternalServerError {
-        log:printInfo("Fetching users with RBAC filtering");
+    isolated resource function get orgs/[string orgHandle]/groups() returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Fetching groups for organization", orgHandle = orgHandle);
 
-        if authHeader is () {
-            log:printError("Authorization header missing in request");
-            return utils:createUnauthorizedError("Authorization header required");
+        // Resolve org handle to org ID
+        // TODO : use when multiple tenants are supported
+        // int|error orgId = storage:getOrgIdByHandle(orgHandle);
+        // if orgId is error {
+        //     log:printWarn("Invalid or unknown organization handle", orgHandle = orgHandle, 'error = orgId);
+        //     return utils:createBadRequestError("Invalid or unknown organization");
+        // }
+
+        // Fetch all groups for the organization
+        // TODO: use orgId when multiple tenants are supported
+        types:Group[]|error groups = storage:getGroupsByOrgId(storage:DEFAULT_ORG_ID);
+        if groups is error {
+            log:printError("Error fetching groups", groups, orgHandle = orgHandle);
+            return utils:createInternalServerError("Failed to fetch groups");
         }
 
-        // Extract user context for RBAC
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
-        if userContext is error {
-            log:printError("Failed to extract user context", userContext);
-            return utils:createUnauthorizedError("Invalid authorization token");
-        }
-
-        types:UserWithRoles[]|error users;
-
-        // Super admins can see ALL users (including those without any roles/projects)
-        if userContext.isSuperAdmin {
-            log:printInfo("Super admin fetching all users", userId = userContext.userId);
-            users = storage:getAllUsers();
-            if users is error {
-                log:printError("Error fetching all users for super admin", users);
-                return utils:createInternalServerError("Failed to fetch users");
-            }
-
-            log:printInfo(string `Successfully fetched ${users.length()} users for super admin`,
-                    userId = userContext.userId);
-            return <http:Ok>{
-                body: users
-            };
-        }
-
-        // Get projects where the user is an admin (using utility function)
-        string[] adminProjectIds = utils:getAdminProjectIds(userContext);
-
-        // If user is not admin in any project, return empty list
-        if adminProjectIds.length() == 0 {
-            log:printInfo("User is not admin in any project, returning empty user list", userId = userContext.userId);
-            return <http:Ok>{
-                body: []
-            };
-        }
-
-        // Fetch users who have roles in projects where the caller is admin
-        users = storage:getUsersByProjectIds(adminProjectIds);
-        if users is error {
-            log:printError("Error fetching users", users);
-            return utils:createInternalServerError("Failed to fetch users");
-        }
-
-        log:printInfo(string `Successfully fetched ${users.length()} users for admin projects`,
-                userId = userContext.userId,
-                adminProjectCount = adminProjectIds.length());
+        log:printInfo(string `Successfully fetched ${groups.length()} groups`, orgHandle = orgHandle);
         return <http:Ok>{
-            body: users
+            body: groups
         };
     }
 
-    // Create a new user with credentials
+    // POST /auth/orgs/{orgHandle}/groups - Create a new group
     @http:ResourceConfig {
         auth: [
             {
@@ -720,443 +676,1187 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
             }
         ]
     }
-    isolated resource function post users(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:CreateUserInput request) returns http:Created|http:BadRequest|http:Unauthorized|http:InternalServerError {
-        log:printInfo("Creating new user", username = request.username);
+    isolated resource function post orgs/[string orgHandle]/groups(@http:Payload types:GroupInput groupInput) returns http:Created|http:BadRequest|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Creating new group", orgHandle = orgHandle, groupName = groupInput.groupName);
 
-        // Extract user context for RBAC
-        if authHeader is () {
-            log:printError("Authorization header missing in request");
-            return utils:createUnauthorizedError("Authorization header required");
+        // Resolve org handle to org ID
+        // TODO: use when multiple tenants are supported
+        // int|error orgId = storage:getOrgIdByHandle(orgHandle);
+        // if orgId is error {
+        //     log:printWarn("Invalid or unknown organization handle", orgHandle = orgHandle, 'error = orgId);
+        //     return utils:createBadRequestError("Invalid or unknown organization");
+        // }
+
+        // Set org ID in the input (default to 1 for now)
+        types:GroupInput inputWithOrg = {
+            groupName: groupInput.groupName,
+            description: groupInput.description,
+            orgUuid: storage:DEFAULT_ORG_ID
+        };
+
+        // Create the group
+        string|error groupId = storage:createGroup(inputWithOrg);
+        if groupId is error {
+            log:printError("Error creating group", groupId, groupName = groupInput.groupName);
+            return utils:createInternalServerError("Failed to create group");
         }
 
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
-        if userContext is error {
-            log:printError("Failed to extract user context", userContext);
-            return utils:createUnauthorizedError("Invalid authorization token");
+        // Fetch the created group
+        types:Group|error createdGroup = storage:getGroupById(groupId);
+        if createdGroup is error {
+            log:printError("Error fetching created group", createdGroup, groupId = groupId);
+            return utils:createInternalServerError("Group created but failed to fetch details");
         }
 
-        // Only super admins can create users
-        if !userContext.isSuperAdmin {
-            log:printWarn("Non-super-admin attempted to create user",
-                    callingUser = userContext.userId,
-                    targetUsername = request.username);
-            return utils:createUnauthorizedError("Super admin access required to create users");
+        log:printInfo("Successfully created group", groupId = groupId, groupName = groupInput.groupName);
+        return <http:Created>{
+            body: createdGroup
+        };
+    }
+
+    // GET /auth/orgs/{orgHandle}/groups/{groupId} - Get group details
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
+            }
+        ]
+    }
+    isolated resource function get orgs/[string orgHandle]/groups/[string groupId]() returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Fetching group details", orgHandle = orgHandle, groupId = groupId);
+
+        // Fetch group by ID
+        types:Group|error group = storage:getGroupById(groupId);
+        if group is error {
+            log:printWarn("Group not found", groupId = groupId, 'error = group);
+            return <http:NotFound>{
+                body: {
+                    message: "Group not found"
+                }
+            };
         }
+
+        log:printInfo("Successfully fetched group details", groupId = groupId);
+        return <http:Ok>{
+            body: group
+        };
+    }
+
+    // PUT /auth/orgs/{orgHandle}/groups/{groupId} - Update group
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
+            }
+        ]
+    }
+    isolated resource function put orgs/[string orgHandle]/groups/[string groupId](@http:Payload types:GroupInput groupInput) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Updating group", orgHandle = orgHandle, groupId = groupId);
+
+        // Update the group
+        error? updateResult = storage:updateGroup(groupId, groupInput);
+        if updateResult is error {
+            log:printError("Error updating group", updateResult, groupId = groupId);
+            if updateResult.message().includes("not found") {
+                return <http:NotFound>{
+                    body: {
+                        message: "Group not found"
+                    }
+                };
+            }
+            return utils:createInternalServerError("Failed to update group");
+        }
+
+        // Fetch the updated group
+        types:Group|error updatedGroup = storage:getGroupById(groupId);
+        if updatedGroup is error {
+            log:printError("Error fetching updated group", updatedGroup, groupId = groupId);
+            return utils:createInternalServerError("Group updated but failed to fetch details");
+        }
+
+        log:printInfo("Successfully updated group", groupId = groupId);
+        return <http:Ok>{
+            body: updatedGroup
+        };
+    }
+
+    // DELETE /auth/orgs/{orgHandle}/groups/{groupId} - Delete group
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS]
+            }
+        ]
+    }
+    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId]() returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Deleting group", orgHandle = orgHandle, groupId = groupId);
+
+        // TODO: Check if group has members or role assignments
+        // For now, delete will cascade due to foreign key constraints
+
+        // Delete the group
+        error? deleteResult = storage:deleteGroup(groupId);
+        if deleteResult is error {
+            log:printError("Error deleting group", deleteResult, groupId = groupId);
+            if deleteResult.message().includes("not found") {
+                return <http:NotFound>{
+                    body: {
+                        message: "Group not found"
+                    }
+                };
+            }
+            return utils:createInternalServerError("Failed to delete group");
+        }
+
+        log:printInfo("Successfully deleted group", groupId = groupId);
+        return <http:Ok>{
+            body: {
+                message: "Group deleted successfully",
+                groupId: groupId
+            }
+        };
+    }
+
+    // ============================================================================
+    // Group-User Mapping Endpoints (RBAC v2)
+    // ============================================================================
+
+    // POST /auth/orgs/{orgHandle}/groups/{groupId}/users - Add users to group
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
+            }
+        ]
+    }
+    isolated resource function post orgs/[string orgHandle]/groups/[string groupId]/users(types:AddUsersToGroupInput input) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Adding users to group", orgHandle = orgHandle, groupId = groupId, userCount = input.userIds.length());
 
         // Validate input
-        if request.username.trim().length() == 0 {
+        if input.userIds.length() == 0 {
+            return <http:BadRequest>{
+                body: {
+                    message: "At least one user ID must be provided"
+                }
+            };
+        }
+
+        // Verify group exists
+        types:Group|error existingGroup = storage:getGroupById(groupId);
+        if existingGroup is error {
+            log:printError("Group not found", existingGroup, groupId = groupId);
+            return <http:NotFound>{
+                body: {
+                    message: "Group not found"
+                }
+            };
+        }
+
+        // Add each user to the group
+        int successCount = 0;
+        int failureCount = 0;
+        string[] errors = [];
+
+        foreach string userId in input.userIds {
+            error? addResult = storage:addUserToGroup(userId, groupId);
+            if addResult is error {
+                failureCount += 1;
+                errors.push(string `Failed to add user ${userId}: ${addResult.message()}`);
+                log:printError(string `Error adding user ${userId} to group ${groupId}`, addResult);
+            } else {
+                successCount += 1;
+            }
+        }
+
+        log:printInfo("Users added to group", groupId = groupId, successCount = successCount, failureCount = failureCount);
+
+        if failureCount > 0 && successCount == 0 {
+            // All operations failed
+            return utils:createInternalServerError(string `Failed to add all users to group: ${errors[0]}`);
+        }
+
+        return <http:Ok>{
+            body: {
+                message: string `Successfully added ${successCount} user(s) to group`,
+                groupId: groupId,
+                successCount: successCount,
+                failureCount: failureCount,
+                errors: errors
+            }
+        };
+    }
+
+    // DELETE /auth/orgs/{orgHandle}/groups/{groupId}/users/{userId} - Remove user from group
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
+            }
+        ]
+    }
+    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId]/users/[string userId]() returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Removing user from group", orgHandle = orgHandle, groupId = groupId, userId = userId);
+
+        // Remove user from group
+        error? removeResult = storage:removeUserFromGroup(userId, groupId);
+        if removeResult is error {
+            log:printError("Error removing user from group", removeResult, userId = userId, groupId = groupId);
+            if removeResult.message().includes("not found") {
+                return <http:NotFound>{
+                    body: {
+                        message: "User not found in group"
+                    }
+                };
+            }
+            return utils:createInternalServerError("Failed to remove user from group");
+        }
+
+        log:printInfo("Successfully removed user from group", userId = userId, groupId = groupId);
+        return <http:Ok>{
+            body: {
+                message: "User removed from group successfully",
+                groupId: groupId,
+                userId: userId
+            }
+        };
+    }
+
+    // ============================================================================
+    // Group-Role Mapping Endpoints (RBAC v2)
+    // ============================================================================
+
+    // POST /auth/orgs/{orgHandle}/groups/{groupId}/roles - Assign roles to group with scope
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES]
+            }
+        ]
+    }
+    isolated resource function post orgs/[string orgHandle]/groups/[string groupId]/roles(types:AssignRolesToGroupInput input, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+        log:printInfo("Assigning roles to group", orgHandle = orgHandle, groupId = groupId, roleCount = input.roleIds.length());
+
+        // Extract user context for granular permission checks
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            log:printError("Failed to extract user context for token revocation", userContext);
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+
+        // Note: Basic permission validation is handled by @http:ResourceConfig scopes
+        // Additional granular checks below ensure user has permissions at the specified scope level
+
+        // Validate input
+        if input.roleIds.length() == 0 {
+            return <http:BadRequest>{
+                body: {
+                    message: "At least one role ID must be provided"
+                }
+            };
+        }
+
+        // Verify group exists
+        types:Group|error existingGroup = storage:getGroupById(groupId);
+        if existingGroup is error {
+            log:printError("Group not found", existingGroup, groupId = groupId);
+            return <http:NotFound>{
+                body: {
+                    message: "Group not found"
+                }
+            };
+        }
+
+        // Validate scope context
+        if input.integrationUuid is string && input.projectUuid is () {
+            return <http:BadRequest>{
+                body: {
+                    message: "projectUuid is required when integrationUuid is provided"
+                }
+            };
+        }
+
+        // Granular permission checks based on scope level
+        // Check user has appropriate permissions at the specified scope
+        types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+        if input.integrationUuid is string {
+            // Integration-level scope - most restrictive
+            string integrationUuid = <string>input.integrationUuid;
+            string projectUuid = <string>input.projectUuid;
+            scope.projectUuid = projectUuid;
+            scope.integrationUuid = integrationUuid;
+        } else if input.projectUuid is string {
+            // Project-level scope
+            string projectUuid = <string>input.projectUuid;
+            scope.projectUuid = projectUuid;
+        } 
+
+        boolean|error canAssign = auth:hasAnyPermission(userContext.userId, 
+            [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS], 
+            scope
+        );
+        if canAssign is error {
+            log:printError("Error checking project scope permissions", canAssign, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        
+        if !canAssign {
+            log:printWarn("User lacks permission to assign roles at this scope", 
+                userId = userContext.userId, projectUuid = input.projectUuid ?: "N/A", integrationUuid = input.integrationUuid ?: "N/A");
+            return <http:Forbidden>{
+                body: {
+                    message: "You do not have permission to assign roles at this scope"
+                }
+            };
+        }
+
+        // Assign each role to the group with the specified scope
+        int successCount = 0;
+        int failureCount = 0;
+        string[] errors = [];
+        int[] mappingIds = [];
+
+        int orgUuid = input.orgUuid ?: 1;
+
+        foreach string roleId in input.roleIds {
+            // Verify role exists
+            types:RoleV2|error role = storage:getRoleV2ById(roleId);
+            if role is error {
+                failureCount += 1;
+                errors.push(string `Role ${roleId} not found`);
+                log:printError(string `Role not found: ${roleId}`, role);
+                continue;
+            }
+
+            // Create assignment input for this role
+            types:AssignRoleToGroupInput assignInput = {
+                groupId: groupId,
+                roleId: roleId,
+                orgUuid: orgUuid,
+                projectUuid: input.projectUuid,
+                envUuid: input.envUuid,
+                integrationUuid: input.integrationUuid
+            };
+
+            // Assign role to group
+            int|error mappingId = storage:assignRoleToGroup(assignInput);
+            if mappingId is error {
+                failureCount += 1;
+                errors.push(string `Failed to assign role ${roleId}: ${mappingId.message()}`);
+                log:printError(string `Error assigning role ${roleId} to group ${groupId}`, mappingId);
+            } else {
+                successCount += 1;
+                mappingIds.push(mappingId);
+            }
+        }
+
+        log:printInfo("Roles assigned to group", groupId = groupId, successCount = successCount, failureCount = failureCount);
+
+        if failureCount > 0 && successCount == 0 {
+            // All operations failed
+            return utils:createInternalServerError(string `Failed to assign all roles to group: ${errors[0]}`);
+        }
+
+        return <http:Ok>{
+            body: {
+                message: string `Successfully assigned ${successCount} role(s) to group`,
+                groupId: groupId,
+                successCount: successCount,
+                failureCount: failureCount,
+                mappingIds: mappingIds,
+                errors: errors
+            }
+        };
+    }
+
+    // DELETE /auth/orgs/{orgHandle}/groups/{groupId}/roles/{mappingId} - Remove role from group
+    @http:ResourceConfig {
+        auth: {
+            scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS]
+        }
+    }
+    resource function delete orgs/[string orgHandle]/groups/[string groupId]/roles/[int mappingId](http:Request req)
+            returns http:Ok|http:NotFound|http:Forbidden|http:InternalServerError|http:Unauthorized|error {
+        
+        log:printInfo("Removing role from group", orgHandle = orgHandle, groupId = groupId, mappingId = mappingId);
+
+        // Extract user context for granular permission checks
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            log:printError("Failed to extract user context for token revocation", userContext);
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+
+        // Verify group exists
+        types:Group|error existingGroup = storage:getGroupById(groupId);
+        if existingGroup is error {
+            log:printWarn("Group not found", groupId = groupId, 'error = existingGroup);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group not found: ${groupId}`
+                }
+            };
+        }
+
+        // Get the mapping to determine its scope for permission validation
+        types:GroupRoleMapping|error mapping = storage:getGroupRoleMappingById(mappingId);
+        if mapping is error {
+            log:printWarn("Group-role mapping not found", mappingId = mappingId, 'error = mapping);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group-role mapping not found: ${mappingId}`
+                }
+            };
+        }
+
+        // Verify the mapping belongs to the specified group
+        if mapping.groupId != groupId {
+            log:printWarn("Mapping does not belong to specified group", 
+                mappingId = mappingId, 
+                mappingGroupId = mapping.groupId, 
+                requestedGroupId = groupId);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group-role mapping ${mappingId} does not belong to group ${groupId}`
+                }
+            };
+        }
+
+        // Granular permission checks based on mapping scope
+        // Check permissions at the scope level of the mapping (integration → project → org)
+        if mapping.integrationUuid is string {
+            // Integration scope - most restrictive
+            string integrationId = <string>mapping.integrationUuid;
+            string projectId = mapping.projectUuid is string ? <string>mapping.projectUuid : "";
+            
+            boolean|error canRemove = auth:canAssignRolesAtIntegrationScope(
+                userContext.userId, 
+                integrationId, 
+                projectId
+            );
+            if canRemove is error {
+                log:printError("Error checking integration scope permissions", canRemove, 
+                    userId = userContext.userId, 
+                    integrationId = integrationId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canRemove {
+                log:printWarn("User lacks permission to remove roles at integration scope", 
+                    userId = userContext.userId, 
+                    integrationId = integrationId);
+                return <http:Forbidden>{
+                    body: {
+                        message: string `You do not have permission to remove roles at integration scope: ${integrationId}`
+                    }
+                };
+            }
+        } else if mapping.projectUuid is string {
+            // Project scope
+            string projectId = <string>mapping.projectUuid;
+            
+            boolean|error canRemove = auth:canAssignRolesAtProjectScope(userContext.userId, projectId);
+            if canRemove is error {
+                log:printError("Error checking project scope permissions", canRemove, 
+                    userId = userContext.userId, 
+                    projectId = projectId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canRemove {
+                log:printWarn("User lacks permission to remove roles at project scope", 
+                    userId = userContext.userId, 
+                    projectId = projectId);
+                return <http:Forbidden>{
+                    body: {
+                        message: string `You do not have permission to remove roles at project scope: ${projectId}`
+                    }
+                };
+            }
+        } else {
+            // Organization scope - least restrictive
+            boolean|error canRemove = auth:canAssignRolesAtOrgScope(userContext.userId);
+            if canRemove is error {
+                log:printError("Error checking org scope permissions", canRemove, userId = userContext.userId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            
+            if !canRemove {
+                log:printWarn("User lacks permission to remove roles at org scope", userId = userContext.userId);
+                return <http:Forbidden>{
+                    body: {
+                        message: "You do not have permission to remove roles at organization scope"
+                    }
+                };
+            }
+        }
+
+        // Remove the role mapping
+        error? result = storage:removeRoleFromGroup(mappingId);
+        if result is error {
+            log:printError(string `Failed to remove role mapping ${mappingId}`, result);
+            return utils:createInternalServerError(string `Failed to remove role from group: ${result.message()}`);
+        }
+
+        log:printInfo("Successfully removed role from group", mappingId = mappingId, groupId = groupId);
+
+        return <http:Ok>{
+            body: {
+                message: string `Successfully removed role from group`,
+                mappingId: mappingId,
+                groupId: groupId
+            }
+        };
+    }
+
+    // GET /auth/orgs/{orgHandle}/groups/{groupId}/roles - List group's role assignments
+    @http:ResourceConfig {
+        auth: {
+            scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
+        }
+    }
+    resource function get orgs/[string orgHandle]/groups/[string groupId]/roles()
+            returns http:Ok|http:NotFound|http:InternalServerError|error {
+        
+        log:printInfo("Fetching role assignments for group", orgHandle = orgHandle, groupId = groupId);
+
+        // Verify group exists
+        types:Group|error existingGroup = storage:getGroupById(groupId);
+        if existingGroup is error {
+            log:printWarn("Group not found", groupId = groupId, 'error = existingGroup);
+            return <http:NotFound>{
+                body: {
+                    message: string `Group not found: ${groupId}`
+                }
+            };
+        }
+
+        // Get all role mappings for this group
+        types:GroupRoleMapping[]|error mappings = storage:getGroupRoleMappings(groupId);
+        if mappings is error {
+            log:printError(string `Failed to fetch role mappings for group ${groupId}`, mappings);
+            return utils:createInternalServerError(string `Failed to fetch role assignments: ${mappings.message()}`);
+        }
+
+        // Enrich mappings with role details
+        json[] enrichedMappings = [];
+        foreach types:GroupRoleMapping mapping in mappings {
+            // Get role details
+            types:RoleV2|error role = storage:getRoleV2ById(mapping.roleId);
+            if role is error {
+                log:printWarn(string `Role not found for mapping ${mapping.id}`, roleId = mapping.roleId);
+                // Skip this mapping if role doesn't exist (orphaned mapping)
+                continue;
+            }
+
+            // Build enriched mapping with role name
+            json enrichedMapping = {
+                id: mapping.id,
+                groupId: mapping.groupId,
+                roleId: mapping.roleId,
+                roleName: role.roleName,
+                roleDescription: role.description,
+                // Scope information
+                orgUuid: mapping.orgUuid,
+                projectUuid: mapping.projectUuid,
+                envUuid: mapping.envUuid,
+                integrationUuid: mapping.integrationUuid,
+                createdAt: mapping.createdAt
+            };
+
+            enrichedMappings.push(enrichedMapping);
+        }
+
+        log:printInfo(string `Found ${enrichedMappings.length()} role assignments for group ${groupId}`);
+
+        return <http:Ok>{
+            body: {
+                groupId: groupId,
+                mappings: enrichedMappings,
+                count: enrichedMappings.length()
+            }
+        };
+    }
+
+    // ============================================================================
+    // User Management Endpoints (RBAC v2)
+    // ============================================================================
+
+    // GET /auth/orgs/{orgHandle}/users - List all users with group memberships
+    @http:ResourceConfig {
+        auth: {
+            scopes: [auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
+        }
+    }
+    resource function get orgs/[string orgHandle]/users()
+            returns http:Ok|http:InternalServerError|error {
+        
+        log:printInfo("Fetching users for organization", orgHandle = orgHandle);
+
+        // Get all users with their group memberships
+        json[]|error users = storage:getAllUsersV2();
+        if users is error {
+            log:printError("Failed to fetch users", users);
+            return utils:createInternalServerError(string `Failed to fetch users: ${users.message()}`);
+        }
+
+        log:printInfo(string `Successfully fetched ${users.length()} users`);
+
+        return <http:Ok>{
+            body: {
+                users: users,
+                count: users.length()
+            }
+        };
+    }
+
+    // POST /auth/orgs/{orgHandle}/users - Create a new user
+    @http:ResourceConfig {
+        auth: {
+            scopes: [auth:PERMISSION_USER_MANAGE_USERS]
+        }
+    }
+    resource function post orgs/[string orgHandle]/users(@http:Payload json payload)
+            returns http:Created|http:BadRequest|http:InternalServerError|error {
+        
+        log:printInfo("Creating new user", orgHandle = orgHandle);
+
+        // Extract and validate payload
+        string username = check payload.username;
+        string password = check payload.password;
+        string displayName = check payload.displayName;
+        
+        // Handle optional groupIds array
+        string[] groupIds = [];
+        json|error groupIdsField = payload.groupIds;
+        if groupIdsField is json[] {
+            groupIds = from var id in groupIdsField select id.toString();
+        }
+
+        // Validate required fields
+        if username.trim().length() == 0 {
             return utils:createBadRequestError("Username is required");
         }
-        if request.displayName.trim().length() == 0 {
-            return utils:createBadRequestError("Display name is required");
-        }
-        if request.password.trim().length() == 0 {
+        if password.trim().length() == 0 {
             return utils:createBadRequestError("Password is required");
         }
+        if displayName.trim().length() == 0 {
+            return utils:createBadRequestError("Display name is required");
+        }
 
-        // Call authentication backend to create user
-        http:Response|error authResponse = authBackendClient->post("/users", request, {
+        // Call auth backend to create user credentials
+        json createUserRequest = {
+            username: username,
+            password: password,
+            displayName: displayName
+        };
+
+        http:Response|error authResponse = authBackendClient->post("/users", createUserRequest, headers = {
             "X-API-Key": authBackendApiKey
         });
 
         if authResponse is error {
-            log:printError("Error calling authentication backend for user creation", authResponse);
-            return utils:createInternalServerError("Authentication service unavailable");
+            log:printError("Failed to create user credentials in auth backend", authResponse);
+            return utils:createInternalServerError("Failed to create user credentials");
         }
 
-        if authResponse.statusCode == http:STATUS_BAD_REQUEST {
-            json|error payload = authResponse.getJsonPayload();
-            if payload is map<json> {
-                json msg = payload["message"];
-                if msg is string {
-                    return utils:createBadRequestError(msg);
-                }
+        if authResponse.statusCode == 400 {
+            json|error errorBody = authResponse.getJsonPayload();
+            if errorBody is json {
+                json|error messageField = errorBody.message;
+                string message = messageField is string ? messageField : "Username already exists";
+                return utils:createBadRequestError(message);
             }
-            return utils:createBadRequestError("Invalid user data");
-        } else if authResponse.statusCode == http:STATUS_UNAUTHORIZED {
-            log:printError("Invalid API key for auth backend while creating user");
-            return utils:createInternalServerError("Invalid API key");
-        } else if authResponse.statusCode != http:STATUS_CREATED {
-            log:printError("Unexpected status from auth backend", status = authResponse.statusCode);
-            return utils:createInternalServerError("Authentication service error");
+            return utils:createBadRequestError("Username already exists");
         }
 
-        // Parse response to get user details
-        json|error successPayload = authResponse.getJsonPayload();
-        if successPayload is error {
-            log:printError("Error parsing auth backend response", successPayload);
-            return utils:createInternalServerError("Failed to parse user creation response");
+        if authResponse.statusCode != 201 {
+            log:printError(string `Auth backend returned error status: ${authResponse.statusCode}`);
+            return utils:createInternalServerError("Failed to create user credentials");
         }
 
-        if successPayload is map<json> {
-            json userIdJson = successPayload["userId"];
-            json usernameJson = successPayload["username"];
-            json displayNameJson = successPayload["displayName"];
+        // Get the created user ID from auth backend response
+        json authResponseBody = check authResponse.getJsonPayload();
+        string userId = check authResponseBody.userId;
 
-            if userIdJson is string && usernameJson is string && displayNameJson is string {
-                // Create user in users table (auth service manages users table)
-                error? createUserResult = storage:createUser(userIdJson, usernameJson, displayNameJson);
-                if createUserResult is error {
-                    log:printError("Error creating user in users table", createUserResult, username = usernameJson);
-                    return utils:createInternalServerError("Failed to create user record");
-                }
-
-                // Get the created user details
-                types:User|error userDetails = storage:getUserDetailsById(userIdJson);
-                if userDetails is error {
-                    log:printError("Error getting created user details", userDetails);
-                    return utils:createInternalServerError("Failed to get user details");
-                }
-
-                log:printInfo("User created successfully by super admin",
-                        username = usernameJson,
-                        userId = userIdJson,
-                        createdBy = userContext.userId);
-                return <http:Created>{body: userDetails};
-            }
+        // Create user in main database with group assignments
+        json|error createdUser = storage:createUserV2(userId, username, displayName, groupIds);
+        if createdUser is error {
+            log:printError("Failed to create user in main database", createdUser);
+            // TODO: Consider cleanup - delete from credentials DB if main DB creation fails
+            return utils:createInternalServerError(string `Failed to create user: ${createdUser.message()}`);
         }
 
-        log:printError("Invalid response format from auth backend");
-        return utils:createInternalServerError("Invalid response from authentication service");
+        log:printInfo(string `Successfully created user: ${username}`);
+
+        return <http:Created>{
+            body: createdUser
+        };
     }
 
-    // Delete a user by ID
+    // DELETE /auth/orgs/{orgHandle}/users/{userId} - Delete a user
     @http:ResourceConfig {
-        auth: [
-            {
-                jwtValidatorConfig: {
-                    issuer: frontendJwtIssuer,
-                    audience: frontendJwtAudience,
-                    signatureConfig: {
-                        secret: defaultJwtHMACSecret
-                    }
-                }
-            }
-        ]
+        auth: {
+            scopes: [auth:PERMISSION_USER_MANAGE_USERS]
+        }
     }
-    isolated resource function delete users/[string userId](@http:Header {name: http:AUTH_HEADER} string? authHeader) returns http:Ok|http:NotFound|http:Forbidden|http:Unauthorized|http:InternalServerError {
-        log:printInfo("Deleting user", userId = userId);
+    resource function delete orgs/[string orgHandle]/users/[string userId](http:Request req)
+            returns http:NoContent|http:Unauthorized|http:Forbidden|http:NotFound|http:InternalServerError|error {
+        
+        log:printInfo("Deleting user", orgHandle = orgHandle, userId = userId);
 
-        // Extract user context for RBAC
-        if authHeader is () {
-            log:printError("Authorization header missing in request");
-            return utils:createUnauthorizedError("Authorization header required");
-        }
-
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
+        // Extract user context for granular permission checks
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
         if userContext is error {
-            log:printError("Failed to extract user context", userContext);
-            return utils:createUnauthorizedError("Invalid authorization token");
+            log:printError("Failed to extract user context for token revocation", userContext);
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
         }
 
-        // Only super admins can delete users
-        if !userContext.isSuperAdmin {
-            log:printWarn("Non-super-admin attempted to delete user",
-                    callingUser = userContext.userId,
-                    targetUserId = userId);
-            return utils:createUnauthorizedError("Super admin access required to delete users");
-        }
-
-        // Super admins cannot delete themselves
-        if userContext.userId == userId {
-            log:printWarn("Super admin attempted to delete their own user account",
-                    userId = userId);
-            return utils:createForbiddenError("You cannot delete your own user account");
-        }
-
-        // Check if user exists
-        types:User|error existingUser = storage:getUserDetailsById(userId);
-        if existingUser is error {
-            if existingUser is sql:NoRowsError {
-                log:printWarn("User not found for deletion", userId = userId);
-                return <http:NotFound>{
-                    body: {
-                        message: "User not found"
-                    }
-                };
-            }
-            log:printError("Error checking user existence", existingUser);
-            return utils:createInternalServerError("Error checking user");
-        }
-
-        // Delete the user
-        error? deleteResult = storage:deleteUserById(userId);
+        // Delete user with safety checks (cannot delete self or system admin)
+        error? deleteResult = storage:deleteUserV2(userId, userContext.userId);
         if deleteResult is error {
-            log:printError("Error deleting user", deleteResult, userId = userId);
-            return utils:createInternalServerError("Failed to delete user");
-        }
-
-        log:printInfo("User deleted successfully by super admin",
-                userId = userId,
-                deletedBy = userContext.userId);
-        return <http:Ok>{
-            body: {
-                message: "User deleted successfully"
+            string errorMsg = deleteResult.message();
+            if errorMsg.includes("system administrator") {
+                log:printWarn(string `Attempted to delete system administrator`, userId = userId);
+                return utils:createForbiddenError("Cannot delete system administrator");
             }
-        };
-    }
-
-    // Update user profile (display name) - users can update their own profile
-    @http:ResourceConfig {
-        auth: [
-            {
-                jwtValidatorConfig: {
-                    issuer: frontendJwtIssuer,
-                    audience: frontendJwtAudience,
-                    signatureConfig: {
-                        secret: defaultJwtHMACSecret
-                    }
-                }
+            if errorMsg.includes("own user account") {
+                log:printWarn(string `User attempted to delete own account`, userId = userId);
+                return utils:createForbiddenError("Cannot delete your own user account");
             }
-        ]
-    }
-    isolated resource function put profile(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:UpdateProfileRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
-        log:printInfo("Updating user profile");
-
-        if authHeader is () {
-            log:printError("Authorization header missing in request");
-            return utils:createUnauthorizedError("Authorization header required");
-        }
-
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
-        if userContext is error {
-            log:printError("Failed to extract user context", userContext);
-            return utils:createUnauthorizedError("Invalid authorization token");
-        }
-
-        // Validate input
-        if request.displayName.trim().length() == 0 {
-            return utils:createBadRequestError("Display name cannot be empty");
-        }
-
-        // Update profile
-        error? updateResult = storage:updateUserProfile(userContext.userId, request.displayName);
-        if updateResult is error {
-            log:printError("Error updating user profile", updateResult, userId = userContext.userId);
-            return utils:createInternalServerError("Failed to update profile");
-        }
-
-        // Fetch updated user details
-        types:User|error updatedUser = storage:getUserDetailsById(userContext.userId);
-        if updatedUser is error {
-            log:printError("Error fetching updated user details", updatedUser);
-            return utils:createInternalServerError("Failed to fetch updated profile");
-        }
-
-        log:printInfo("Profile updated successfully", userId = userContext.userId);
-        return <http:Ok>{
-            body: {
-                message: "Profile updated successfully",
-                user: updatedUser
-            }
-        };
-    }
-
-    // Change password - users can change their own password
-    @http:ResourceConfig {
-        auth: [
-            {
-                jwtValidatorConfig: {
-                    issuer: frontendJwtIssuer,
-                    audience: frontendJwtAudience,
-                    signatureConfig: {
-                        secret: defaultJwtHMACSecret
-                    }
-                }
-            }
-        ]
-    }
-    isolated resource function put password(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:ChangePasswordRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
-        log:printInfo("Changing user password");
-
-        if authHeader is () {
-            log:printError("Authorization header missing in request");
-            return utils:createUnauthorizedError("Authorization header required");
-        }
-
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
-        if userContext is error {
-            log:printError("Failed to extract user context", userContext);
-            return utils:createUnauthorizedError("Invalid authorization token");
-        }
-
-        // Validate input
-        if request.currentPassword.trim().length() == 0 {
-            return utils:createBadRequestError("Current password is required");
-        }
-        if request.newPassword.trim().length() == 0 {
-            return utils:createBadRequestError("New password is required");
-        }
-        if request.newPassword.length() < 6 {
-            return utils:createBadRequestError("New password must be at least 6 characters long");
-        }
-
-        // Call the authentication backend to change password
-        types:ChangePasswordRequest changePasswordRequest = {
-            userId: userContext.userId,
-            currentPassword: request.currentPassword,
-            newPassword: request.newPassword
-        };
-
-        http:Response|error authResponse = authBackendClient->post("/change-password", changePasswordRequest, {
-            "X-API-Key": authBackendApiKey
-        });
-
-        if authResponse is error {
-            log:printError("Error calling authentication backend for password change", authResponse);
-            return utils:createInternalServerError("Authentication service unavailable");
-        }
-
-        // Check status code before parsing response
-        if authResponse.statusCode == http:STATUS_BAD_REQUEST {
-            log:printError("Password change failed - incorrect current password", userId = userContext.userId);
-            return utils:createBadRequestError("Current password is incorrect");
-        } else if authResponse.statusCode == http:STATUS_UNAUTHORIZED {
-            log:printError("Invalid API key", userId = userContext.userId);
-            return utils:createInternalServerError("Invalid API key");
-        } else if authResponse.statusCode != http:STATUS_OK {
-            log:printError("Unexpected status code from authentication backend", statusCode = authResponse.statusCode);
-            return utils:createInternalServerError("Authentication service error");
-        }
-
-        log:printInfo("Password changed successfully", userId = userContext.userId);
-        return <http:Ok>{
-            body: {
-                message: "Password changed successfully"
-            }
-        };
-    }
-
-    // Update user roles
-    @http:ResourceConfig {
-        auth: [
-            {
-                jwtValidatorConfig: {
-                    issuer: frontendJwtIssuer,
-                    audience: frontendJwtAudience,
-                    signatureConfig: {
-                        secret: defaultJwtHMACSecret
-                    }
-                }
-            }
-        ]
-    }
-    isolated resource function put users/[string userId]/roles(@http:Header {name: http:AUTH_HEADER} string? authHeader, types:UpdateUserRolesRequest request) returns http:Ok|http:NotFound|http:BadRequest|http:Unauthorized|http:InternalServerError|error? {
-        log:printInfo("Updating roles for user", userId = userId);
-
-        // Extract user context for RBAC
-        if authHeader is () {
-            log:printError("Authorization header missing in request");
-            return utils:createUnauthorizedError("Authorization header required");
-        }
-
-        types:UserContext|error userContext = utils:extractUserContext(authHeader);
-        if userContext is error {
-            log:printError("Failed to extract user context", userContext);
-            return utils:createUnauthorizedError("Invalid authorization token");
-        }
-
-        // Check if target user exists and get their details
-        types:User|error targetUser = storage:getUserDetailsById(userId);
-        if targetUser is error {
-            if targetUser is sql:NoRowsError {
-                log:printWarn("Target user not found for role update", userId = userId);
+            if errorMsg.includes("not found") {
+                log:printWarn(string `User not found for deletion`, userId = userId);
                 return <http:NotFound>{
                     body: {
-                        message: "User not found"
+                        message: string `User not found: ${userId}`
                     }
                 };
             }
-            log:printError("Error checking target user existence", targetUser);
-            return utils:createInternalServerError("Error checking user");
+            log:printError("Failed to delete user", deleteResult);
+            return utils:createInternalServerError(string `Failed to delete user: ${errorMsg}`);
         }
 
-        // RBAC: Only super admins can edit super admin permissions
-        if targetUser.isSuperAdmin && !userContext.isSuperAdmin {
-            log:printWarn("Non-super-admin attempted to edit super admin permissions",
-                    callingUser = userContext.userId,
-                    targetUser = userId);
-            return utils:createUnauthorizedError("Only super admins can edit super admin permissions");
-        }
+        log:printInfo(string `Successfully deleted user ${userId}`);
 
-        // RBAC: Verify the calling user has admin access to ALL project-environment type pairs being assigned
-        foreach types:RoleAssignment roleAssignment in request.roles {
-            final readonly & types:RoleAssignment roleAssignmentValue = roleAssignment.cloneReadOnly();
-            // Check if user has admin access to this project and environment type
-            boolean hasAdminAccess = userContext.roles.some(isolated function(types:RoleInfo role) returns boolean {
-                return role.projectId == roleAssignmentValue.projectId &&
-                role.environmentType == roleAssignmentValue.environmentType &&
-                role.privilegeLevel == types:ADMIN;
-            });
+        return <http:NoContent>{};
+    }
 
-            if !hasAdminAccess && !userContext.isSuperAdmin {
-                log:printWarn("User attempted to assign role without admin access",
-                        callingUser = userContext.userId,
-                        targetUser = userId,
-                        projectId = roleAssignment.projectId,
-                        environmentType = roleAssignment.environmentType);
-                return utils:createUnauthorizedError(
-                        string `Access denied: You must be an admin in project ${roleAssignment.projectId} and environment type ${roleAssignment.environmentType} to assign roles`
-                );
+    // ============================================================================
+    // Role Management Endpoints (RBAC v2)
+    // ============================================================================
+
+    // GET /auth/orgs/{orgHandle}/roles - List all roles
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
+        ]
+    }
+    isolated resource function get orgs/[string orgHandle]/roles() returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Fetching all roles for organization", orgHandle = orgHandle);
+
+        // Resolve org handle to org ID
+        // TODO: use when multiple tenants are supported
+        // int|error orgId = storage:getOrgIdByHandle(orgHandle);
+        // if orgId is error {
+        //     log:printWarn("Invalid or unknown organization handle", orgHandle = orgHandle, 'error = orgId);
+        //     return utils:createBadRequestError("Invalid or unknown organization");
+        // }
+
+        // Fetch all roles for the organization
+        // TODO: use orgId when multiple tenants are supported
+        types:RoleV2[]|error roles = storage:getAllRolesV2(storage:DEFAULT_ORG_ID);
+        if roles is error {
+            log:printError("Error fetching roles", roles, orgHandle = orgHandle);
+            return utils:createInternalServerError("Failed to fetch roles");
         }
 
-        // RBAC: Only super admins can update isProjectAuthor flag
-        if request?.isProjectAuthor is boolean {
-            if !userContext.isSuperAdmin {
-                log:printWarn("Non-super-admin attempted to update project author flag",
-                        callingUser = userContext.userId,
-                        targetUser = userId);
-                return utils:createUnauthorizedError("Only super admins can update project author permissions");
+        log:printInfo(string `Successfully fetched ${roles.length()} roles`, orgHandle = orgHandle);
+        return <http:Ok>{
+            body: roles
+        };
+    }
+
+    // POST /auth/orgs/{orgHandle}/roles - Create a new role
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
+        ]
+    }
+    isolated resource function post orgs/[string orgHandle]/roles(@http:Payload types:RoleV2Input roleInput) returns http:Created|http:BadRequest|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Creating new role", orgHandle = orgHandle, roleName = roleInput.roleName);
+
+        // Resolve org handle to org ID
+        // TODO: use when multiple tenants are supported
+        // int|error orgId = storage:getOrgIdByHandle(orgHandle);
+        // if orgId is error {
+        //     log:printWarn("Invalid or unknown organization handle", orgHandle = orgHandle, 'error = orgId);
+        //     return utils:createBadRequestError("Invalid or unknown organization");
+        // }
+
+        // Set org ID in the input (default to 1 for now)
+        types:RoleV2Input inputWithOrg = {
+            roleName: roleInput.roleName,
+            description: roleInput.description,
+            orgId: storage:DEFAULT_ORG_ID
+        };
+
+        // Create the role
+        string|error roleId = storage:createRoleV2(inputWithOrg);
+        if roleId is error {
+            log:printError("Error creating role", roleId, roleName = roleInput.roleName);
+            return utils:createInternalServerError("Failed to create role");
         }
 
-        log:printInfo("RBAC check passed for role assignment",
-                callingUser = userContext.userId,
-                targetUser = userId,
-                roleCount = request.roles.length());
-
-        // Validate role assignments
-        if request.roles.length() == 0 {
-            log:printDebug("Removing all roles for user", userId = userId);
+        // Fetch the created role
+        types:RoleV2|error createdRole = storage:getRoleV2ById(roleId);
+        if createdRole is error {
+            log:printError("Error fetching created role", createdRole, roleId = roleId);
+            return utils:createInternalServerError("Role created but failed to fetch details");
         }
 
-        // Update isProjectAuthor flag if provided (and super admin has approved)
-        if request?.isProjectAuthor is boolean {
-            boolean isProjectAuthor = check request?.isProjectAuthor.ensureType();
-            error? updateAuthorResult = storage:updateUserProjectAuthor(userId, isProjectAuthor);
-            if updateAuthorResult is error {
-                log:printError("Error updating user project author flag", updateAuthorResult, userId = userId);
-                return utils:createInternalServerError("Failed to update project author permission");
+        log:printInfo("Successfully created role", roleId = roleId, roleName = roleInput.roleName);
+        return <http:Created>{
+            body: createdRole
+        };
+    }
+
+    // GET /auth/orgs/{orgHandle}/roles/{roleId} - Get role details with permissions
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
             }
-            log:printInfo("Updated project author flag", userId = userId, isProjectAuthor = request?.isProjectAuthor);
+        ]
+    }
+    isolated resource function get orgs/[string orgHandle]/roles/[string roleId]() returns http:Ok|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Fetching role details", orgHandle = orgHandle, roleId = roleId);
+
+        // Fetch role by ID
+        types:RoleV2|error role = storage:getRoleV2ById(roleId);
+        if role is error {
+            log:printWarn("Role not found", roleId = roleId, 'error = role);
+            return <http:NotFound>{
+                body: {
+                    message: "Role not found"
+                }
+            };
         }
 
-        // Update roles
-        error? updateResult = storage:updateUserRoles(userId, request.roles);
+        // Fetch role permissions
+        types:Permission[]|error permissions = storage:getRolePermissions(roleId);
+        if permissions is error {
+            log:printError("Error fetching role permissions", permissions, roleId = roleId);
+            return utils:createInternalServerError("Failed to fetch role permissions");
+        }
+
+        // Build response with role and permissions
+        types:RoleV2WithPermissions roleWithPermissions = {
+            roleId: role.roleId,
+            roleName: role.roleName,
+            orgId: role.orgId,
+            description: role.description,
+            createdAt: role.createdAt,
+            updatedAt: role.updatedAt,
+            permissions: permissions
+        };
+
+        log:printInfo("Successfully fetched role details", roleId = roleId);
+        return <http:Ok>{
+            body: roleWithPermissions
+        };
+    }
+
+    // PUT /auth/orgs/{orgHandle}/roles/{roleId} - Update role
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
+            }
+        ]
+    }
+    isolated resource function put orgs/[string orgHandle]/roles/[string roleId](@http:Payload types:RoleV2Input roleInput) returns http:Ok|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Updating role", orgHandle = orgHandle, roleId = roleId);
+
+        // Update the role
+        error? updateResult = storage:updateRoleV2(roleId, roleInput);
         if updateResult is error {
-            log:printError("Error updating user roles", updateResult, userId = userId);
-            return utils:createInternalServerError("Failed to update user roles");
+            log:printError("Error updating role", updateResult, roleId = roleId);
+            if updateResult.message().includes("not found") {
+                return <http:NotFound>{
+                    body: {
+                        message: "Role not found"
+                    }
+                };
+            }
+            return utils:createInternalServerError("Failed to update role");
         }
 
-        // Fetch updated user with roles
-        types:Role[]|error updatedRoles = storage:getUserRoles(userId);
-        if updatedRoles is error {
-            log:printError("Error fetching updated roles", updatedRoles);
-            return utils:createInternalServerError("Failed to fetch updated roles");
+        // Fetch the updated role
+        types:RoleV2|error updatedRole = storage:getRoleV2ById(roleId);
+        if updatedRole is error {
+            log:printError("Error fetching updated role", updatedRole, roleId = roleId);
+            return utils:createInternalServerError("Role updated but failed to fetch details");
         }
 
-        log:printInfo("User roles updated successfully", userId = userId, callingUser = userContext.userId);
+        log:printInfo("Successfully updated role", roleId = roleId);
+        return <http:Ok>{
+            body: updatedRole
+        };
+    }
+
+    // DELETE /auth/orgs/{orgHandle}/roles/{roleId} - Delete role
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_ROLES]
+            }
+        ]
+    }
+    isolated resource function delete orgs/[string orgHandle]/roles/[string roleId]() returns http:Ok|http:NotFound|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Deleting role", orgHandle = orgHandle, roleId = roleId);
+
+        // TODO: Check if role is assigned to any groups
+        // For now, delete will cascade due to foreign key constraints
+
+        // Delete the role
+        error? deleteResult = storage:deleteRoleV2(roleId);
+        if deleteResult is error {
+            log:printError("Error deleting role", deleteResult, roleId = roleId);
+            if deleteResult.message().includes("not found") {
+                return <http:NotFound>{
+                    body: {
+                        message: "Role not found"
+                    }
+                };
+            }
+            return utils:createInternalServerError("Failed to delete role");
+        }
+
+        log:printInfo("Successfully deleted role", roleId = roleId);
         return <http:Ok>{
             body: {
-                message: "User roles updated successfully",
-                roles: updatedRoles
+                message: "Role deleted successfully",
+                roleId: roleId
             }
         };
     }
+
+    // ============================================================================
+    // Permission Endpoints (RBAC v2)
+    // ============================================================================
+
+    // GET /auth/permissions - List all available permissions
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+                // No specific scopes required - all authenticated users can see available permissions
+            }
+        ]
+    }
+    isolated resource function get permissions() returns http:Ok|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Fetching all available permissions");
+
+        // Fetch all permissions
+        types:Permission[]|error permissions = storage:getAllPermissions();
+        if permissions is error {
+            log:printError("Error fetching permissions", permissions);
+            return utils:createInternalServerError("Failed to fetch permissions");
+        }
+
+        // Group permissions by domain for easier consumption
+        map<types:Permission[]> groupedPermissions = {};
+        foreach types:Permission permission in permissions {
+            string domain = permission.permissionDomain.toString();
+            if !groupedPermissions.hasKey(domain) {
+                groupedPermissions[domain] = [];
+            }
+            types:Permission[]? domainPerms = groupedPermissions[domain];
+            if domainPerms is types:Permission[] {
+                domainPerms.push(permission);
+            }
+        }
+
+        log:printInfo(string `Successfully fetched ${permissions.length()} permissions across ${groupedPermissions.length()} domains`);
+        return <http:Ok>{
+            body: {
+                permissions: permissions,
+                groupedByDomain: groupedPermissions
+            }
+        };
+    }
+
+    // GET /auth/orgs/{orgHandle}/users/{userId}/permissions - Get user's effective permissions
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                },
+                scopes: [auth:PERMISSION_USER_MANAGE_USERS]
+            }
+        ]
+    }
+    isolated resource function get orgs/[string orgHandle]/users/[string userId]/permissions(
+        string? projectId = (),
+        string? integrationId = (),
+        string? environmentId = ()
+    ) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+        log:printInfo("Fetching effective permissions for user", 
+            orgHandle = orgHandle, 
+            userId = userId, 
+            projectId = projectId, 
+            integrationId = integrationId, 
+            environmentId = environmentId
+        );
+
+        // Resolve org handle to org ID
+        // TODO: use when multiple tenants are supported
+        // int|error orgId = storage:getOrgIdByHandle(orgHandle);
+        // if orgId is error {
+        //     log:printWarn("Invalid or unknown organization handle", orgHandle = orgHandle, 'error = orgId);
+        //     return utils:createBadRequestError("Invalid or unknown organization");
+        // }
+
+        // Build access scope from query parameters
+        types:AccessScope scope = {
+            orgUuid: storage:DEFAULT_ORG_ID,
+            projectUuid: projectId,
+            integrationUuid: integrationId,
+            envUuid: environmentId
+        };
+
+        // Get user's effective permissions for the given scope
+        types:Permission[]|error permissions = storage:getUserEffectivePermissions(userId, scope);
+        if permissions is error {
+            log:printError("Error fetching user permissions", permissions, userId = userId);
+            return utils:createInternalServerError("Failed to fetch user permissions");
+        }
+
+        // Extract permission names for easier use
+        string[] permissionNames = from types:Permission p in permissions
+            select p.permissionName;
+
+        log:printInfo(string `Successfully fetched ${permissions.length()} effective permissions for user`, userId = userId);
+        return <http:Ok>{
+            body: {
+                userId: userId,
+                scope: scope,
+                permissions: permissions,
+                permissionNames: permissionNames
+            }
+        };
+    }
+}
+
+isolated function extractUserContextFromRequest(http:Request req) returns types:UserContextV2|error {
+    string|http:HeaderNotFoundError authHeader = req.getHeader("Authorization");
+    if authHeader is http:HeaderNotFoundError {
+        log:printError("Authorization header not found");
+        return error("Authorization header not found");
+    }
+
+    types:UserContextV2|error userContext = auth:extractUserContextV2(authHeader);
+    if userContext is error {
+        log:printError("Failed to extract user context", userContext);
+        return error("Failed to extract user context");
+    }
+
+    return userContext;
 }
 

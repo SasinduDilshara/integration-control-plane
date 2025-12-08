@@ -29,7 +29,22 @@ import ballerina/uuid;
 // Organization: All queries default to org_uuid=1 for single-tenant mode
 // ============================================================================
 
-const int DEFAULT_ORG_ID = 1;
+public const int DEFAULT_ORG_ID = 1;
+
+// ============================================================================
+// 3.1 Organization Helper Functions
+// ============================================================================
+
+// Get organization ID by handle
+public isolated function getOrgIdByHandle(string orgHandle) returns int|error {
+    log:printDebug(string `Resolving org handle: ${orgHandle} to org ID`);
+    
+    record {|int org_id;|} result = check dbClient->queryRow(
+        `SELECT org_id FROM organizations WHERE org_handle = ${orgHandle}`
+    );
+    
+    return result.org_id;
+}
 
 // ============================================================================
 // 3.2 Group Management Functions
@@ -130,12 +145,13 @@ public isolated function deleteGroup(string groupId) returns error? {
 // Create a new role
 public isolated function createRoleV2(types:RoleV2Input input) returns string|error {
     string roleId = uuid:createType1AsString();
+    int orgId = input.orgId ?: DEFAULT_ORG_ID;
 
     log:printDebug(string `Creating role: ${input.roleName} with roleId: ${roleId}`);
 
     sql:ExecutionResult|error result = dbClient->execute(
-        `INSERT INTO roles_v2 (role_id, role_name, description) 
-         VALUES (${roleId}, ${input.roleName}, ${input.description})`
+        `INSERT INTO roles_v2 (role_id, role_name, org_id, description) 
+         VALUES (${roleId}, ${input.roleName}, ${orgId}, ${input.description})`
     );
 
     if result is error {
@@ -152,7 +168,7 @@ public isolated function getRoleV2ById(string roleId) returns types:RoleV2|error
     log:printDebug(string `Fetching role details for roleId: ${roleId}`);
 
     types:RoleV2 role = check dbClient->queryRow(
-        `SELECT role_id, role_name, description, created_at, updated_at 
+        `SELECT role_id, role_name, org_id, description, created_at, updated_at 
          FROM roles_v2 
          WHERE role_id = ${roleId}`
     );
@@ -160,14 +176,15 @@ public isolated function getRoleV2ById(string roleId) returns types:RoleV2|error
     return role;
 }
 
-// Get all roles
-public isolated function getAllRolesV2() returns types:RoleV2[]|error {
-    log:printDebug("Fetching all roles");
+// Get all roles for an organization
+public isolated function getAllRolesV2(int orgId) returns types:RoleV2[]|error {
+    log:printDebug(string `Fetching all roles for orgId: ${orgId}`);
 
     types:RoleV2[] roles = [];
     stream<types:RoleV2, sql:Error?> roleStream = dbClient->query(
-        `SELECT role_id, role_name, description, created_at, updated_at 
+        `SELECT role_id, role_name, org_id, description, created_at, updated_at 
          FROM roles_v2 
+         WHERE org_id = ${orgId}
          ORDER BY role_name`
     );
 
@@ -567,47 +584,65 @@ public isolated function getRolePermissions(string roleId) returns types:Permiss
 // Get user's effective permissions in a given scope
 // This computes: user → groups → roles (in scope) → permissions
 public isolated function getUserEffectivePermissions(string userId, types:AccessScope scope) returns types:Permission[]|error {
-    log:printDebug(string `Computing effective permissions for user ${userId} in scope`);
+    log:printDebug(string `Computing effective permissions for user ${userId} in scope: ${scope.toString()}`);
 
     types:Permission[] permissions = [];
-    
-    // Query that resolves the full chain: user → groups → roles → permissions
-    // Filters roles by scope context (org, project, env, integration)
-    sql:ParameterizedQuery query = `
-        SELECT DISTINCT p.permission_id, p.permission_name, p.permission_domain, p.resource_type, p.action, p.description, p.created_at, p.updated_at
-        FROM permissions p
-        INNER JOIN role_permission_mapping rpm ON p.permission_id = rpm.permission_id
-        INNER JOIN group_role_mapping grm ON rpm.role_id = grm.role_id
-        INNER JOIN group_user_mapping gum ON grm.group_id = gum.group_id
-        WHERE gum.user_uuid = ${userId}
-          AND grm.org_uuid = ${scope.orgUuid}`;
 
-    // Apply hierarchical scope filters
-    // Project scope: include org-wide roles OR project-specific roles
+    // Base EXISTS-style query that checks for existence of a (group -> role -> permission)
+    // mapping for the user within the provided scope. We'll append scope-specific clauses
+    // (project, env, integration) to match current semantics exactly.
+    sql:ParameterizedQuery query = `
+        SELECT DISTINCT
+            p.permission_id,
+            p.permission_name,
+            p.permission_domain,
+            p.resource_type,
+            p.action,
+            p.description,
+            p.created_at,
+            p.updated_at
+        FROM permissions p
+        WHERE EXISTS (
+            SELECT 1
+            FROM role_permission_mapping rpm
+            INNER JOIN group_role_mapping grm ON grm.role_id = rpm.role_id
+            INNER JOIN group_user_mapping gum ON gum.group_id = grm.group_id
+            WHERE rpm.permission_id = p.permission_id
+              AND gum.user_uuid = ${userId}
+              AND grm.org_uuid = ${scope.orgUuid}
+    `;
+
+    // Project scope: if projectUuid provided, include org-wide OR project-specific roles.
+    // If not provided, restrict to org-wide only (grm.project_uuid IS NULL).
     if scope.projectUuid is string {
         query = sql:queryConcat(query, ` AND (grm.project_uuid IS NULL OR grm.project_uuid = ${scope.projectUuid})`);
     } else {
-        // Org-wide only
         query = sql:queryConcat(query, ` AND grm.project_uuid IS NULL`);
     }
 
-    // Environment filter: include all-env roles OR specific-env roles
+    // Environment filter: include roles that apply to all envs OR the specific env when given.
     if scope.envUuid is string {
         query = sql:queryConcat(query, ` AND (grm.env_uuid IS NULL OR grm.env_uuid = ${scope.envUuid})`);
     }
 
-    // Integration scope: include project-wide roles OR integration-specific roles
+    // Integration scope: if integrationUuid provided include project-wide OR integration-specific roles.
+    // If no integration but project scope present, exclude integration-specific roles.
     if scope.integrationUuid is string {
         query = sql:queryConcat(query, ` AND (grm.integration_uuid IS NULL OR grm.integration_uuid = ${scope.integrationUuid})`);
     } else if scope.projectUuid is string {
-        // If project scope without integration, exclude integration-specific roles
+        // project scope without integration: do not include integration-specific role mappings
         query = sql:queryConcat(query, ` AND grm.integration_uuid IS NULL`);
     }
 
-    query = sql:queryConcat(query, ` ORDER BY p.permission_domain, p.permission_name`);
+    // Close the EXISTS and apply ordering
+    query = sql:queryConcat(query, `
+        ) -- end EXISTS
+        ORDER BY p.permission_domain, p.permission_name
+    `);
 
     stream<types:Permission, sql:Error?> permissionStream = dbClient->query(query);
 
+    // Collect results
     check from types:Permission permission in permissionStream
         do {
             permissions.push(permission);
@@ -627,7 +662,7 @@ public isolated function getUserAccessibleProjects(string userId) returns types:
 
     types:UserProjectAccess[] projects = [];
     stream<types:UserProjectAccess, sql:Error?> projectStream = dbClient->query(
-        `SELECT user_uuid, project_uuid, project_name, group_id, group_name, role_id, role_name, org_uuid
+        `SELECT user_uuid, project_uuid, project_name, role_id, org_uuid, access_level
          FROM v_user_project_access
          WHERE user_uuid = ${userId}
          ORDER BY project_name`
@@ -649,8 +684,8 @@ public isolated function getUserAccessibleIntegrations(string userId, string? pr
     types:UserIntegrationAccess[] integrations = [];
     
     sql:ParameterizedQuery query = `
-        SELECT user_uuid, integration_uuid, integration_name, project_uuid, project_name, 
-               env_uuid, env_name, group_id, group_name, role_id, role_name, org_uuid
+        SELECT user_uuid, integration_uuid, integration_name, project_uuid, 
+               env_uuid, role_id, access_level
         FROM v_user_integration_access
         WHERE user_uuid = ${userId}`;
 
@@ -663,7 +698,7 @@ public isolated function getUserAccessibleIntegrations(string userId, string? pr
         query = sql:queryConcat(query, ` AND (env_uuid = ${envId} OR env_uuid IS NULL)`);
     }
 
-    query = sql:queryConcat(query, ` ORDER BY project_name, integration_name`);
+    query = sql:queryConcat(query, ` ORDER BY integration_name`);
 
     stream<types:UserIntegrationAccess, sql:Error?> integrationStream = dbClient->query(query);
 
@@ -683,8 +718,8 @@ public isolated function getUserEnvironmentRestrictions(string userId, string? p
     types:UserEnvironmentAccess[] environments = [];
     
     sql:ParameterizedQuery query = `
-        SELECT user_uuid, env_uuid, env_name, project_uuid, project_name, 
-               integration_uuid, integration_name, group_id, group_name, role_id, role_name, org_uuid
+        SELECT user_uuid, env_uuid, project_uuid, 
+               integration_uuid, role_id, scope_level
         FROM v_user_environment_access
         WHERE user_uuid = ${userId}`;
 
@@ -697,7 +732,7 @@ public isolated function getUserEnvironmentRestrictions(string userId, string? p
         query = sql:queryConcat(query, ` AND (integration_uuid = ${integrationId} OR integration_uuid IS NULL)`);
     }
 
-    query = sql:queryConcat(query, ` ORDER BY env_name`);
+    query = sql:queryConcat(query, ` ORDER BY env_uuid`);
 
     stream<types:UserEnvironmentAccess, sql:Error?> envStream = dbClient->query(query);
 
@@ -929,6 +964,20 @@ public isolated function permissionExists(string permissionName) returns boolean
 }
 
 // Get group-role mappings for a specific group (returns full mapping details including scope)
+// Get a single group-role mapping by ID
+public isolated function getGroupRoleMappingById(int mappingId) returns types:GroupRoleMapping|error {
+    log:printDebug(string `Fetching group-role mapping with ID: ${mappingId}`);
+
+    types:GroupRoleMapping mapping = check dbClient->queryRow(
+        `SELECT id, group_id, role_id, org_uuid, project_uuid, env_uuid, integration_uuid, created_at
+         FROM group_role_mapping
+         WHERE id = ${mappingId}`
+    );
+
+    log:printDebug(string `Found mapping: group=${mapping.groupId}, role=${mapping.roleId}`);
+    return mapping;
+}
+
 public isolated function getGroupRoleMappings(string groupId) returns types:GroupRoleMapping[]|error {
     log:printDebug(string `Fetching role mappings for group: ${groupId}`);
 

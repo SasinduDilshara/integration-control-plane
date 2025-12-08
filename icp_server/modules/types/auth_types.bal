@@ -40,33 +40,6 @@ public enum PermissionDomain {
     USER_MANAGEMENT = "User-Management"
 }
 
-// === Resource Type Enum ===
-
-// Defines the types of resources that can be controlled by permissions
-public enum ResourceType {
-    INTEGRATION = "integration",
-    ENVIRONMENT = "environment",
-    PROJECT = "project",
-    LOGS = "logs",
-    INSIGHTS = "insights",
-    USER = "user",
-    GROUP = "group",
-    ROLE = "role",
-    GROUP_ROLE = "group-role"
-}
-
-// === Action Enum ===
-
-// Defines the actions that can be performed on resources
-// Manage = View + Edit + Create + Delete (full control)
-public enum Action {
-    VIEW = "view",
-    EDIT = "edit",
-    CREATE = "create",
-    DELETE = "delete",
-    MANAGE = "manage" // Full control: view + edit + create + delete
-}
-
 // === Core RBAC V2 Database Record Types ===
 
 // Permission record - represents a fine-grained permission in the system
@@ -81,10 +54,10 @@ public type Permission record {
     PermissionDomain permissionDomain;
     
     @sql:Column {name: "resource_type"}
-    ResourceType resourceType;
+    string resourceType; // Changed from ResourceType enum to string for flexibility
     
     @sql:Column {name: "action"}
-    Action action;
+    string action; // Changed from Action enum to string for flexibility
     
     string description?;
     
@@ -103,6 +76,9 @@ public type RoleV2 record {
     
     @sql:Column {name: "role_name"}
     string roleName;
+    
+    @sql:Column {name: "org_id"}
+    int orgId; // Organization ID (default: 1 for single-tenant mode)
     
     string description?;
     
@@ -238,6 +214,7 @@ public type GroupInput record {
 // Input for creating a new role
 public type RoleV2Input record {
     string roleName;
+    int orgId?; // Optional, defaults to 1
     string description?;
 };
 
@@ -247,13 +224,29 @@ public type AssignGroupToUserInput record {
     string userId;
 };
 
-// Input for assigning a role to a group with context
+// Input for adding multiple users to a group
+public type AddUsersToGroupInput record {
+    string[] userIds;
+};
+
+// Input for assigning a role to a group with context (used by storage layer)
 // This is how permissions are granted to users (via groups)
 public type AssignRoleToGroupInput record {
     string groupId;
     string roleId;
     
     // Scope context - defines WHERE this role applies
+    int orgUuid?; // Default: 1
+    string projectUuid?; // NULL = org-wide
+    string envUuid?; // NULL = all environments (acts as filter)
+    string integrationUuid?; // NULL = not integration-specific (requires projectUuid if set)
+};
+
+// Input for assigning multiple roles to a group (used by API endpoint)
+public type AssignRolesToGroupInput record {
+    string[] roleIds; // Multiple roles can be assigned at once
+    
+    // Scope context - defines WHERE these roles apply
     int orgUuid?; // Default: 1
     string projectUuid?; // NULL = org-wide
     string envUuid?; // NULL = all environments (acts as filter)

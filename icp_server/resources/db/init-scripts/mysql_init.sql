@@ -137,40 +137,6 @@ CREATE TABLE environments (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- ============================================================================
--- ROLES & USER ROLES (moved after projects/environments)
--- ============================================================================
-
-CREATE TABLE roles (
-    role_id CHAR(36) NOT NULL PRIMARY KEY,
-    project_id CHAR(36) NOT NULL,
-    environment_type ENUM('prod', 'non-prod') NOT NULL,
-    privilege_level ENUM('admin', 'developer') NOT NULL,
-    role_name VARCHAR(200) NOT NULL UNIQUE, -- Format: <project_name>:<env_type>:<privilege_level>
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_roles_project FOREIGN KEY (project_id) REFERENCES projects (project_id) ON DELETE CASCADE,
-    UNIQUE KEY uk_role_project_env_type_priv (
-        project_id,
-        environment_type,
-        privilege_level
-    ),
-    INDEX idx_role_name (role_name),
-    INDEX idx_project_id (project_id),
-    INDEX idx_environment_type (environment_type)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-
-CREATE TABLE user_roles (
-    user_id CHAR(36) NOT NULL,
-    role_id CHAR(36) NOT NULL,
-    assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    assigned_by CHAR(36) NULL,
-    PRIMARY KEY (user_id, role_id),
-    CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-    CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles (role_id) ON DELETE CASCADE,
-    INDEX idx_user_id (user_id),
-    INDEX idx_role_id (role_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
-
 -- ============================================================================
 -- RBAC V2 - GROUP-BASED AUTHORIZATION
 -- ============================================================================
@@ -192,11 +158,14 @@ CREATE TABLE user_groups (
 CREATE TABLE roles_v2 (
     role_id VARCHAR(36) PRIMARY KEY,
     role_name VARCHAR(255) NOT NULL,
+    org_id INT NOT NULL DEFAULT 1,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_role_name (role_name),
-    INDEX idx_role_name (role_name)
+    CONSTRAINT fk_roles_v2_org FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE,
+    UNIQUE KEY unique_role_name_org (role_name, org_id),
+    INDEX idx_role_name (role_name),
+    INDEX idx_org_id (org_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Permissions table with domain grouping
@@ -400,11 +369,22 @@ WHERE grm.env_uuid IS NOT NULL OR grm.org_uuid IS NOT NULL;
 -- RBAC V2 SEED DATA
 -- ============================================================================
 
+-- Insert default organization (required for foreign key constraints)
+INSERT INTO
+    organizations (org_id, org_name, org_handle)
+VALUES (
+        1,
+        'Default Organization',
+        'default'
+    );
+
 -- Insert pre-defined roles
-INSERT INTO roles_v2 (role_id, role_name, description) VALUES
-(UUID(), 'Super Admin', 'Full access to all resources and permissions'),
-(UUID(), 'Admin', 'Administrative access to projects and integrations'),
-(UUID(), 'Developer', 'Development access with limited permissions');
+INSERT INTO roles_v2 (role_id, role_name, org_id, description) VALUES
+(UUID(), 'Super Admin', 1, 'Full access to all resources and permissions'),
+(UUID(), 'Admin', 1, 'Administrative access to projects and integrations'),
+(UUID(), 'Developer', 1, 'Development access with limited permissions'),
+(UUID(), 'Project Admin', 1, 'Administrative access to a specific project'),
+(UUID(), 'Viewer', 1, 'Read-only access with view permissions only');
 
 -- Insert permissions for all domains
 INSERT INTO permissions (permission_id, permission_name, permission_domain, resource_type, action, description) VALUES
@@ -462,6 +442,67 @@ WHERE permission_name IN (
     'project_mgt:edit',
     'observability_mgt:view_logs',
     'observability_mgt:view_insights'
+);
+
+-- Map Project Admin to project-specific admin permissions
+INSERT INTO role_permission_mapping (role_id, permission_id)
+SELECT 
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Project Admin'),
+    permission_id
+FROM permissions
+WHERE permission_name IN (
+    'project_mgt:manage',
+    'integration_mgt:manage',
+    'user_mgt:update_group_roles'
+);
+
+-- Map Viewer to view-only permissions
+INSERT INTO role_permission_mapping (role_id, permission_id)
+SELECT 
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Viewer'),
+    permission_id
+FROM permissions
+WHERE permission_name IN (
+    'integration_mgt:view',
+    'project_mgt:view',
+    'observability_mgt:view_logs',
+    'observability_mgt:view_insights'
+);
+
+-- Insert default admin user (required for group assignments)
+INSERT INTO
+    users (
+        user_id,
+        username,
+        display_name,
+        is_super_admin
+    )
+VALUES (
+        '550e8400-e29b-41d4-a716-446655440000',
+        'admin',
+        'System Administrator',
+        TRUE
+    );
+
+-- Create default groups
+INSERT INTO user_groups (group_id, group_name, org_uuid, description) VALUES
+(UUID(), 'Super Admins', 1, 'Group for super administrators with full access'),
+(UUID(), 'Administrators', 1, 'Group for administrators'),
+(UUID(), 'Developers', 1, 'Group for developers');
+
+-- Assign super admin user to Super Admins group
+INSERT INTO group_user_mapping (group_id, user_uuid)
+VALUES (
+    (SELECT group_id FROM user_groups WHERE group_name = 'Super Admins'),
+    '550e8400-e29b-41d4-a716-446655440000'
+);
+
+-- Map Super Admins group to Super Admin role at org level
+INSERT INTO group_role_mapping (group_id, role_id, org_uuid)
+VALUES (
+    (SELECT group_id FROM user_groups WHERE group_name = 'Super Admins'),
+    (SELECT role_id FROM roles_v2 WHERE role_name = 'Super Admin'),
+    1
 );
 
 -- ============================================================================
@@ -1135,16 +1176,9 @@ ORDER BY cc.issued_at ASC;
 -- SAMPLE DATA FOR TESTING
 -- ============================================================================
 
--- Insert default organization
-INSERT INTO
-    organizations (org_id, org_name, org_handle)
-VALUES (
-        1,
-        'Default Organization',
-        'default'
-    );
+-- Note: Default organization and super admin user are created in RBAC V2 SEED DATA section above
 
--- Insert a default admin user for testing
+-- Insert additional test users
 INSERT INTO
     users (
         user_id,
@@ -1153,12 +1187,6 @@ INSERT INTO
         is_super_admin
     )
 VALUES (
-        '550e8400-e29b-41d4-a716-446655440000',
-        'admin',
-        'System Administrator',
-        TRUE
-    ),
-    (
         '660e8400-e29b-41d4-a716-446655440002',
         'testuser',
         'Test User for Role Management',
@@ -1288,72 +1316,6 @@ VALUES (
         TRUE,
         'prod',
         '550e8400-e29b-41d4-a716-446655440000'
-    );
-
--- Insert sample roles with format: <project_name>:<env_type>:<privilege_level>
-INSERT INTO
-    roles (
-        role_id,
-        project_id,
-        environment_type,
-        privilege_level,
-        role_name
-    )
-VALUES (
-        '850e8400-e29b-41d4-a716-446655440001',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'non-prod',
-        'admin',
-        'sample_project:non-prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440002',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'non-prod',
-        'developer',
-        'sample_project:non-prod:developer'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440003',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'prod',
-        'admin',
-        'sample_project:prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440004',
-        '650e8400-e29b-41d4-a716-446655440001',
-        'prod',
-        'developer',
-        'sample_project:prod:developer'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440005',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'non-prod',
-        'admin',
-        'sample_project_2:non-prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440006',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'non-prod',
-        'developer',
-        'sample_project_2:non-prod:developer'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440007',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'prod',
-        'admin',
-        'sample_project_2:prod:admin'
-    ),
-    (
-        '850e8400-e29b-41d4-a716-446655440008',
-        '650e8400-e29b-41d4-a716-446655440002',
-        'prod',
-        'developer',
-        'sample_project_2:prod:developer'
     );
 
 -- Insert sample refresh token for admin user (for testing)

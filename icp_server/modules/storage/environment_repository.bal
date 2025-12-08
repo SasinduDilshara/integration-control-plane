@@ -104,6 +104,44 @@ public isolated function getEnvironmentsByIds(string[] environmentIds) returns t
     return environments;
 }
 
+// Get all environments (for admin operations)
+public isolated function getAllEnvironments() returns types:Environment[]|error {
+    types:Environment[] environments = [];
+
+    sql:ParameterizedQuery query = `SELECT environment_id, name, description, 
+                                     region, cluster_id, choreo_env, external_apim_env_name, internal_apim_env_name, 
+                                     sandbox_apim_env_name, critical, dns_prefix, created_at, updated_at, created_by, updated_by
+                                     FROM environments 
+                                     ORDER BY name ASC`;
+
+    stream<types:Environment, sql:Error?> envStream = dbClient->query(query);
+
+    check from types:Environment env in envStream
+        do {
+            environments.push({
+                id: env.id,
+                description: env.description,
+                name: env.name,
+                region: env.region,
+                clusterId: env.clusterId,
+                choreoEnv: env.choreoEnv,
+                externalApimEnvName: env.externalApimEnvName,
+                internalApimEnvName: env.internalApimEnvName,
+                sandboxApimEnvName: env.sandboxApimEnvName,
+                critical: env.critical,
+                dnsPrefix: env.dnsPrefix,
+                createdAt: env.createdAt,
+                updatedAt: env.updatedAt,
+                createdBy: getDisplayNameById(env.createdBy),
+                updatedBy: getDisplayNameById(env.updatedBy)
+            });
+        };
+
+    log:printInfo("Retrieved all environments", environmentCount = environments.length());
+
+    return environments;
+}
+
 // Get environment IDs by environment types (for RBAC filtering)
 public isolated function getEnvironmentIdsByTypes(boolean hasProdAccess, boolean hasNonProdAccess) returns string[]|error {
     if !hasProdAccess && !hasNonProdAccess {
@@ -252,4 +290,24 @@ public isolated function deleteEnvironment(string environmentId) returns error? 
     }
     log:printInfo(string `Successfully deleted environment ${environmentId}`);
     return ();
+}
+
+// Get all environment IDs where a component has runtimes
+public isolated function getEnvironmentIdsWithRuntimes(string componentId) returns string[]|error {
+    log:printDebug(string `Fetching environment IDs where component ${componentId} has runtimes`);
+
+    stream<record {|string environment_Id;|}, sql:Error?> envStream = dbClient->query(
+        `SELECT DISTINCT environment_id 
+         FROM runtimes 
+         WHERE component_id = ${componentId}`
+        );
+
+    string[] environmentIds = [];
+    check from record {|string environment_Id;|} envRecord in envStream
+        do {
+            environmentIds.push(envRecord.environment_Id);
+        };
+
+    log:printInfo(string `Component ${componentId} has runtimes in ${environmentIds.length()} environments`);
+    return environmentIds;
 }

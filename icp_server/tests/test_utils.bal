@@ -17,7 +17,7 @@
 import ballerina/http;
 import ballerina/jwt;
 import ballerina/test;
-import icp_server.types;
+import icp_server.auth;
 
 // HTTP client for testing - matches configuration from auth_tests.bal
 const string AUTH_SERVICE_URL = "https://localhost:9445";
@@ -46,96 +46,41 @@ public string projectAdminToken = "";
 @test:BeforeSuite
 function initializeTestTokens() returns error? {
     // Generate admin token (super admin with full access)
-    adminToken = check generateTestToken(
-        "550e8400-e29b-41d4-a716-446655440000", // Admin user ID from seed data
-        "admin",
-        "Admin User",
+    adminToken = check generateV2Token(
+        "550e8400-e29b-41d4-a716-446655440000", 
+        "admin", 
         [
-            {
-                projectId: "project-1",
-                environmentType: types:PROD,
-                privilegeLevel: types:ADMIN
-            },
-            {
-                projectId: "project-1",
-                environmentType: types:NON_PROD,
-                privilegeLevel: types:ADMIN
-            }
-        ],
-        isSuperAdmin = true,
-        isProjectAuthor = true
+            auth:PERMISSION_INTEGRATION_VIEW,
+            auth:PERMISSION_INTEGRATION_EDIT,
+            auth:PERMISSION_INTEGRATION_MANAGE,
+            auth:PERMISSION_ENVIRONMENT_MANAGE,
+            auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD,
+            auth:PERMISSION_PROJECT_VIEW,
+            auth:PERMISSION_PROJECT_EDIT,
+            auth:PERMISSION_PROJECT_MANAGE,
+            auth:PERMISSION_OBSERVABILITY_VIEW_LOGS,
+            auth:PERMISSION_OBSERVABILITY_VIEW_INSIGHTS,
+            auth:PERMISSION_USER_MANAGE_USERS,
+            auth:PERMISSION_USER_UPDATE_USERS,
+            auth:PERMISSION_USER_MANAGE_GROUPS,
+            auth:PERMISSION_USER_MANAGE_ROLES,
+            auth:PERMISSION_USER_UPDATE_GROUP_ROLES
+        ]
     );
     
     // Generate regular user token (test user with some roles)
-    regularUserToken = check generateTestToken(
-        "660e8400-e29b-41d4-a716-446655440002", // Test user ID
-        "testuser",
-        "Test User",
-        [
-            {
-                projectId: "project-1",
-                environmentType: types:PROD,
-                privilegeLevel: types:DEVELOPER
-            }
-        ],
-        isSuperAdmin = false,
-        isProjectAuthor = false
+    regularUserToken = check generateV2Token(
+        "770e8400-e29b-41d4-a716-446655440001",
+        "orgdev",
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_PROJECT_VIEW]
     );
     
     // Generate project admin token (admin in project-1 only)
-    projectAdminToken = check generateTestToken(
-        "550e8400-e29b-41d4-a716-446655440002", // Another test user
+    projectAdminToken = check generateV2Token(
+        "770e8400-e29b-41d4-a716-446655440002",
         "projectadmin",
-        "Project Admin",
-        [
-            {
-                projectId: "project-1",
-                environmentType: types:PROD,
-                privilegeLevel: types:ADMIN
-            }
-        ],
-        isSuperAdmin = false,
-        isProjectAuthor = false
+        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_PROJECT_MANAGE]
     );
-}
-
-// Generate a test JWT token with custom claims
-public function generateTestToken(
-    string userId,
-    string username,
-    string displayName,
-    types:RoleInfo[] roles = [],
-    boolean isSuperAdmin = false,
-    boolean isProjectAuthor = false,
-    decimal expTime = 3600
-) returns string|error {
-    
-    // Build minimal role info for JWT (no roleId or roleName in token)
-    json[] rolesClaim = [];
-    foreach types:RoleInfo role in roles {
-        rolesClaim.push({
-            projectId: role.projectId,
-            environmentType: role.environmentType,
-            privilegeLevel: role.privilegeLevel
-        });
-    }
-    
-    jwt:IssuerConfig issuerConfig = {
-        username: userId,
-        issuer: frontendJwtIssuer,
-        expTime: expTime,
-        audience: frontendJwtAudience,
-        signatureConfig: testJwtConfig,
-        customClaims: {
-            "username": username,
-            "displayName": displayName,
-            "roles": rolesClaim,
-            "isSuperAdmin": isSuperAdmin,
-            "isProjectAuthor": isProjectAuthor
-        }
-    };
-    
-    return jwt:issue(issuerConfig);
 }
 
 // Generate an expired test JWT token

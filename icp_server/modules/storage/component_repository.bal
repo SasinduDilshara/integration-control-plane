@@ -129,6 +129,70 @@ public isolated function getComponentsByProjectIds(string[] projectIds, types:Co
     return components;
 }
 
+// Get components by component IDs (integration IDs) using SQL IN clause
+public isolated function getComponentsByIds(string[] componentIds) returns types:Component[]|error {
+    if componentIds.length() == 0 {
+        return [];
+    }
+
+    // Log warning for large lists (similar to getProjectsByIds)
+    if componentIds.length() > 5000 {
+        log:printWarn(string `Large component ID list: ${componentIds.length()} components`);
+    }
+
+    types:Component[] components = [];
+
+    sql:ParameterizedQuery selectClause = `SELECT c.component_id, c.project_id, c.name as component_name, c.display_name as component_display_name, c.description as component_description, 
+                                                  c.component_type, c.created_by as component_created_by, c.created_at as component_created_at, c.updated_at as component_updated_at,
+                                                  c.updated_by as component_updated_by,
+                                                  p.org_id as project_org_id, p.name as project_name, p.version as project_version, 
+                                                  p.created_date as project_created_date, p.handler as project_handler, p.region as project_region,
+                                                  p.description as project_description, p.default_deployment_pipeline_id as project_default_deployment_pipeline_id,
+                                                  p.deployment_pipeline_ids as project_deployment_pipeline_ids, p.type as project_type,
+                                                  p.git_provider as project_git_provider, p.git_organization as project_git_organization,
+                                                  p.repository as project_repository, p.branch as project_branch, p.secret_ref as project_secret_ref,
+                                                  p.created_by as project_created_by, p.updated_at as project_updated_at, p.updated_by as project_updated_by
+                                           FROM components c 
+                                           JOIN projects p ON c.project_id = p.project_id 
+                                           WHERE c.component_id IN (`;
+
+    sql:ParameterizedQuery inClause = ``;
+    foreach int i in 0 ..< componentIds.length() {
+        if i > 0 {
+            inClause = sql:queryConcat(inClause, `, `);
+        }
+        inClause = sql:queryConcat(inClause, `${componentIds[i]}`);
+    }
+
+    sql:ParameterizedQuery orderByClause = `) ORDER BY c.name ASC`;
+    sql:ParameterizedQuery query = sql:queryConcat(selectClause, inClause, orderByClause);
+
+    stream<types:ComponentInDB, sql:Error?> componentStream = dbClient->query(query);
+
+    check from types:ComponentInDB component in componentStream
+        do {
+            components.push(mapToComponent(component));
+        };
+
+    return components;
+}
+
+// Get project ID for a given component ID (lightweight query for access control)
+public isolated function getProjectIdByComponentId(string componentId) returns string|error {
+    stream<record {|string project_id;|}, sql:Error?> resultStream = 
+        dbClient->query(`SELECT project_id FROM components WHERE component_id = ${componentId}`);
+
+    record {|string project_id;|}[] results = 
+        check from record {|string project_id;|} result in resultStream
+        select result;
+
+    if results.length() == 0 {
+        return error(string `Component with id ${componentId} not found`);
+    }
+
+    return results[0].project_id;
+}
+
 // Get a specific component by ID
 public isolated function getComponentById(string componentId) returns types:Component|error {
     stream<types:ComponentInDB, sql:Error?> componentStream =
@@ -457,7 +521,7 @@ isolated function mapToComponent(types:ComponentInDB component) returns types:Co
             id: component.project_id,
             orgId: component.project_org_id,
             name: component.project_name,
-            version: <string>component.project_version,
+            version: component.project_version,
             createdDate: component.project_created_date,
             handler: component.project_handler,
             region: component.project_region,
