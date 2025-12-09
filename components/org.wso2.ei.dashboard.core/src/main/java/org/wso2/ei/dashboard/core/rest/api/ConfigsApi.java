@@ -50,14 +50,32 @@ public class ConfigsApi {
     @GET
     @Path("/super-admin")
     @Produces({ "application/json" })
-    @Operation(summary = "Get super admin username", description = "", tags={ "configs" })
-    @ApiResponses(value = { 
-        @ApiResponse(responseCode = "200", description = "The super admin details configured in dashboard configs", content = @Content(schema = @Schema(implementation = SuperAdminUser.class))),
-        @ApiResponse(responseCode = "500", description = "Unexpected error", content = @Content(schema = @Schema(implementation = Error.class)))
+    @Operation(summary = "Get super admin username", description = "", tags = { "configs" })
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "The super admin details configured in dashboard configs", content = @Content(schema = @Schema(implementation = SuperAdminUser.class))),
+            @ApiResponse(responseCode = "500", description = "Unexpected error", content = @Content(schema = @Schema(implementation = Error.class)))
     })
     public Response getSuperAdmin() {
         ConfigsDelegate configsDelegate = new ConfigsDelegate();
         Response.ResponseBuilder responseBuilder = Response.ok().entity(configsDelegate.getSuperUser());
         HttpUtils.setHeaders(responseBuilder);
         return responseBuilder.build();
-    }}
+    }
+
+    @GET
+    @Path("/jdbc-userstore-enabled")
+    @Produces({ "application/json" })
+    @Operation(summary = "Check if JDBC user store is enabled", description = "", tags = { "configs" })
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Returns whether JDBC user store is enabled"),
+            @ApiResponse(responseCode = "500", description = "Unexpected error", content = @Content(schema = @Schema(implementation = Error.class)))
+    })
+    public Response isJdbcUserStoreEnabled() {
+        ConfigsDelegate configsDelegate = new ConfigsDelegate();
+        boolean jdbcEnabled = configsDelegate.isJdbcUserStoreEnabled();
+        Response.ResponseBuilder responseBuilder = Response.ok()
+                .entity("{\"jdbcUserStoreEnabled\": " + jdbcEnabled + "}");
+        HttpUtils.setHeaders(responseBuilder);
+        return responseBuilder.build();
+    }
+}

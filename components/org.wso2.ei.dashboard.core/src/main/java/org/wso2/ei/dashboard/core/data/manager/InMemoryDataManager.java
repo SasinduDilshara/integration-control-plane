@@ -22,6 +22,8 @@ package org.wso2.ei.dashboard.core.data.manager;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.wso2.config.mapper.ConfigParser;
+import org.wso2.dashboard.security.user.core.UserStoreManagerUtils;
 import org.wso2.ei.dashboard.core.commons.Constants.Product;
 import org.wso2.ei.dashboard.core.exception.DashboardServerException;
 import org.wso2.ei.dashboard.core.rest.delegates.heartbeat.HeartbeatObject;
@@ -70,7 +72,7 @@ public final class InMemoryDataManager implements DataManager {
             String keyString = heartbeat.getGroupId() + heartbeat.getNodeId();
             heartBeatStore.put(keyString, map);
             logger.info("Inserting heartbeat details of node " + heartbeat.getNodeId() +
-                        " in group " + heartbeat.getGroupId());
+                    " in group " + heartbeat.getGroupId());
             return heartBeatStore.size() > 0;
         } catch (DashboardServerException e) {
             throw new DashboardServerException("Error occurred while inserting heartbeat information.", e);
@@ -87,11 +89,11 @@ public final class InMemoryDataManager implements DataManager {
             map.put(PRODUCT, heartbeat.getProduct());
             String keyString = heartbeat.getGroupId() + heartbeat.getNodeId();
             serviceInfoStore.put(keyString, map);
-            logger.info("Adding serverInfo of node " + heartbeat.getNodeId() +  " in group " + heartbeat.getGroupId());
+            logger.info("Adding serverInfo of node " + heartbeat.getNodeId() + " in group " + heartbeat.getGroupId());
             return serviceInfoStore.size() > 0;
         } catch (DashboardServerException e) {
             throw new DashboardServerException("Error occurred while inserting server information of node : "
-                                               + heartbeat.getNodeId() + " in group: " + heartbeat.getGroupId(), e);
+                    + heartbeat.getNodeId() + " in group: " + heartbeat.getGroupId(), e);
         }
     }
 
@@ -100,23 +102,37 @@ public final class InMemoryDataManager implements DataManager {
         String groupId;
         try {
             GroupList groupList = new GroupList();
-            for (HashMap entry: heartBeatStore.values()) {
+            for (HashMap entry : heartBeatStore.values()) {
                 groupId = entry.get(GROUP_ID).toString();
                 if (!groupList.contains(groupId)) {
                     groupList.add(groupId);
                 }
             }
+
+            // Add ICP group if JDBC user store is enabled
+            if (!UserStoreManagerUtils.isFileBasedUserStoreEnabled()) {
+                String icpGroupName = getIcpGroupName();
+                if (!groupList.contains(icpGroupName)) {
+                    groupList.add(icpGroupName);
+                }
+            }
+
             return groupList;
         } catch (DashboardServerException e) {
             throw new DashboardServerException("Error occurred fetching groups.", e);
         }
     }
 
+    private String getIcpGroupName() {
+        Object icpName = ConfigParser.getParsedConfigs().get("mi_control_plane.name");
+        return icpName != null ? icpName.toString() : "icp";
+    }
+
     @Override
     public NodeList fetchNodes(String groupId) {
         try {
             NodeList nodeList = new NodeList();
-            for (HashMap entry: serviceInfoStore.values()) {
+            for (HashMap entry : serviceInfoStore.values()) {
                 if (entry.get(GROUP_ID).toString().equals(groupId)) {
                     NodeListInner nodeListInner = new NodeListInner();
                     nodeListInner.setNodeId(entry.get(NODE_ID).toString());
@@ -135,7 +151,7 @@ public final class InMemoryDataManager implements DataManager {
     public NodeList fetchNodes(String groupId, Product productId) {
         try {
             NodeList nodeList = new NodeList();
-            for (HashMap entry: serviceInfoStore.values()) {
+            for (HashMap entry : serviceInfoStore.values()) {
                 if (entry.get(GROUP_ID).toString().equals(groupId) &&
                         entry.get(PRODUCT).toString().equalsIgnoreCase(productId.toString())) {
                     NodeListInner nodeListInner = new NodeListInner();
@@ -154,7 +170,7 @@ public final class InMemoryDataManager implements DataManager {
     @Override
     public String getMgtApiUrl(String groupId, String nodeId) {
         String mgtApiUrl = "";
-        try  {
+        try {
             HashMap valueMap = heartBeatStore.get(groupId + nodeId);
             mgtApiUrl = valueMap.get(MGT_URL).toString();
         } catch (DashboardServerException e) {
@@ -171,32 +187,32 @@ public final class InMemoryDataManager implements DataManager {
             accessToken = valueMap.get(ACCESS_TOKEN).toString();
         } catch (DashboardServerException e) {
             throw new DashboardServerException("Error occurred while retrieving access token of node: " + nodeId
-                                               + " in group " + groupId, e);
+                    + " in group " + groupId, e);
         }
         return accessToken;
     }
 
     @Override
     public String getHeartbeatInterval(String groupId, String nodeId) {
-        try  {
+        try {
             HashMap valueMap = heartBeatStore.get(groupId + nodeId);
             String heartBeatInterval = valueMap.get(INTERVAL).toString();
             return heartBeatInterval;
         } catch (DashboardServerException e) {
             throw new DashboardServerException("Error occurred while fetching heartbeat interval of group " + groupId
-                                               + " node " + nodeId, e);
+                    + " node " + nodeId, e);
         }
     }
 
     @Override
     public boolean checkIfTimestampExceedsInitial(HeartbeatObject heartbeat, String initialTimestamp) {
         boolean isExists = false;
-        try  {
+        try {
             HashMap valueMap = heartBeatStore.get(heartbeat.getGroupId() + heartbeat.getNodeId());
             String timeStamp = valueMap.get(TIMESTAMP).toString();
 
             if (Integer.parseInt(timeStamp) > Integer.parseInt(initialTimestamp)) {
-                isExists =  true;
+                isExists = true;
             }
         } catch (DashboardServerException e) {
             throw new DashboardServerException("Error occurred while retrieving next row.", e);
@@ -222,7 +238,7 @@ public final class InMemoryDataManager implements DataManager {
     @Override
     public boolean updateHeartbeat(HeartbeatObject heartbeat) {
         String keyString = heartbeat.getGroupId() + heartbeat.getNodeId();
-        try  {
+        try {
             HashMap valueMap = heartBeatStore.get(keyString);
             valueMap.put(TIMESTAMP, String.valueOf(heartbeat.getTimestamp()));
             heartBeatStore.put(keyString, valueMap);
@@ -236,7 +252,7 @@ public final class InMemoryDataManager implements DataManager {
     @Override
     public boolean updateAccessToken(String groupId, String nodeId, String accessToken) {
         String keyString = groupId + nodeId;
-        try  {
+        try {
             HashMap valueMap = heartBeatStore.get(keyString);
             valueMap.put(ACCESS_TOKEN, accessToken);
             heartBeatStore.put(keyString, valueMap);
@@ -250,7 +266,7 @@ public final class InMemoryDataManager implements DataManager {
     @Override
     public int deleteHeartbeat(HeartbeatObject heartbeat) {
         String keyString = heartbeat.getGroupId() + heartbeat.getNodeId();
-        try  {
+        try {
             heartBeatStore.remove(keyString);
             logger.info("Heartbeat deleted of node " + heartbeat.getNodeId() + " in group " + heartbeat.getGroupId());
             return heartBeatStore.containsKey(keyString) ? 0 : 1;
@@ -262,7 +278,7 @@ public final class InMemoryDataManager implements DataManager {
     @Override
     public boolean deleteServerInformation(String groupId, String nodeId) {
         String keyString = groupId + nodeId;
-        try  {
+        try {
             serviceInfoStore.remove(keyString);
             logger.info("Successfully deleted server information of node " + nodeId + " in group " + groupId);
 

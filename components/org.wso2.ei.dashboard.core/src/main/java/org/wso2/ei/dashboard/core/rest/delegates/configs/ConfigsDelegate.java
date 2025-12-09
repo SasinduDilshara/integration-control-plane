@@ -23,6 +23,7 @@ package org.wso2.ei.dashboard.core.rest.delegates.configs;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.wso2.config.mapper.ConfigParser;
+import org.wso2.dashboard.security.user.core.UserStoreManagerUtils;
 import org.wso2.ei.dashboard.core.rest.model.SuperAdminUser;
 
 /**
@@ -37,5 +38,10 @@ public class ConfigsDelegate {
         String superAdminUserName = (String) ConfigParser.getParsedConfigs().get("super_admin.username");
         superAdminUser.setUsername(superAdminUserName);
         return superAdminUser;
+    }
+
+    public boolean isJdbcUserStoreEnabled() {
+        log.debug("Checking if JDBC user store is enabled.");
+        return !UserStoreManagerUtils.isFileBasedUserStoreEnabled();
     }
 }
