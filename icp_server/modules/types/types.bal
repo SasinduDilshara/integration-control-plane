@@ -348,7 +348,6 @@ public type ProxyServiceRecordInDB record {
     string proxy_package;
     string base_path;
     ArtifactState state;
-    string wsdl = "";
     string transports = "";
 };
 
@@ -515,7 +514,6 @@ public type ProxyService record {
         name: "proxy_name"
     }
     string name;
-    string wsdl?;
     string[] transports?;
     @sql:Column {
         name: "proxy_state"

@@ -255,7 +255,7 @@ isolated function getApiResourcesForRuntime(string runtimeId, string apiName) re
 public isolated function getProxyServicesForRuntime(string runtimeId) returns types:ProxyService[]|error {
     types:ProxyService[] proxyList = [];
     stream<types:ProxyServiceRecordInDB, sql:Error?> proxyStream = dbClient->query(`
-        SELECT proxy_name, wsdl, transports, state 
+        SELECT proxy_name, transports, state 
         FROM runtime_proxy_services 
         WHERE runtime_id = ${runtimeId}
     `);
@@ -269,7 +269,6 @@ public isolated function getProxyServicesForRuntime(string runtimeId) returns ty
 
             types:ProxyService proxy = {
                 name: proxyRecord.proxy_name,
-                wsdl: proxyRecord.wsdl,
                 transports: transports,
                 state: proxyRecord.state
             };

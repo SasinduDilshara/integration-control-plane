@@ -837,7 +837,6 @@ CREATE TABLE runtime_proxy_services (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
     runtime_id CHAR(36) NOT NULL,
     proxy_name VARCHAR(200) NOT NULL,
-    wsdl TEXT,
     transports CLOB,
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

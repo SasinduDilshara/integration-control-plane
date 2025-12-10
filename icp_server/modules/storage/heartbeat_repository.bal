@@ -547,9 +547,9 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
         string? transportsJson = proxy.transports is string[] ? (<string[]>proxy.transports).toJsonString() : ();
         _ = check dbClient->execute(`
             INSERT INTO runtime_proxy_services (
-                runtime_id, proxy_name, wsdl, transports, state
+                runtime_id, proxy_name, transports, state
             ) VALUES (
-                ${heartbeat.runtime}, ${proxy.name}, ${proxy.wsdl},
+                ${heartbeat.runtime}, ${proxy.name},
                 ${transportsJson}, ${proxy.state}
             )
         `);
