@@ -348,7 +348,6 @@ public type ProxyServiceRecordInDB record {
     string proxy_package;
     string base_path;
     ArtifactState state;
-    string wsdl = "";
     string transports = "";
 };
 
@@ -438,6 +437,7 @@ public type Service record {
     string 'type = ""; // "API", "ProxyService", "DataService", "InboundEndpoint", "ScheduledTask"
     Resource[] resources;
     Listener[] listeners;
+    string[] runtimeIds?;
 };
 
 public type Listener record {
@@ -483,6 +483,7 @@ public type Listener record {
         name: "listener_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 // MI Runtime specific artifact types
@@ -499,6 +500,7 @@ public type RestApi record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     ApiResource[] resources = []; // API resources (path + methods)
+    string[] runtimeIds?;
 };
 
 // API Resource type for MI API resources
@@ -515,12 +517,12 @@ public type ProxyService record {
         name: "proxy_name"
     }
     string name;
-    string wsdl?;
     string[] transports?;
     @sql:Column {
         name: "proxy_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type Endpoint record {
@@ -534,6 +536,7 @@ public type Endpoint record {
         name: "endpoint_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type InboundEndpoint record {
@@ -547,6 +550,7 @@ public type InboundEndpoint record {
         name: "inbound_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type Sequence record {
@@ -560,6 +564,7 @@ public type Sequence record {
         name: "sequence_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type Task record {
@@ -573,6 +578,7 @@ public type Task record {
         name: "task_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type Template record {
@@ -585,6 +591,7 @@ public type Template record {
         name: "template_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type MessageStore record {
@@ -598,6 +605,7 @@ public type MessageStore record {
         name: "store_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type MessageProcessor record {
@@ -611,6 +619,7 @@ public type MessageProcessor record {
         name: "processor_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type LocalEntry record {
@@ -624,6 +633,7 @@ public type LocalEntry record {
         name: "entry_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type DataService record {
@@ -637,6 +647,7 @@ public type DataService record {
         name: "dataservice_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type CarbonApp record {
@@ -652,6 +663,7 @@ public type CarbonApp record {
     string state = "Active"; // "Active", "Faulty"
     // Artifacts packaged within the Carbon App (from heartbeat payload)
     CarbonAppArtifact[] artifacts?;
+    string[] runtimeIds?;
 };
 
 // Artifact shape used inside CarbonApp
