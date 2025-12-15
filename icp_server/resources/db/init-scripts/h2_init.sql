@@ -663,7 +663,7 @@ VALUES (
 -- ============================================================================
 
 CREATE TABLE runtimes (
-    runtime_id CHAR(36) NOT NULL PRIMARY KEY,
+    runtime_id VARCHAR(100) NOT NULL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     project_id CHAR(36) NOT NULL,
     component_id CHAR(36) NOT NULL,
@@ -713,7 +713,7 @@ CREATE INDEX idx_runtimes_registration_time ON runtimes (registration_time);
 -- Services deployed on a runtime
 CREATE TABLE runtime_services (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(100) NOT NULL,
     service_package VARCHAR(200) NOT NULL,
     base_path VARCHAR(500),
@@ -739,7 +739,7 @@ CREATE INDEX idx_runtime_services_state ON runtime_services (state);
 -- Resources inside a service (HTTP resources etc.)
 CREATE TABLE service_resources (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(100) NOT NULL,
     resource_url VARCHAR(1000) NOT NULL,
     methods CLOB NOT NULL,
@@ -758,7 +758,7 @@ CREATE INDEX idx_service_resources_method_first ON service_resources (method_fir
 -- Listeners bound to a runtime (e.g., HTTP/HTTPS)
 CREATE TABLE runtime_listeners (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     listener_name VARCHAR(100) NOT NULL,
     listener_package VARCHAR(200) NOT NULL,
     protocol VARCHAR(20) DEFAULT 'HTTP',
@@ -791,7 +791,7 @@ CREATE INDEX idx_runtime_listeners_state ON runtime_listeners (state);
 
 CREATE TABLE runtime_apis (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
     url VARCHAR(500) NOT NULL,
     context VARCHAR(500) NOT NULL,
@@ -812,7 +812,7 @@ CREATE INDEX idx_runtime_apis_state ON runtime_apis (state);
 -- API Resources (MI) - Resources inside an API
 CREATE TABLE runtime_api_resources (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
     resource_path VARCHAR(1000) NOT NULL,
     methods VARCHAR(20) NOT NULL, -- Single HTTP method as string (e.g., "POST", "GET")
@@ -830,7 +830,7 @@ CREATE INDEX idx_runtime_api_resources_methods ON runtime_api_resources (methods
 -- Proxy Services (MI)
 CREATE TABLE runtime_proxy_services (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     proxy_name VARCHAR(200) NOT NULL,
     transports CLOB,
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -849,7 +849,7 @@ CREATE INDEX idx_runtime_proxy_services_state ON runtime_proxy_services (state);
 -- Endpoints (MI)
 CREATE TABLE runtime_endpoints (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     endpoint_name VARCHAR(200) NOT NULL,
     endpoint_type VARCHAR(100) NOT NULL,
     address VARCHAR(500),
@@ -871,7 +871,7 @@ CREATE INDEX idx_runtime_endpoints_state ON runtime_endpoints (state);
 -- Inbound Endpoints (MI)
 CREATE TABLE runtime_inbound_endpoints (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     inbound_name VARCHAR(200) NOT NULL,
     protocol VARCHAR(50) NOT NULL,
     sequence VARCHAR(200),
@@ -893,7 +893,7 @@ CREATE INDEX idx_runtime_inbound_endpoints_state ON runtime_inbound_endpoints (s
 -- Sequences (MI)
 CREATE TABLE runtime_sequences (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     sequence_name VARCHAR(200) NOT NULL,
     sequence_type VARCHAR(100),
     container VARCHAR(200),
@@ -915,7 +915,7 @@ CREATE INDEX idx_runtime_sequences_state ON runtime_sequences (state);
 -- Tasks (MI)
 CREATE TABLE runtime_tasks (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     task_name VARCHAR(200) NOT NULL,
     task_class VARCHAR(500),
     task_group VARCHAR(200),
@@ -935,7 +935,7 @@ CREATE INDEX idx_runtime_tasks_state ON runtime_tasks (state);
 -- Templates (MI)
 CREATE TABLE runtime_templates (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     template_name VARCHAR(200) NOT NULL,
     template_type VARCHAR(100) NOT NULL,
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -956,7 +956,7 @@ CREATE INDEX idx_runtime_templates_state ON runtime_templates (state);
 -- Message Stores (MI)
 CREATE TABLE runtime_message_stores (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     store_name VARCHAR(200) NOT NULL,
     store_type VARCHAR(100) NOT NULL,
     store_class VARCHAR(500),
@@ -978,7 +978,7 @@ CREATE INDEX idx_runtime_message_stores_state ON runtime_message_stores (state);
 -- Message Processors (MI)
 CREATE TABLE runtime_message_processors (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     processor_name VARCHAR(200) NOT NULL,
     processor_type VARCHAR(100) NOT NULL,
     processor_class VARCHAR(500),
@@ -1000,7 +1000,7 @@ CREATE INDEX idx_runtime_message_processors_state ON runtime_message_processors 
 -- Local Entries (MI)
 CREATE TABLE runtime_local_entries (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     entry_name VARCHAR(200) NOT NULL,
     entry_type VARCHAR(100) NOT NULL,
     entry_value TEXT,
@@ -1022,7 +1022,7 @@ CREATE INDEX idx_runtime_local_entries_state ON runtime_local_entries (state);
 -- Data Services (MI)
 CREATE TABLE runtime_data_services (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(200) NOT NULL,
     description TEXT,
     wsdl TEXT,
@@ -1042,7 +1042,7 @@ CREATE INDEX idx_runtime_data_services_state ON runtime_data_services (state);
 -- Carbon Apps (MI)
 CREATE TABLE runtime_carbon_apps (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     app_name VARCHAR(200) NOT NULL,
     version VARCHAR(50),
     state VARCHAR(20) NOT NULL DEFAULT 'Active' CHECK (state IN ('Active', 'Faulty')),
@@ -1062,7 +1062,7 @@ CREATE INDEX idx_runtime_carbon_apps_state ON runtime_carbon_apps (state);
 -- Data Sources (MI)
 CREATE TABLE runtime_data_sources (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     datasource_name VARCHAR(200) NOT NULL,
     driver VARCHAR(500),
     url VARCHAR(1000),
@@ -1082,7 +1082,7 @@ CREATE INDEX idx_runtime_data_sources_state ON runtime_data_sources (state);
 -- Connectors (MI)
 CREATE TABLE runtime_connectors (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     connector_name VARCHAR(200) NOT NULL,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50),
@@ -1106,7 +1106,7 @@ CREATE INDEX idx_runtime_connectors_state ON runtime_connectors (state);
 -- Registry Resources (MI)
 CREATE TABLE runtime_registry_resources (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     resource_name VARCHAR(200) NOT NULL,
     path VARCHAR(1000) NOT NULL,
     resource_type VARCHAR(100),
@@ -1135,7 +1135,7 @@ CREATE INDEX idx_runtime_registry_resources_state ON runtime_registry_resources 
 
 CREATE TABLE control_commands (
     command_id CHAR(36) NOT NULL PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL,
     parameters CLOB,
@@ -1170,7 +1170,7 @@ CREATE INDEX idx_control_commands_issued_by ON control_commands (issued_by);
 
 CREATE TABLE audit_logs (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36),
+    runtime_id VARCHAR(100),
     user_id CHAR(36),
     action VARCHAR(100) NOT NULL,
     resource_type VARCHAR(50),
@@ -1226,7 +1226,7 @@ CREATE INDEX idx_system_events_created_at ON system_events (created_at);
 
 CREATE TABLE runtime_metrics (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     metric_name VARCHAR(100) NOT NULL,
     metric_value DECIMAL(15, 4) NOT NULL,
     metric_unit VARCHAR(20),
@@ -1243,7 +1243,7 @@ CREATE INDEX idx_runtime_metrics_metric_name ON runtime_metrics (metric_name);
 
 CREATE TABLE health_checks (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     check_type VARCHAR(50) NOT NULL,
     status VARCHAR(20) NOT NULL,
     response_time_ms INT,

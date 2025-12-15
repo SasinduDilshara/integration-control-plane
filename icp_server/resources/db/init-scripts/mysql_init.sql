@@ -510,7 +510,7 @@ VALUES (
 -- ============================================================================
 
 CREATE TABLE runtimes (
-    runtime_id CHAR(36) NOT NULL PRIMARY KEY,
+    runtime_id VARCHAR(100) NOT NULL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     project_id CHAR(36) NOT NULL,
     component_id CHAR(36) NOT NULL,
@@ -558,7 +558,7 @@ CREATE TABLE runtimes (
 -- Services deployed on a runtime
 CREATE TABLE runtime_services (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(100) NOT NULL,
     service_package VARCHAR(200) NOT NULL,
     base_path VARCHAR(500) NULL,
@@ -610,7 +610,7 @@ method_first  VARCHAR(20)
 -- Listeners bound to a runtime (e.g., HTTP/HTTPS)
 CREATE TABLE runtime_listeners (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     listener_name VARCHAR(100) NOT NULL,
     listener_package VARCHAR(200) NOT NULL,
     protocol VARCHAR(20) NULL DEFAULT 'HTTP',
@@ -646,7 +646,7 @@ CREATE TABLE runtime_listeners (
 -- REST APIs (MI)
 CREATE TABLE runtime_apis (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
     url VARCHAR(500) NOT NULL,
     context VARCHAR(500) NOT NULL,
@@ -670,7 +670,7 @@ CREATE TABLE runtime_apis (
 -- API Resources (MI) - Resources inside an API
 CREATE TABLE runtime_api_resources (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
     resource_path VARCHAR(1000) NOT NULL,
     methods VARCHAR(20) NOT NULL, -- Single HTTP method as string (e.g., "POST", "GET")
@@ -685,7 +685,7 @@ CREATE TABLE runtime_api_resources (
 -- Proxy Services (MI)
 CREATE TABLE runtime_proxy_services (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     proxy_name VARCHAR(200) NOT NULL,
     transports JSON NULL,
     state ENUM(
@@ -707,7 +707,7 @@ CREATE TABLE runtime_proxy_services (
 -- Endpoints (MI)
 CREATE TABLE runtime_endpoints (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     endpoint_name VARCHAR(200) NOT NULL,
     endpoint_type VARCHAR(100) NOT NULL,
     address VARCHAR(500) NULL,
@@ -731,7 +731,7 @@ CREATE TABLE runtime_endpoints (
 -- Inbound Endpoints (MI)
 CREATE TABLE runtime_inbound_endpoints (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     inbound_name VARCHAR(200) NOT NULL,
     protocol VARCHAR(50) NOT NULL,
     sequence VARCHAR(200) NULL,
@@ -755,7 +755,7 @@ CREATE TABLE runtime_inbound_endpoints (
 -- Sequences (MI)
 CREATE TABLE runtime_sequences (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     sequence_name VARCHAR(200) NOT NULL,
     sequence_type VARCHAR(100) NULL,
     container VARCHAR(200) NULL,
@@ -779,7 +779,7 @@ CREATE TABLE runtime_sequences (
 -- Tasks (MI)
 CREATE TABLE runtime_tasks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     task_name VARCHAR(200) NOT NULL,
     task_class VARCHAR(500) NULL,
     task_group VARCHAR(200) NULL,
@@ -802,7 +802,7 @@ CREATE TABLE runtime_tasks (
 -- Templates (MI)
 CREATE TABLE runtime_templates (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     template_name VARCHAR(200) NOT NULL,
     template_type VARCHAR(100) NOT NULL,
     state ENUM(
@@ -825,7 +825,7 @@ CREATE TABLE runtime_templates (
 -- Message Stores (MI)
 CREATE TABLE runtime_message_stores (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     store_name VARCHAR(200) NOT NULL,
     store_type VARCHAR(100) NOT NULL,
     store_class VARCHAR(500) NULL,
@@ -849,7 +849,7 @@ CREATE TABLE runtime_message_stores (
 -- Message Processors (MI)
 CREATE TABLE runtime_message_processors (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     processor_name VARCHAR(200) NOT NULL,
     processor_type VARCHAR(100) NOT NULL,
     processor_class VARCHAR(500) NULL,
@@ -873,7 +873,7 @@ CREATE TABLE runtime_message_processors (
 -- Local Entries (MI)
 CREATE TABLE runtime_local_entries (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     entry_name VARCHAR(200) NOT NULL,
     entry_type VARCHAR(100) NOT NULL,
     entry_value TEXT NULL,
@@ -897,7 +897,7 @@ CREATE TABLE runtime_local_entries (
 -- Data Services (MI)
 CREATE TABLE runtime_data_services (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(200) NOT NULL,
     description TEXT NULL,
     wsdl TEXT NULL,
@@ -920,7 +920,7 @@ CREATE TABLE runtime_data_services (
 -- Carbon Apps (MI)
 CREATE TABLE runtime_carbon_apps (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     app_name VARCHAR(200) NOT NULL,
     version VARCHAR(50) NULL,
     state ENUM('Active', 'Faulty') NOT NULL DEFAULT 'Active',
@@ -937,7 +937,7 @@ CREATE TABLE runtime_carbon_apps (
 -- Data Sources (MI)
 CREATE TABLE runtime_data_sources (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     datasource_name VARCHAR(200) NOT NULL,
     driver VARCHAR(500) NULL,
     url VARCHAR(1000) NULL,
@@ -960,7 +960,7 @@ CREATE TABLE runtime_data_sources (
 -- Connectors (MI)
 CREATE TABLE runtime_connectors (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     connector_name VARCHAR(200) NOT NULL,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50) NULL,
@@ -987,7 +987,7 @@ CREATE TABLE runtime_connectors (
 -- Registry Resources (MI)
 CREATE TABLE runtime_registry_resources (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     resource_name VARCHAR(200) NOT NULL,
     path VARCHAR(1000) NOT NULL,
     resource_type VARCHAR(100) NULL,
@@ -1018,7 +1018,7 @@ CREATE TABLE runtime_registry_resources (
 
 CREATE TABLE control_commands (
     command_id CHAR(36) NOT NULL PRIMARY KEY, -- UUID
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL, -- start, stop, restart, deploy, undeploy
     parameters JSON NULL,
@@ -1054,7 +1054,7 @@ CREATE TABLE control_commands (
 
 CREATE TABLE audit_logs (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NULL,
+    runtime_id VARCHAR(100) NULL,
     user_id CHAR(36) NULL,
     action VARCHAR(100) NOT NULL,
     resource_type VARCHAR(50) NULL, -- runtime, service, listener, command
@@ -1104,7 +1104,7 @@ CREATE TABLE system_events (
 
 CREATE TABLE runtime_metrics (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     metric_name VARCHAR(100) NOT NULL,
     metric_value DECIMAL(15, 4) NOT NULL,
     metric_unit VARCHAR(20) NULL,
@@ -1118,7 +1118,7 @@ CREATE TABLE runtime_metrics (
 
 CREATE TABLE health_checks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    runtime_id CHAR(36) NOT NULL,
+    runtime_id VARCHAR(100) NOT NULL,
     check_type VARCHAR(50) NOT NULL, -- heartbeat, connectivity, resource
     status ENUM(
         'HEALTHY',

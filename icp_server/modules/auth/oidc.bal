@@ -1,11 +1,11 @@
-import ballerina/url;
-import ballerina/log;
-import ballerina/http;
-import ballerina/jwt;
-import ballerina/time;
-
 import icp_server.types as types;
 import icp_server.utils as utils;
+
+import ballerina/http;
+import ballerina/jwt;
+import ballerina/log;
+import ballerina/time;
+import ballerina/url;
 
 // Build OIDC authorization URL with query parameters
 public isolated function buildAuthorizationUrl(types:SSOConfig config, string? state = ()) returns string|error {
@@ -81,7 +81,7 @@ public isolated function exchangeCodeForTokens(string code, types:SSOConfig conf
             }
         }
 
-        log:printError("OIDC token exchange failed", statusCode = statusCode, message = errorMessage);
+        log:printError("OIDC token exchange failed", statusCode = statusCode, errorMsg = errorMessage);
         return utils:createUnauthorizedError(errorMessage);
     }
 
