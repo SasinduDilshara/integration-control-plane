@@ -1352,16 +1352,23 @@ public type ComponentInDB record {
 
 // === Observability Related Types ===
 
+public enum LogEntryRequestSort {
+    asc,
+    desc
+}
+
 public type LogEntryRequest record {
-    string startTime;
-    string endTime;
-    int logStartIndex;
-    int logCount;
-    string? runtime = ();
-    string? component = ();
-    string? environment = ();
-    string? project = ();
-    string? logLevel = ();
+    string componentId;
+    string environmentId?;
+    string[] versionIdList?;
+    string[] logLevels?;
+    string region?;
+    string searchPhrase?;
+    string regexPhrase?;
+    string startTime?;
+    string endTime?;
+    int 'limit = 100;
+    LogEntryRequestSort sort = "asc";
 };
 
 public type LogEntry record {
@@ -1383,38 +1390,14 @@ public type LogCount record {
     int 'error;
 };
 
+public type LogColumn record {
+    string name;
+    string 'type;
+};
+
 public type LogEntriesResponse record {
-    LogEntry[] logs;
-    LogCount logCounts;
-};
-
-public type OpenSearchHit record {
-    string _index;
-    string _id;
-    json? _score;
-    map<string> _source;
-    json[]? sort;
-};
-
-public type OpenSearchHits record {
-    record {
-        int value;
-        string relation;
-    } total;
-    json? max_score;
-    OpenSearchHit[] hits;
-};
-
-public type OpenSearchResponse record {
-    int took;
-    boolean timed_out;
-    record {
-        int total;
-        int successful;
-        int skipped;
-        int failed;
-    } _shards;
-    OpenSearchHits hits;
+    LogColumn[] columns;
+    json[][] rows;
 };
 
 // === Auth Related Types ===

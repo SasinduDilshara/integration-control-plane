@@ -20,16 +20,19 @@ import ballerina/file;
 
 // Server configuration
 configurable int serverPort = 9445;
-configurable string serverHost = "localhost";
-configurable string organization = "WSO2 Inc.";
 configurable int graphqlPort = 9446;
 configurable int observabilityServerPort = 9448;
+configurable int webServerPort = 9445;
+configurable int defaultOpensearchAdaptorPort = 9449;
+
+configurable string serverHost = "localhost";
+configurable string organization = "WSO2 Inc.";
+
 configurable string keystorePath = check file:joinPath("..", "conf", "security", "ballerinaKeystore.p12");
 configurable string keystorePassword = "ballerina";
 configurable string truststorePath = check file:joinPath("..", "conf", "security", "ballerinaTruststore.p12");
 configurable string truststorePassword = "ballerina";
 
-configurable int webServerPort = 9445;
 configurable string webServerKeystorePath = check file:joinPath("..", "conf", "security", "keystore.p12");
 configurable string webServerKeystorePassword = "changeit";
 
@@ -78,8 +81,11 @@ configurable string logLevel = "INFO"; // DEBUG, INFO, WARN, ERROR
 configurable boolean enableAuditLogging = true;
 configurable boolean enableMetrics = true;
 
+configurable string observabilityBackendURL = "https://localhost:" + defaultOpensearchAdaptorPort.toString();
+configurable string defaultobservabilityJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs256";
+
 // OpenSearch configuration
-configurable string opensearchUrl = "https://opensearch:9200";
+configurable string opensearchUrl = "https://localhost:9200";
 configurable string opensearchUsername = "admin";
 configurable string opensearchPassword = "Ballerina@123";
 

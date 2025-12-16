@@ -33,8 +33,8 @@ configurable string apiKey = "default-api-key";
 // Separate H2 database connection for user credentials (default auth backend only)
 // This is a separate database file from the main ICP database
 final sql:Client credentialsDbClient = check new jdbc:Client(
-    "jdbc:h2:file:./database/credentialsdb;MODE=MySQL;AUTO_SERVER=TRUE", 
-    "sa", 
+    "jdbc:h2:file:./database/credentialsdb;MODE=MySQL;AUTO_SERVER=TRUE",
+    "sa",
     ""
 );
 
