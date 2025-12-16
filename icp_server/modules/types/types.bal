@@ -1685,3 +1685,8 @@ public type ArtifactResponse record {|
     string 'type;
     string configuration;
 |};
+
+public type Parameter record {|
+    string key;
+    string value;
+|};
