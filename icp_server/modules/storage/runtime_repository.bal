@@ -385,7 +385,7 @@ public isolated function getTemplatesForRuntime(string runtimeId) returns types:
 public isolated function getMessageStoresForRuntime(string runtimeId) returns types:MessageStore[]|error {
     types:MessageStore[] storeList = [];
     stream<types:MessageStoreRecordInDB, sql:Error?> storeStream = dbClient->query(`
-        SELECT store_name, store_type, store_class, state 
+        SELECT store_name, store_type, size 
         FROM runtime_message_stores 
         WHERE runtime_id = ${runtimeId}
     `);
@@ -395,8 +395,7 @@ public isolated function getMessageStoresForRuntime(string runtimeId) returns ty
             types:MessageStore store = {
                 name: storeRecord.store_name,
                 'type: storeRecord.store_type,
-                'class: storeRecord.store_class,
-                state: storeRecord.state
+                size: storeRecord.size
             };
             storeList.push(store);
         };

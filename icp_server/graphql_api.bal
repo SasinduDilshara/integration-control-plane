@@ -1339,6 +1339,147 @@ service /graphql on graphqlListener {
         return artifactConfig.configuration;
     }
 
+    // Get WSDL for any supported artifact by type and name via ICP internal API
+    isolated resource function get artifactWsdlByComponent(
+            graphql:Context context,
+            string componentId,
+            string artifactType,
+            string artifactName,
+            string? environmentId = (),
+            string? runtimeId = ()
+    ) returns string|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+
+        // Extract user context for RBAC
+        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+
+        // Get component to verify access
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return error("Integration not found");
+        }
+
+        // Verify user has the permissions
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
+        if !check auth:hasAnyPermission(userContext.userId,
+            ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Insufficient permissions to view component artifacts");
+        }
+
+        // Get runtimes for this component (optionally filtered by environment if environmentId !is ())
+        types:Runtime[] runtimes = check storage:getRuntimes((), (), environmentId, component.projectId, componentId);
+        if runtimes.length() == 0 {
+            return error("No runtimes found for this component");
+        }
+
+        // Select runtime: if runtimeId provided, use matching runtime; otherwise first available
+        types:Runtime runtime = runtimes[0];
+        if runtimeId is string {
+            boolean found = false;
+            foreach types:Runtime r in runtimes {
+                if r.runtimeId == runtimeId {
+                    runtime = r;
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return error(string `Runtime ${runtimeId} not found for component ${componentId}${environmentId is string ? string ` in environment ${environmentId}` : ""}`);
+            }
+        }
+
+        // Check if management endpoint is configured
+        string? managementHost = runtime.managementHostname;
+        string? managementPort = runtime.managementPort;
+        if managementHost is () {
+            return error("Management hostname not configured for this runtime");
+        }
+
+        // Build management API base URL
+        string baseUrl = string `https://${managementHost}`;
+        if managementPort is string {
+            baseUrl = string `${baseUrl}:${managementPort}`;
+        }
+
+        // Normalize artifact type
+        string t = artifactType.toLowerAscii();
+        string artifactPath;
+        if t == "dataservice" || t == "data-service" || t == "datasvc" {
+            // Data Services use 'service' param in ICP API
+            artifactPath = string `${ICP_ARTIFACTS_PATH}/wsdl?service=${artifactName}`;
+        } else if t == "proxy-service" {
+            artifactPath = string `${ICP_ARTIFACTS_PATH}/wsdl?proxy=${artifactName}`;
+        } else {
+            // Generic pattern for future artifact types
+            artifactPath = string `${ICP_ARTIFACTS_PATH}/wsdl?type=${t}&name=${artifactName}`;
+        }
+
+        log:printInfo("Fetching artifact WSDL from management API",
+                runtimeId = runtime.runtimeId,
+                managementUrl = baseUrl,
+                artifactType = artifactType,
+                artifactName = artifactName,
+                path = artifactPath);
+
+        // Create management API client (toggle insecure TLS via configuration)
+        http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl);
+        if mgmtClient is error {
+            log:printError("Failed to create management API client", mgmtClient);
+            return error("Failed to create management API client");
+        }
+
+        // Generate an HMAC JWT to call the ICP internal API
+        string hmacToken = check issueRuntimeHmacToken();
+
+        http:Response|error wsdlResponse = mgmtClient->get(artifactPath, {
+                "Authorization": string `Bearer ${hmacToken}`,
+                "Accept": "application/xml"
+        });
+
+        if wsdlResponse is error {
+            log:printError("Failed to fetch WSDL from management API", wsdlResponse);
+            return error("Failed to fetch WSDL from management API");
+        }
+
+        if wsdlResponse.statusCode != http:STATUS_OK {
+            string|error errPayload = wsdlResponse.getTextPayload();
+            if errPayload is error {
+                log:printError("ICP internal API WSDL fetch returned non-OK status",
+                        status = wsdlResponse.statusCode.toString(),
+                        runtimeId = runtime.runtimeId,
+                        artifactType = artifactType,
+                        artifactName = artifactName);
+                return error(string `ICP internal API WSDL fetch failed with status ${wsdlResponse.statusCode}`);
+            }
+            log:printError("ICP internal API WSDL fetch returned non-OK status",
+                    status = wsdlResponse.statusCode.toString(),
+                    runtimeId = runtime.runtimeId,
+                    artifactType = artifactType,
+                    artifactName = artifactName,
+                    response = errPayload);
+            return error(string `ICP internal API WSDL fetch failed with status ${wsdlResponse.statusCode}: ${errPayload}`);
+        }
+
+        // Return raw XML as string
+        string|error wsdlXml = wsdlResponse.getTextPayload();
+        if wsdlXml is error {
+            log:printError("Failed to read WSDL text payload", wsdlXml);
+            return error("Failed to read WSDL payload");
+        }
+
+        log:printInfo("Successfully fetched artifact WSDL",
+                runtimeId = runtime.runtimeId,
+                artifactType = artifactType,
+                artifactName = artifactName,
+                wsdlLength = wsdlXml.length());
+        return wsdlXml;
+    }
+
     // Get Local Entry value from a runtime's management API via ICP internal API
     isolated resource function get localEntryValueByComponent(
             graphql:Context context,
@@ -1663,6 +1804,186 @@ service /graphql on graphqlListener {
             paramCount = params.length());
         return params;
     }
+
+        // Get Parameters for any artifact type from management API via ICP internal API
+        isolated resource function get artifactParametersByComponent(
+            graphql:Context context,
+            string componentId,
+            string artifactType,
+            string artifactName,
+            string? environmentId = (),
+            string? runtimeId = ()
+        ) returns types:Parameter[]|error {
+        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
+        if authHeader !is string {
+            return error("Authorization header missing in request");
+        }
+
+        // Extract user context for RBAC
+        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
+
+        // Get component to verify access
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return error("Integration not found");
+        }
+
+        // Verify user has the permissions
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
+        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+            return error("Insufficient permissions to view component artifacts");
+        }
+
+        // Get runtimes for this component (optionally filtered by environment if environmentId !is ())
+        types:Runtime[] runtimes = check storage:getRuntimes((), (), environmentId, component.projectId, componentId);
+        if runtimes.length() == 0 {
+            return error("No runtimes found for this component");
+        }
+
+        // Select runtime: if runtimeId provided, use matching runtime; otherwise first available
+        types:Runtime runtime = runtimes[0];
+        if runtimeId is string {
+            boolean found = false;
+            foreach types:Runtime r in runtimes {
+                if r.runtimeId == runtimeId {
+                    runtime = r;
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                return error(string `Runtime ${runtimeId} not found for component ${componentId}${environmentId is string ? string ` in environment ${environmentId}` : ""}`);
+            }
+        }
+
+        // Check if management endpoint is configured
+        string? managementHost = runtime.managementHostname;
+        string? managementPort = runtime.managementPort;
+        if managementHost is () {
+            return error("Management hostname not configured for this runtime");
+        }
+
+        // Build management API base URL
+        string baseUrl = string `https://${managementHost}`;
+        if managementPort is string {
+            baseUrl = string `${baseUrl}:${managementPort}`;
+        }
+
+        log:printInfo("Fetching artifact parameters from management API",
+                runtimeId = runtime.runtimeId,
+                managementUrl = baseUrl,
+                artifactType = artifactType,
+                artifactName = artifactName);
+
+        // Create management API client (toggle insecure TLS via configuration)
+        http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl);
+        if mgmtClient is error {
+            log:printError("Failed to create management API client", mgmtClient);
+            return error("Failed to create management API client");
+        }
+
+        // Generate an HMAC JWT (same mechanism as heartbeat) to call the ICP internal API
+        string hmacToken = check issueRuntimeHmacToken();
+
+        // Fetch parameters via ICP Internal API (/icp/artifacts/parameters)
+        string artifactPath = string `${ICP_ARTIFACTS_PATH}/parameters?type=${artifactType}&name=${artifactName}`;
+        log:printDebug("Sending ICP internal API artifact parameters request",
+                runtimeId = runtime.runtimeId,
+                managementUrl = baseUrl,
+                artifactPath = artifactPath,
+                accept = "application/json");
+
+        http:Response|error resp = mgmtClient->get(artifactPath, {
+                "Authorization": string `Bearer ${hmacToken}`,
+                "Accept": "application/json"
+        });
+
+        if resp is error {
+            log:printError("Failed to fetch artifact parameters from management API", resp);
+            return error("Failed to fetch artifact parameters from management API");
+        }
+
+        if resp.statusCode != http:STATUS_OK {
+            string|error errPayload = resp.getTextPayload();
+            if errPayload is error {
+                log:printError("Artifact parameters fetch returned non-OK status",
+                        status = resp.statusCode.toString(),
+                        runtimeId = runtime.runtimeId,
+                        artifactType = artifactType,
+                        artifactName = artifactName);
+                return error(string `Artifact parameters fetch failed with status ${resp.statusCode}`);
+            }
+            log:printError("Artifact parameters fetch returned non-OK status",
+                    status = resp.statusCode.toString(),
+                    runtimeId = runtime.runtimeId,
+                    artifactType = artifactType,
+                    artifactName = artifactName,
+                    response = errPayload);
+            return error(string `Artifact parameters fetch failed with status ${resp.statusCode}: ${errPayload}`);
+        }
+
+        // Parse JSON payload and convert to Parameter[] (same logic as inbound)
+        json payload = check resp.getJsonPayload();
+        types:Parameter[] params = [];
+
+        if payload is map<json> {
+            foreach var [k, v] in payload.entries() {
+                string valStr;
+                if v is string {
+                    valStr = v;
+                } else {
+                    valStr = v.toJsonString();
+                }
+                params.push({key: k, value: valStr});
+            }
+        } else if payload is json[] {
+            foreach json item in payload {
+                if item is map<json> {
+                    string? k = ();
+                    string? vStr = ();
+
+                    json kJson = item["key"];
+                    if kJson is () {
+                        kJson = item["name"];
+                    }
+                    if kJson is string {
+                        k = kJson;
+                    }
+
+                    json vJson = item["value"];
+                    if vJson is string {
+                        vStr = vJson;
+                    } else if vJson is () {
+                        json altV = item["paramValue"];
+                        if altV is string {
+                            vStr = altV;
+                        } else if altV is json {
+                            vStr = altV.toJsonString();
+                        }
+                    } else if vJson is json {
+                        vStr = vJson.toJsonString();
+                    }
+
+                    if k is string && vStr is string {
+                        params.push({key: <string>k, value: <string>vStr});
+                    }
+                }
+            }
+        } else if payload is string {
+            params.push({key: "payload", value: payload});
+        } else {
+            log:printWarn("Unexpected artifact parameters JSON shape", artifactType = artifactType, artifactName = artifactName);
+        }
+
+        log:printInfo("Successfully fetched artifact parameters",
+            runtimeId = runtime.runtimeId,
+            artifactType = artifactType,
+            artifactName = artifactName,
+            paramCount = params.length());
+        return params;
+        }
 }
 
 isolated function extractUserContext(graphql:Context context) returns types:UserContextV2|error {

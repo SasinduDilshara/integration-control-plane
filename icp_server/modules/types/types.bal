@@ -327,7 +327,7 @@ public type ServiceRecordInDB record {
     string service_name;
     string service_package;
     string base_path;
-    ArtifactState state;
+    string state;
     string service_type;
 };
 
@@ -335,7 +335,7 @@ public type ListenerRecordInDB record {
     string listener_name;
     string listener_package;
     string protocol;
-    ArtifactState state;
+    string state;
     string port?;
     string destination?;
     string queue?;
@@ -347,7 +347,7 @@ public type ProxyServiceRecordInDB record {
     string proxy_name;
     string proxy_package;
     string base_path;
-    ArtifactState state;
+    string state;
     string transports = "";
 };
 
@@ -355,48 +355,47 @@ public type EndpointRecordInDB record {
     string endpoint_name;
     string endpoint_type;
     string address?;
-    ArtifactState state;
+    string state;
 };
 
 public type SequenceRecordInDB record {
     string sequence_name;
     string sequence_type?;
     string container?;
-    ArtifactState state;
+    string state;
 };
 
 public type TaskRecordInDB record {
     string task_name;
     string task_class?;
     string task_group?;
-    ArtifactState state;
+    string state;
 };
 
 public type MessageStoreRecordInDB record {
     string store_name;
     string store_type;
-    string store_class?;
-    ArtifactState state;
+    int size;
 };
 
 public type MessageProcessorRecordInDB record {
     string processor_name;
     string processor_type;
     string processor_class?;
-    ArtifactState state;
+    string state;
 };
 
 public type LocalEntryRecordInDB record {
     string entry_name;
     string entry_type;
     string entry_value?;
-    ArtifactState state;
+    string state;
 };
 
 public type CarbonAppRecordInDB record {
     string app_name;
     string version = "";
-    DeploymentState state;
+    string state;
 };
 
 public type RegistryResourceRecordInDB record {
@@ -597,7 +596,7 @@ public type MessageStore record {
     }
     string name;
     string 'type;
-    string 'class?;
+    int size = 0;
     @sql:Column {
         name: "store_state"
     }

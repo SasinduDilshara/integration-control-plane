@@ -828,22 +828,14 @@ CREATE TABLE runtime_message_stores (
     runtime_id VARCHAR(100) NOT NULL,
     store_name VARCHAR(200) NOT NULL,
     store_type VARCHAR(100) NOT NULL,
-    store_class VARCHAR(500) NULL,
-    state ENUM(
-        'ENABLED',
-        'DISABLED',
-        'STARTING',
-        'STOPPING',
-        'FAILED'
-    ) NOT NULL DEFAULT 'ENABLED',
+    size BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_message_stores_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     UNIQUE KEY uk_runtime_message_store (runtime_id, store_name),
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_store_name (store_name),
-    INDEX idx_store_type (store_type),
-    INDEX idx_state (state)
+    INDEX idx_store_type (store_type)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Message Processors (MI)
