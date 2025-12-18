@@ -1064,8 +1064,10 @@ CREATE TABLE runtime_data_sources (
     id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
     runtime_id VARCHAR(100) NOT NULL,
     datasource_name VARCHAR(200) NOT NULL,
+    datasource_type VARCHAR(100),
     driver VARCHAR(500),
     url VARCHAR(1000),
+    username VARCHAR(255),
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1076,6 +1078,8 @@ CREATE TABLE runtime_data_sources (
 CREATE INDEX idx_runtime_data_sources_runtime_id ON runtime_data_sources (runtime_id);
 
 CREATE INDEX idx_runtime_data_sources_datasource_name ON runtime_data_sources (datasource_name);
+
+CREATE INDEX idx_runtime_data_sources_datasource_type ON runtime_data_sources (datasource_type);
 
 CREATE INDEX idx_runtime_data_sources_state ON runtime_data_sources (state);
 

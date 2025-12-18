@@ -524,7 +524,7 @@ isolated function parseCarbonAppArtifacts(json j) returns types:CarbonAppArtifac
 public isolated function getDataSourcesForRuntime(string runtimeId) returns types:DataSource[]|error {
     types:DataSource[] sourceList = [];
     stream<types:DataSource, sql:Error?> sourceStream = dbClient->query(`
-        SELECT datasource_name, driver, url, state 
+        SELECT datasource_name, datasource_type, driver, url, username, state 
         FROM runtime_data_sources 
         WHERE runtime_id = ${runtimeId}
     `);

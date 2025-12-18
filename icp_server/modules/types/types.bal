@@ -674,12 +674,18 @@ public type DataSource record {
         name: "datasource_name"
     }
     string name;
+    @sql:Column {
+        name: "datasource_type"
+    }
+    string 'type?;
     string driver?;
     string url?;
+    string username?;
     @sql:Column {
         name: "datasource_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string[] runtimeIds?;
 };
 
 public type Connector record {

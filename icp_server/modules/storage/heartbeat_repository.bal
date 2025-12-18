@@ -695,10 +695,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
     foreach types:DataSource dataSource in <types:DataSource[]>heartbeat.artifacts.dataSources {
         _ = check dbClient->execute(`
             INSERT INTO runtime_data_sources (
-                runtime_id, datasource_name, driver, url, state
+                runtime_id, datasource_name, datasource_type, driver, url, username, state
             ) VALUES (
-                ${heartbeat.runtime}, ${dataSource.name}, ${dataSource.driver},
-                ${dataSource.url}, ${dataSource.state}
+                ${heartbeat.runtime}, ${dataSource.name}, ${dataSource.'type}, ${dataSource.driver},
+                ${dataSource.url}, ${dataSource.username}, ${dataSource.state}
             )
         `);
     }

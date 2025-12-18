@@ -939,8 +939,10 @@ CREATE TABLE runtime_data_sources (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     runtime_id VARCHAR(100) NOT NULL,
     datasource_name VARCHAR(200) NOT NULL,
+    datasource_type VARCHAR(100) NULL,
     driver VARCHAR(500) NULL,
     url VARCHAR(1000) NULL,
+    username VARCHAR(255) NULL,
     state ENUM(
         'ENABLED',
         'DISABLED',
@@ -954,6 +956,7 @@ CREATE TABLE runtime_data_sources (
     UNIQUE KEY uk_runtime_data_source (runtime_id, datasource_name),
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_datasource_name (datasource_name),
+    INDEX idx_datasource_type (datasource_type),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
