@@ -1363,10 +1363,23 @@ public enum LogEntryRequestSort {
     desc
 }
 
-public type LogEntryRequest record {
-    string componentId;
+public type ICPLogEntryRequest record {
+    string componentId?;
+    string[] componentIdList?;
     string environmentId?;
-    string[] versionIdList?;
+    string[] environmentList?;
+    string[] logLevels?;
+    string region?;
+    string searchPhrase?;
+    string regexPhrase?;
+    string startTime?;
+    string endTime?;
+    int 'limit = 100;
+    LogEntryRequestSort sort = "asc";
+};
+
+public type LogEntryRequest record {
+    string[] runtimeIdList = [];
     string[] logLevels?;
     string region?;
     string searchPhrase?;

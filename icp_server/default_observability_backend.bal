@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.storage as storage;
 import icp_server.types as types;
 
 import ballerina/http;
@@ -64,11 +65,101 @@ service /icp/observability on observabilityListener {
         log:printInfo("Observability service started at " + serverHost + ":" + observabilityServerPort.toString());
     }
 
-    resource function post logs(http:Request request, types:LogEntryRequest logRequest) returns types:LogEntriesResponse|error {
-        log:printInfo("Received log request for component: " + logRequest.componentId);
+    resource function post logs(http:Request request, types:ICPLogEntryRequest logRequest) returns types:LogEntriesResponse|error {
+        log:printInfo("Received log request: " + logRequest.toString());
 
-        // Invoke observability backend
-        return check observabilityClient->post("/observability/logs/", logRequest);
+        // Transform ICPLogEntryRequest to LogEntryRequest by resolving component/environment filters to runtime IDs
+        string[] runtimeIdList = check resolveRuntimeIds(logRequest);
+
+        // If component/environment filters were provided but no runtimes found, return empty result
+        boolean hasFilters = logRequest.componentId is string ||
+                            (logRequest.componentIdList is string[] && (<string[]>logRequest.componentIdList).length() > 0) ||
+                            logRequest.environmentId is string ||
+                            (logRequest.environmentList is string[] && (<string[]>logRequest.environmentList).length() > 0);
+
+        if (hasFilters && runtimeIdList.length() == 0) {
+            log:printInfo("No runtimes found for the given component/environment filters. Returning empty result.");
+            return {
+                columns: [],
+                rows: []
+            };
+        }
+
+        // Construct LogEntryRequest with resolved runtime IDs and copy other filter fields
+        types:LogEntryRequest adaptorRequest = {
+            runtimeIdList: runtimeIdList,
+            logLevels: logRequest.logLevels,
+            region: logRequest.region,
+            searchPhrase: logRequest.searchPhrase,
+            regexPhrase: logRequest.regexPhrase,
+            startTime: logRequest.startTime,
+            endTime: logRequest.endTime,
+            'limit: logRequest.'limit,
+            sort: logRequest.sort
+        };
+
+        log:printInfo("Invoking observability adapter with " + runtimeIdList.length().toString() + " runtime IDs");
+
+        // Invoke observability adapter service
+        return check observabilityClient->post("/observability/logs/", adaptorRequest);
     }
 }
 
+// Resolve component/environment filters to runtime IDs by querying the storage layer
+isolated function resolveRuntimeIds(types:ICPLogEntryRequest logRequest) returns string[]|error {
+    string[] runtimeIds = [];
+
+    // Build list of component IDs to query
+    string[] componentIds = [];
+    if logRequest.componentId is string {
+        componentIds.push(<string>logRequest.componentId);
+    }
+    if logRequest.componentIdList is string[] {
+        componentIds.push(...<string[]>logRequest.componentIdList);
+    }
+
+    // Build list of environment IDs to query
+    string[] environmentIds = [];
+    if logRequest.environmentId is string {
+        environmentIds.push(<string>logRequest.environmentId);
+    }
+    if logRequest.environmentList is string[] {
+        environmentIds.push(...<string[]>logRequest.environmentList);
+    }
+
+    // Query runtimes based on filters
+    if componentIds.length() > 0 || environmentIds.length() > 0 {
+        // If both component and environment filters exist, query for each component-environment combination
+        if componentIds.length() > 0 && environmentIds.length() > 0 {
+            foreach string componentId in componentIds {
+                foreach string environmentId in environmentIds {
+                    types:Runtime[] runtimes = check storage:getRuntimes((), (), environmentId, (), componentId);
+                    foreach types:Runtime runtime in runtimes {
+                        runtimeIds.push(runtime.runtimeId);
+                    }
+                }
+            }
+        }
+        // If only component IDs, query by component
+        else if componentIds.length() > 0 {
+            foreach string componentId in componentIds {
+                types:Runtime[] runtimes = check storage:getRuntimes((), (), (), (), componentId);
+                foreach types:Runtime runtime in runtimes {
+                    runtimeIds.push(runtime.runtimeId);
+                }
+            }
+        }
+        // If only environment IDs, query by environment
+        else {
+            foreach string environmentId in environmentIds {
+                types:Runtime[] runtimes = check storage:getRuntimes((), (), environmentId, (), ());
+                foreach types:Runtime runtime in runtimes {
+                    runtimeIds.push(runtime.runtimeId);
+                }
+            }
+        }
+    }
+
+    log:printInfo("Resolved " + runtimeIds.length().toString() + " runtime IDs from component/environment filters");
+    return runtimeIds;
+}

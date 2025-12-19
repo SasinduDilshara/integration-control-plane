@@ -69,7 +69,7 @@ service /observability on openSerachObservabilityListener {
     }
 
     resource function post logs(@http:Header {name: "X-API-Key"} string? apiKeyHeader, http:Request request, types:LogEntryRequest logRequest) returns types:LogEntriesResponse|error {
-        log:printInfo("Received log request for component: " + logRequest.componentId);
+        log:printInfo("Received log request for component: " + logRequest.toString());
 
         // Build OpenSearch query
         json query = buildLogQuery(logRequest);
@@ -142,12 +142,15 @@ service /observability on openSerachObservabilityListener {
 function buildLogQuery(types:LogEntryRequest logRequest) returns json {
     json[] mustClauses = [];
 
-    // Filter by app_name (component)
-    mustClauses.push({
-        "match": {
-            "app_name": logRequest.componentId
-        }
-    });
+    // Filter by runtime IDs if specified
+    string[] runtimeIds = logRequest.runtimeIdList;
+    if (runtimeIds.length() > 0) {
+        mustClauses.push({
+            "terms": {
+                "icp_runtimeId.keyword": runtimeIds
+            }
+        });
+    }
 
     // Filter by log levels if specified
     string[]? levels = logRequest.logLevels;
