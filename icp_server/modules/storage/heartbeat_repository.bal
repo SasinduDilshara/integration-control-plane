@@ -638,10 +638,9 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
     foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
         _ = check dbClient->execute(`
             INSERT INTO runtime_message_stores (
-                runtime_id, store_name, store_type, store_class, state
+                runtime_id, store_name, store_type, size
             ) VALUES (
-                ${heartbeat.runtime}, ${store.name}, ${store.'type},
-                ${store.'class}, ${store.state}
+                ${heartbeat.runtime}, ${store.name}, ${store.'type}, ${store.size}
             )
         `);
     }

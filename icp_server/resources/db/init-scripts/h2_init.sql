@@ -959,8 +959,7 @@ CREATE TABLE runtime_message_stores (
     runtime_id VARCHAR(100) NOT NULL,
     store_name VARCHAR(200) NOT NULL,
     store_type VARCHAR(100) NOT NULL,
-    store_class VARCHAR(500),
-    state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
+    size BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_message_stores_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
@@ -972,8 +971,7 @@ CREATE INDEX idx_runtime_message_stores_runtime_id ON runtime_message_stores (ru
 CREATE INDEX idx_runtime_message_stores_store_name ON runtime_message_stores (store_name);
 
 CREATE INDEX idx_runtime_message_stores_store_type ON runtime_message_stores (store_type);
-
-CREATE INDEX idx_runtime_message_stores_state ON runtime_message_stores (state);
+-- No state persisted for message stores; size is stored instead.
 
 -- Message Processors (MI)
 CREATE TABLE runtime_message_processors (
