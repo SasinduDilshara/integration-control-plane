@@ -938,7 +938,6 @@ CREATE TABLE runtime_templates (
     runtime_id VARCHAR(100) NOT NULL,
     template_name VARCHAR(200) NOT NULL,
     template_type VARCHAR(100) NOT NULL,
-    state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_templates_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
@@ -951,7 +950,7 @@ CREATE INDEX idx_runtime_templates_template_name ON runtime_templates (template_
 
 CREATE INDEX idx_runtime_templates_template_type ON runtime_templates (template_type);
 
-CREATE INDEX idx_runtime_templates_state ON runtime_templates (state);
+-- state column removed for templates; no index needed
 
 -- Message Stores (MI)
 CREATE TABLE runtime_message_stores (

@@ -805,21 +805,13 @@ CREATE TABLE runtime_templates (
     runtime_id VARCHAR(100) NOT NULL,
     template_name VARCHAR(200) NOT NULL,
     template_type VARCHAR(100) NOT NULL,
-    state ENUM(
-        'ENABLED',
-        'DISABLED',
-        'STARTING',
-        'STOPPING',
-        'FAILED'
-    ) NOT NULL DEFAULT 'ENABLED',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_templates_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     UNIQUE KEY uk_runtime_template (runtime_id, template_name),
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_template_name (template_name),
-    INDEX idx_template_type (template_type),
-    INDEX idx_state (state)
+    INDEX idx_template_type (template_type)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Message Stores (MI)

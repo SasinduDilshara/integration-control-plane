@@ -105,22 +105,22 @@ service /graphql on graphqlListener {
         if environmentId is string {
             // Build scope with project, integration, and environment
             types:AccessScope scope = auth:buildScopeFromContext(actualProjectId, integrationId = componentId, envId = environmentId);
-            
+
             // Check if user has permission to view this integration in this environment
-            if !check auth:hasAnyPermission(userContext.userId, 
-                [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            if !check auth:hasAnyPermission(userContext.userId,
+                    [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
                 return []; // No access to this integration in this environment
             }
-            
+
             // Fetch runtimes for the specified environment
             return check storage:getRuntimes(status, runtimeType, environmentId, actualProjectId, componentId);
         }
 
         // Step 3: If environmentId is NOT specified, resolve accessible environments
         auth:EnvironmentAccessInfo envAccess = check auth:resolveEnvironmentAccess(
-            userContext.userId, 
-            projectId = actualProjectId, 
-            integrationId = componentId
+                userContext.userId,
+                projectId = actualProjectId,
+                integrationId = componentId
         );
 
         // If no restriction, user can access all environments - fetch all runtimes
@@ -157,9 +157,9 @@ service /graphql on graphqlListener {
 
         // Build scope from runtime's context
         types:AccessScope scope = auth:buildScopeFromContext(
-            runtime.component.projectId,
-            runtime.component.id,
-            runtime.environment.id
+                runtime.component.projectId,
+                runtime.component.id,
+                runtime.environment.id
         );
 
         // Check permission to view this integration
@@ -189,9 +189,9 @@ service /graphql on graphqlListener {
 
         // Build scope with project, integration, and environment
         types:AccessScope scope = auth:buildScopeFromContext(
-            projectIdResult,
-            componentId,
-            environmentId
+                projectIdResult,
+                componentId,
+                environmentId
         );
 
         // Check permission to view this integration deployment
@@ -645,6 +645,30 @@ service /graphql on graphqlListener {
         return check storage:getRegistryResourcesByEnvironmentAndComponent(environmentId, componentId);
     }
 
+    // Get Connectors for a specific environment and component
+    isolated resource function get connectorsByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:Connector[]|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
+
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component connectors without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
+        }
+
+        return check storage:getConnectorsByEnvironmentAndComponent(environmentId, componentId);
+    }
+
     // Delete a runtime by ID
     isolated remote function deleteRuntime(graphql:Context context, string runtimeId) returns boolean|error {
         types:UserContextV2 userContext = check extractUserContext(context);
@@ -658,9 +682,9 @@ service /graphql on graphqlListener {
 
         // Build scope from runtime's context
         types:AccessScope scope = auth:buildScopeFromContext(
-            runtime.component.projectId,
-            runtime.component.id,
-            runtime.environment.id
+                runtime.component.projectId,
+                runtime.component.id,
+                runtime.environment.id
         );
 
         // Check permission to delete this integration's runtime (mutation = explicit error)
@@ -708,7 +732,7 @@ service /graphql on graphqlListener {
 
         // Get user's accessible environments (filtered by role mappings)
         // If user has any role mapping, they can see environments within their scope
-        types:UserEnvironmentAccess[] accessibleEnvs = 
+        types:UserEnvironmentAccess[] accessibleEnvs =
             check storage:getUserEnvironmentRestrictions(userContext.userId);
 
         // Check if user has any access at all
@@ -720,10 +744,10 @@ service /graphql on graphqlListener {
         // Build environment ID list from access mappings:
         // If ANY mapping has env_uuid = NULL, user gets all environments
         // Otherwise, collect specific env_uuid values
-        
+
         boolean hasUnrestrictedAccess = false;
         string[] envIds = [];
-        
+
         foreach types:UserEnvironmentAccess envAccess in accessibleEnvs {
             if envAccess.envUuid is () {
                 // env_uuid is NULL = unrestricted access to all environments
@@ -873,9 +897,9 @@ service /graphql on graphqlListener {
         // Get accessible projects via access resolver
         // This returns all projects where user has ANY role assignment (any permission domain)
         // Includes users who only have observability_mgt:view_logs or other non-project permissions
-        types:UserProjectAccess[] accessibleProjects = 
+        types:UserProjectAccess[] accessibleProjects =
             check auth:getAccessibleProjects(userContext.userId);
-        
+
         if accessibleProjects.length() == 0 {
             return []; // User has no project access
         }
@@ -883,7 +907,7 @@ service /graphql on graphqlListener {
         string[] accessibleProjectIds = accessibleProjects.map(p => p.projectUuid);
 
         // Fetch only accessible projects with SQL IN clause (efficient DB filtering)
-        types:Project[] filteredProjects = 
+        types:Project[] filteredProjects =
             check storage:getProjectsByIds(accessibleProjectIds, orgId);
 
         return filteredProjects;
@@ -895,7 +919,7 @@ service /graphql on graphqlListener {
 
         // Use access resolver to check project access (handles ANY role assignment)
         auth:ProjectAccessInfo accessInfo = check auth:resolveProjectAccess(userContext.userId, projectId);
-        
+
         if !accessInfo.hasAccess {
             log:printWarn("Attempt to access project without permission", userId = userContext.userId, projectId = projectId);
             return (); // No access - return null (404 pattern for queries)
@@ -946,7 +970,7 @@ service /graphql on graphqlListener {
         // Build org-level scope for permission check
         types:AccessScope scope = {orgUuid: orgId, projectUuid: projectId};
         // Check permission at project level - requires project_mgt:manage 
-        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_PROJECT_MANAGE, scope)  {
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_PROJECT_MANAGE, scope) {
             return error("Insufficient permissions to delete project");
         }
 
@@ -1026,7 +1050,7 @@ service /graphql on graphqlListener {
 
         // Get accessible integrations (with optional project filter)
         // This returns integrations where user has ANY role assignment (permission-agnostic)
-        types:UserIntegrationAccess[] accessibleIntegrations = 
+        types:UserIntegrationAccess[] accessibleIntegrations =
             check storage:getUserAccessibleIntegrations(userContext.userId, projectId);
 
         // Extract integration IDs
@@ -1064,8 +1088,8 @@ service /graphql on graphqlListener {
 
         // Check if user has permission to view this integration
         // Users with edit or manage permissions should also be able to view
-        if !check auth:hasAnyPermission(userContext.userId, 
-            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             log:printWarn("Attempt to access component without permission", userId = userContext.userId, componentId = component.id);
             return (); // Return null for no access (404 pattern for queries)
         }
@@ -1100,7 +1124,7 @@ service /graphql on graphqlListener {
 
         // 2. Build scope and check if user has permission to manage this integration
         types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId);
-        
+
         if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
             return {
                 status: "FAILED",
@@ -1171,8 +1195,8 @@ service /graphql on graphqlListener {
         types:AccessScope scope = auth:buildScopeFromContext(projectId, integrationId = targetComponentId);
 
         // Check if user has permission to edit this integration (edit or manage)
-        if !check auth:hasAnyPermission(userContext.userId, 
-            [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Insufficient permissions to update this component");
         }
 
@@ -1196,8 +1220,8 @@ service /graphql on graphqlListener {
 
         // Check if user has permission to view this integration
         // Users with edit or manage permissions should also be able to view artifacts
-        if !check auth:hasAnyPermission(userContext.userId, 
-            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             log:printWarn("Attempt to access component artifact types without permission", userId = userContext.userId, componentId = componentId, environmentId = environmentId);
             return [];
         }
@@ -1230,8 +1254,8 @@ service /graphql on graphqlListener {
 
         // Verify user has the permisions
         types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
-        if !check auth:hasAnyPermission(userContext.userId, 
-            ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId,
+                ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
             return error("Insufficient permissions to view component artifacts");
         }
 
@@ -1299,9 +1323,9 @@ service /graphql on graphqlListener {
                 accept = "application/json"
         );
         http:Response|error artifactResponse = mgmtClient->get(artifactPath, {
-                "Authorization": string `Bearer ${hmacToken}`,
-                "Accept": "application/json"
-                });
+            "Authorization": string `Bearer ${hmacToken}`,
+            "Accept": "application/json"
+        });
 
         if artifactResponse is error {
             log:printError("Failed to fetch artifact from management API", artifactResponse);
@@ -1365,7 +1389,7 @@ service /graphql on graphqlListener {
         // Verify user has the permissions
         types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
         if !check auth:hasAnyPermission(userContext.userId,
-            ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+                ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
             return error("Insufficient permissions to view component artifacts");
         }
 
@@ -1437,8 +1461,8 @@ service /graphql on graphqlListener {
         string hmacToken = check issueRuntimeHmacToken();
 
         http:Response|error wsdlResponse = mgmtClient->get(artifactPath, {
-                "Authorization": string `Bearer ${hmacToken}`,
-                "Accept": "application/xml"
+            "Authorization": string `Bearer ${hmacToken}`,
+            "Accept": "application/xml"
         });
 
         if wsdlResponse is error {
@@ -1504,8 +1528,8 @@ service /graphql on graphqlListener {
 
         // Verify user has the permissions
         types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
-        if !check auth:hasAnyPermission(userContext.userId, 
-            ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
+        if !check auth:hasAnyPermission(userContext.userId,
+                ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
             return error("Insufficient permissions to view component artifacts");
         }
 
@@ -1572,9 +1596,9 @@ service /graphql on graphqlListener {
                 accept = "application/json"
         );
         http:Response|error leResponse = mgmtClient->get(artifactPath, {
-                "Authorization": string `Bearer ${hmacToken}`,
-                "Accept": "application/json"
-                });
+            "Authorization": string `Bearer ${hmacToken}`,
+            "Accept": "application/json"
+        });
 
         if leResponse is error {
             log:printError("Failed to fetch local entry from management API", leResponse);
@@ -1638,8 +1662,8 @@ service /graphql on graphqlListener {
         return <string>result;
     }
 
-        // Get Inbound Endpoint parameters from management API via ICP internal API
-        isolated resource function get inboundEndpointParametersByComponent(
+    // Get Inbound Endpoint parameters from management API via ICP internal API
+    isolated resource function get inboundEndpointParametersByComponent(
             graphql:Context context,
             string componentId,
             string inboundName,
@@ -1715,9 +1739,9 @@ service /graphql on graphqlListener {
                 accept = "application/json"
         );
         http:Response|error resp = mgmtClient->get(artifactPath, {
-                "Authorization": string `Bearer ${hmacToken}`,
-                "Accept": "application/json"
-                });
+            "Authorization": string `Bearer ${hmacToken}`,
+            "Accept": "application/json"
+        });
 
         if resp is error {
             log:printError("Failed to fetch inbound parameters from management API", resp);
@@ -1757,37 +1781,14 @@ service /graphql on graphqlListener {
                 params.push({key: k, value: valStr});
             }
         } else if payload is json[] {
-            // Shape: [{"key":"...","value":"..."}] or [{"name":"...","value":...}]
+            // Shape: [{"key":"...","value":"..."}] or [{"name":"...","paramValue":...}]
             foreach json item in payload {
                 if item is map<json> {
-                    string? k = ();
-                    string? vStr = ();
-
-                    json kJson = item["key"];
-                    if kJson is () {
-                        kJson = item["name"];
-                    }
-                    if kJson is string {
-                        k = kJson;
-                    }
-
-                    json vJson = item["value"];
-                    if vJson is string {
-                        vStr = vJson;
-                    } else if vJson is () {
-                        // Some payloads might use 'paramValue'
-                        json altV = item["paramValue"];
-                        if altV is string {
-                            vStr = altV;
-                        } else if altV is json {
-                            vStr = altV.toJsonString();
-                        }
-                    } else if vJson is json {
-                        vStr = vJson.toJsonString();
-                    }
-
-                    if k is string && vStr is string {
-                        params.push({key: <string>k, value: <string>vStr});
+                    json kJson = item["key"] ?: item["name"];
+                    json vJson = item["value"] ?: item["paramValue"];
+                    if kJson is string && vJson != () {
+                        string vStr = vJson is string ? vJson : vJson.toJsonString();
+                        params.push({key: kJson, value: vStr});
                     }
                 }
             }
@@ -1799,14 +1800,14 @@ service /graphql on graphqlListener {
         }
 
         log:printInfo("Successfully fetched inbound endpoint parameters",
-            runtimeId = runtime.runtimeId,
-            inboundName = inboundName,
-            paramCount = params.length());
+                runtimeId = runtime.runtimeId,
+                inboundName = inboundName,
+                paramCount = params.length());
         return params;
     }
 
-        // Get Parameters for any artifact type from management API via ICP internal API
-        isolated resource function get artifactParametersByComponent(
+    // Get Parameters for any artifact type from management API via ICP internal API
+    isolated resource function get artifactParametersByComponent(
             graphql:Context context,
             string componentId,
             string artifactType,
@@ -1896,8 +1897,8 @@ service /graphql on graphqlListener {
                 accept = "application/json");
 
         http:Response|error resp = mgmtClient->get(artifactPath, {
-                "Authorization": string `Bearer ${hmacToken}`,
-                "Accept": "application/json"
+            "Authorization": string `Bearer ${hmacToken}`,
+            "Accept": "application/json"
         });
 
         if resp is error {
@@ -1941,33 +1942,16 @@ service /graphql on graphqlListener {
         } else if payload is json[] {
             foreach json item in payload {
                 if item is map<json> {
-                    string? k = ();
-                    string? vStr = ();
+                    // 1. Resolve the key using the Elvis operator for fallbacks
+                    json kJson = item["key"] ?: item["name"];
 
-                    json kJson = item["key"];
-                    if kJson is () {
-                        kJson = item["name"];
-                    }
-                    if kJson is string {
-                        k = kJson;
-                    }
+                    // 2. Resolve the value (checking "value" then "paramValue")
+                    json vJson = item["value"] ?: item["paramValue"];
 
-                    json vJson = item["value"];
-                    if vJson is string {
-                        vStr = vJson;
-                    } else if vJson is () {
-                        json altV = item["paramValue"];
-                        if altV is string {
-                            vStr = altV;
-                        } else if altV is json {
-                            vStr = altV.toJsonString();
-                        }
-                    } else if vJson is json {
-                        vStr = vJson.toJsonString();
-                    }
-
-                    if k is string && vStr is string {
-                        params.push({key: <string>k, value: <string>vStr});
+                    // 3. Process only if we have a valid key and a non-null value
+                    if kJson is string && vJson != () {
+                        string vStr = vJson is string ? vJson : vJson.toJsonString();
+                        params.push({key: kJson, value: vStr});
                     }
                 }
             }
@@ -1978,12 +1962,12 @@ service /graphql on graphqlListener {
         }
 
         log:printInfo("Successfully fetched artifact parameters",
-            runtimeId = runtime.runtimeId,
-            artifactType = artifactType,
-            artifactName = artifactName,
-            paramCount = params.length());
+                runtimeId = runtime.runtimeId,
+                artifactType = artifactType,
+                artifactName = artifactName,
+                paramCount = params.length());
         return params;
-        }
+    }
 }
 
 isolated function extractUserContext(graphql:Context context) returns types:UserContextV2|error {

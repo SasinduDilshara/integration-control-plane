@@ -36,6 +36,33 @@ isolated function getRuntimeIdsByEnvironmentAndComponent(string environmentId, s
     return runtimeIds;
 }
 
+// Helper to fetch status for a given set of runtime IDs in one query
+isolated function getRuntimeStatusMap(string[] runtimeIds) returns map<string>|error {
+    map<string> statusMap = {};
+    if runtimeIds.length() == 0 {
+        return statusMap;
+    }
+
+    // Build IN clause for runtime IDs
+    sql:ParameterizedQuery inClause = `(`;
+    foreach int i in 0 ..< runtimeIds.length() {
+        if i > 0 {
+            inClause = sql:queryConcat(inClause, `, `);
+        }
+        inClause = sql:queryConcat(inClause, `${runtimeIds[i]}`);
+    }
+    inClause = sql:queryConcat(inClause, `)`);
+
+    sql:ParameterizedQuery query = sql:queryConcat(`SELECT runtime_id, status FROM runtimes WHERE runtime_id IN `, inClause);
+    stream<record {|string runtime_id; string status;|}, sql:Error?> rs = dbClient->query(query);
+    check from record {|string runtime_id; string status;|} row in rs
+        do {
+            statusMap[row.runtime_id] = row.status;
+        };
+
+    return statusMap;
+}
+
 // Helper function to calculate a hash for a service based on its key properties
 isolated function calculateServiceHash(types:Service 'service) returns string {
     // Create a unique string representation of the service including resources
@@ -116,10 +143,20 @@ public isolated function getServicesByEnvironmentAndComponent(string environment
         }
     }
 
+    // Build status map once
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(serviceList.length()) {
         types:Service s = serviceList[i];
         string hash = calculateServiceHash(s);
-        s.runtimeIds = serviceRuntimeMap[hash] ?: [];
+        string[] rids = serviceRuntimeMap[hash] ?: [];
+        s.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMap[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        s.runtimes = infos;
         serviceList[i] = s;
     }
 
@@ -159,10 +196,20 @@ public isolated function getListenersByEnvironmentAndComponent(string environmen
         }
     }
 
+    // Build status map once
+    map<string> statusMapL = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(listenerList.length()) {
         types:Listener l = listenerList[i];
         string hash = calculateListenerHash(l);
-        l.runtimeIds = listenerRuntimeMap[hash] ?: [];
+        string[] rids = listenerRuntimeMap[hash] ?: [];
+        l.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapL[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        l.runtimes = infos;
         listenerList[i] = l;
     }
 
@@ -199,9 +246,19 @@ public isolated function getRestApisByEnvironmentAndComponent(string environment
     }
 
     // attach runtimeIds
+    // Build status map once
+    map<string> statusMapApi = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(apiList.length()) {
         types:RestApi api = apiList[i];
-        api.runtimeIds = apiRuntimeMap[api.name] ?: [];
+        string[] rids = apiRuntimeMap[api.name] ?: [];
+        api.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapApi[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        api.runtimes = infos;
         apiList[i] = api;
     }
 
@@ -237,9 +294,19 @@ public isolated function getCarbonAppsByEnvironmentAndComponent(string environme
         }
     }
 
+    // Build status map once
+    map<string> statusMapApp = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(appList.length()) {
         types:CarbonApp app = appList[i];
-        app.runtimeIds = appRuntimeMap[app.name] ?: [];
+        string[] rids = appRuntimeMap[app.name] ?: [];
+        app.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapApp[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        app.runtimes = infos;
         appList[i] = app;
     }
 
@@ -275,9 +342,19 @@ public isolated function getInboundEndpointsByEnvironmentAndComponent(string env
         }
     }
 
+    // Build status map once
+    map<string> statusMapInbound = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(inboundList.length()) {
         types:InboundEndpoint inbound = inboundList[i];
-        inbound.runtimeIds = inboundRuntimeMap[inbound.name] ?: [];
+        string[] rids = inboundRuntimeMap[inbound.name] ?: [];
+        inbound.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapInbound[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        inbound.runtimes = infos;
         inboundList[i] = inbound;
     }
 
@@ -313,9 +390,19 @@ public isolated function getEndpointsByEnvironmentAndComponent(string environmen
         }
     }
 
+    // Build status map once
+    map<string> statusMapEndpoint = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(endpointList.length()) {
         types:Endpoint endpoint = endpointList[i];
-        endpoint.runtimeIds = endpointRuntimeMap[endpoint.name] ?: [];
+        string[] rids = endpointRuntimeMap[endpoint.name] ?: [];
+        endpoint.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapEndpoint[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        endpoint.runtimes = infos;
         endpointList[i] = endpoint;
     }
 
@@ -351,9 +438,19 @@ public isolated function getSequencesByEnvironmentAndComponent(string environmen
         }
     }
 
+    // Build status map once
+    map<string> statusMapSeq = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(sequenceList.length()) {
         types:Sequence sequence = sequenceList[i];
-        sequence.runtimeIds = sequenceRuntimeMap[sequence.name] ?: [];
+        string[] rids = sequenceRuntimeMap[sequence.name] ?: [];
+        sequence.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapSeq[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        sequence.runtimes = infos;
         sequenceList[i] = sequence;
     }
 
@@ -389,9 +486,19 @@ public isolated function getProxyServicesByEnvironmentAndComponent(string enviro
         }
     }
 
+    // Build status map once
+    map<string> statusMapProxy = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(proxyList.length()) {
         types:ProxyService proxy = proxyList[i];
-        proxy.runtimeIds = proxyRuntimeMap[proxy.name] ?: [];
+        string[] rids = proxyRuntimeMap[proxy.name] ?: [];
+        proxy.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapProxy[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        proxy.runtimes = infos;
         proxyList[i] = proxy;
     }
 
@@ -427,9 +534,19 @@ public isolated function getTasksByEnvironmentAndComponent(string environmentId,
         }
     }
 
+    // Build status map once
+    map<string> statusMapTask = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(taskList.length()) {
         types:Task task = taskList[i];
-        task.runtimeIds = taskRuntimeMap[task.name] ?: [];
+        string[] rids = taskRuntimeMap[task.name] ?: [];
+        task.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapTask[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        task.runtimes = infos;
         taskList[i] = task;
     }
 
@@ -465,9 +582,19 @@ public isolated function getTemplatesByEnvironmentAndComponent(string environmen
         }
     }
 
+    // Build status map once
+    map<string> statusMapTpl = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(templateList.length()) {
         types:Template template = templateList[i];
-        template.runtimeIds = templateRuntimeMap[template.name] ?: [];
+        string[] rids = templateRuntimeMap[template.name] ?: [];
+        template.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapTpl[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        template.runtimes = infos;
         templateList[i] = template;
     }
 
@@ -503,9 +630,19 @@ public isolated function getMessageStoresByEnvironmentAndComponent(string enviro
         }
     }
 
+    // Build status map once
+    map<string> statusMapStore = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(storeList.length()) {
         types:MessageStore store = storeList[i];
-        store.runtimeIds = storeRuntimeMap[store.name] ?: [];
+        string[] rids = storeRuntimeMap[store.name] ?: [];
+        store.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapStore[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        store.runtimes = infos;
         storeList[i] = store;
     }
 
@@ -541,9 +678,19 @@ public isolated function getMessageProcessorsByEnvironmentAndComponent(string en
         }
     }
 
+    // Build status map once
+    map<string> statusMapProc = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(processorList.length()) {
         types:MessageProcessor proc = processorList[i];
-        proc.runtimeIds = processorRuntimeMap[proc.name] ?: [];
+        string[] rids = processorRuntimeMap[proc.name] ?: [];
+        proc.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapProc[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        proc.runtimes = infos;
         processorList[i] = proc;
     }
 
@@ -579,9 +726,19 @@ public isolated function getLocalEntriesByEnvironmentAndComponent(string environ
         }
     }
 
+    // Build status map once
+    map<string> statusMapEntry = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(entryList.length()) {
         types:LocalEntry entry = entryList[i];
-        entry.runtimeIds = entryRuntimeMap[entry.name] ?: [];
+        string[] rids = entryRuntimeMap[entry.name] ?: [];
+        entry.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapEntry[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        entry.runtimes = infos;
         entryList[i] = entry;
     }
 
@@ -617,9 +774,19 @@ public isolated function getDataServicesByEnvironmentAndComponent(string environ
         }
     }
 
+    // Build status map once
+    map<string> statusMapDsvc = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(dataServiceList.length()) {
         types:DataService ds = dataServiceList[i];
-        ds.runtimeIds = dsRuntimeMap[ds.name] ?: [];
+        string[] rids = dsRuntimeMap[ds.name] ?: [];
+        ds.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapDsvc[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        ds.runtimes = infos;
         dataServiceList[i] = ds;
     }
 
@@ -655,9 +822,19 @@ public isolated function getDataSourcesByEnvironmentAndComponent(string environm
         }
     }
 
+    // Build status map once
+    map<string> statusMapDs = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(sourceList.length()) {
         types:DataSource ds = sourceList[i];
-        ds.runtimeIds = sourceRuntimeMap[ds.name] ?: [];
+        string[] rids = sourceRuntimeMap[ds.name] ?: [];
+        ds.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapDs[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        ds.runtimes = infos;
         sourceList[i] = ds;
     }
 
@@ -692,11 +869,57 @@ public isolated function getRegistryResourcesByEnvironmentAndComponent(string en
             }
         }
     }
+    // Build status map once
+    map<string> statusMapRes = check getRuntimeStatusMap(runtimeIds);
+
     foreach int i in 0..<(resourceList.length()) {
         types:RegistryResource res = resourceList[i];
-        res.runtimeIds = resourceRuntimeMap[res.name] ?: [];
+        string[] rids = resourceRuntimeMap[res.name] ?: [];
+        res.runtimeIds = rids;
+        types:ArtifactRuntimeInfo[] infos = [];
+        foreach string rid in rids {
+            string st = statusMapRes[rid] ?: "UNKNOWN";
+            infos.push({runtimeId: rid, status: st});
+        }
+        res.runtimes = infos;
         resourceList[i] = res;
     }
 
     return resourceList;
+}
+
+// Get Connectors for a specific environment and component
+public isolated function getConnectorsByEnvironmentAndComponent(string environmentId, string componentId) returns types:Connector[]|error {
+    types:Connector[] connectorList = [];
+    map<string[]> connectorRuntimeMap = {};
+
+    // Get all runtime IDs for this environment and component
+    string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
+
+    // If no runtimes found, return empty array
+    if runtimeIds.length() == 0 {
+        return connectorList;
+    }
+
+    // Get all Connectors for these runtimes
+    foreach string runtimeId in runtimeIds {
+        types:Connector[] runtimeConnectors = check getConnectorsForRuntime(runtimeId);
+        foreach types:Connector conn in runtimeConnectors {
+            // Use name + package + version as uniqueness key across runtimes
+            string key = string `${conn.name}|${conn.'package}|${conn.version ?: ""}`;
+            string[] existing = connectorRuntimeMap[key] ?: [];
+            if existing.length() == 0 {
+                connectorRuntimeMap[key] = [runtimeId];
+                connectorList.push(conn);
+            } else {
+                existing.push(runtimeId);
+                connectorRuntimeMap[key] = existing;
+            }
+        }
+    }
+
+    // Note: Connector type does not currently expose runtimeIds/runtimes
+    // like other artifacts, so we return the unique connector list only.
+
+    return connectorList;
 }

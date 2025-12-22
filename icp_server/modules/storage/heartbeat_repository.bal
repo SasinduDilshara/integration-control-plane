@@ -628,9 +628,9 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
     foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
         _ = check dbClient->execute(`
             INSERT INTO runtime_templates (
-                runtime_id, template_name, template_type, state
+                runtime_id, template_name, template_type
             ) VALUES (
-                ${heartbeat.runtime}, ${template.name}, ${template.'type}, ${template.state}
+                ${heartbeat.runtime}, ${template.name}, ${template.'type}
             )
         `);
     }
