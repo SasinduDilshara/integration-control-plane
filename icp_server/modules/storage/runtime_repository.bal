@@ -368,13 +368,14 @@ public isolated function getTasksForRuntime(string runtimeId) returns types:Task
 public isolated function getTemplatesForRuntime(string runtimeId) returns types:Template[]|error {
     types:Template[] templateList = [];
     stream<types:Template, sql:Error?> templateStream = dbClient->query(`
-        SELECT template_name, template_type, state 
+        SELECT template_name, template_type 
         FROM runtime_templates 
         WHERE runtime_id = ${runtimeId}
     `);
 
     check from types:Template templateRecord in templateStream
         do {
+            // state is no longer persisted; default value in type will be used
             templateList.push(templateRecord);
         };
 
@@ -540,7 +541,7 @@ public isolated function getDataSourcesForRuntime(string runtimeId) returns type
 public isolated function getConnectorsForRuntime(string runtimeId) returns types:Connector[]|error {
     types:Connector[] connectorList = [];
     stream<types:Connector, sql:Error?> connectorStream = dbClient->query(`
-        SELECT connector_name, package as connector_package, version, state
+        SELECT connector_name, package, version, state
         FROM runtime_connectors 
         WHERE runtime_id = ${runtimeId}
     `);

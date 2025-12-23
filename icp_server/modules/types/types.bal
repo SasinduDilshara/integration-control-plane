@@ -434,6 +434,7 @@ public type Service record {
     Resource[] resources;
     Listener[] listeners;
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type Listener record {
@@ -480,6 +481,7 @@ public type Listener record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 // MI Runtime specific artifact types
@@ -497,6 +499,7 @@ public type RestApi record {
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     ApiResource[] resources = []; // API resources (path + methods)
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 // API Resource type for MI API resources
@@ -519,6 +522,7 @@ public type ProxyService record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type Endpoint record {
@@ -533,6 +537,7 @@ public type Endpoint record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type InboundEndpoint record {
@@ -547,6 +552,7 @@ public type InboundEndpoint record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type Sequence record {
@@ -561,6 +567,7 @@ public type Sequence record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type Task record {
@@ -575,6 +582,7 @@ public type Task record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type Template record {
@@ -582,12 +590,12 @@ public type Template record {
         name: "template_name"
     }
     string name;
-    string 'type;
     @sql:Column {
-        name: "template_state"
+        name: "template_type"
     }
-    string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string 'type;
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type MessageStore record {
@@ -602,6 +610,7 @@ public type MessageStore record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type MessageProcessor record {
@@ -616,6 +625,7 @@ public type MessageProcessor record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type LocalEntry record {
@@ -630,6 +640,7 @@ public type LocalEntry record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type DataService record {
@@ -644,6 +655,7 @@ public type DataService record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type CarbonApp record {
@@ -660,6 +672,7 @@ public type CarbonApp record {
     // Artifacts packaged within the Carbon App (from heartbeat payload)
     CarbonAppArtifact[] artifacts?;
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 // Artifact shape used inside CarbonApp
@@ -685,6 +698,7 @@ public type DataSource record {
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 public type Connector record {
@@ -711,6 +725,7 @@ public type RegistryResource record {
     string 'type = "";
     // Populated at query time to indicate runtimes containing this resource
     string[] runtimeIds = [];
+    ArtifactRuntimeInfo[]? runtimes?;
 };
 
 // === Project & Component Types ===
@@ -1361,6 +1376,12 @@ public enum LogEntryRequestSort {
     asc,
     desc
 }
+
+// Lightweight runtime reference for artifact availability
+public type ArtifactRuntimeInfo record {
+    string runtimeId;
+    string status;
+};
 
 public type ICPLogEntryRequest record {
     string componentId?;
