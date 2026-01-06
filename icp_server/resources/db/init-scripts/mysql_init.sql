@@ -715,7 +715,7 @@ CREATE TABLE runtime_proxy_service_endpoints (
     UNIQUE KEY uk_runtime_proxy_service_endpoint (
         runtime_id,
         proxy_name,
-        endpoint_url
+        endpoint_url(255)
     ),
     INDEX idx_runtime_proxy_service_endpoints_runtime_id (runtime_id),
     INDEX idx_runtime_proxy_service_endpoints_proxy_name (proxy_name)
