@@ -527,6 +527,7 @@ isolated function deleteExistingArtifacts(string runtimeId) returns error? {
     _ = check dbClient->execute(`DELETE FROM runtime_proxy_services WHERE runtime_id = ${runtimeId}`);
     _ = check dbClient->execute(`DELETE FROM runtime_proxy_service_endpoints WHERE runtime_id = ${runtimeId}`);
     _ = check dbClient->execute(`DELETE FROM runtime_endpoints WHERE runtime_id = ${runtimeId}`);
+    _ = check dbClient->execute(`DELETE FROM runtime_endpoint_attributes WHERE runtime_id = ${runtimeId}`);
     _ = check dbClient->execute(`DELETE FROM runtime_inbound_endpoints WHERE runtime_id = ${runtimeId}`);
     _ = check dbClient->execute(`DELETE FROM runtime_sequences WHERE runtime_id = ${runtimeId}`);
     _ = check dbClient->execute(`DELETE FROM runtime_tasks WHERE runtime_id = ${runtimeId}`);
@@ -593,12 +594,26 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
     foreach types:Endpoint endpoint in <types:Endpoint[]>heartbeat.artifacts.endpoints {
         _ = check dbClient->execute(`
             INSERT INTO runtime_endpoints (
-                runtime_id, endpoint_name, endpoint_type, address, state
+                runtime_id, endpoint_name, endpoint_type, state
             ) VALUES (
                 ${heartbeat.runtime}, ${endpoint.name}, ${endpoint.'type},
-                ${endpoint.address}, ${endpoint.state}
+                ${endpoint.state}
             )
         `);
+
+        // Persist endpoint attributes if present
+        var attrsVal = endpoint?.attributes;
+        if attrsVal is types:EndpointAttribute[] {
+            foreach types:EndpointAttribute attr in attrsVal {
+                _ = check dbClient->execute(`
+                    INSERT INTO runtime_endpoint_attributes (
+                        runtime_id, endpoint_name, attribute_name, attribute_value
+                    ) VALUES (
+                        ${heartbeat.runtime}, ${endpoint.name}, ${attr.name}, ${attr?.value}
+                    )
+                `);
+            }
+        }
     }
 }
 

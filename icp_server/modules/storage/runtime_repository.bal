@@ -292,7 +292,7 @@ public isolated function getProxyServicesForRuntime(string runtimeId) returns ty
 public isolated function getEndpointsForRuntime(string runtimeId) returns types:Endpoint[]|error {
     types:Endpoint[] endpointList = [];
     stream<types:EndpointRecordInDB, sql:Error?> endpointStream = dbClient->query(`
-        SELECT endpoint_name, endpoint_type, address, state 
+        SELECT endpoint_name, endpoint_type, state 
         FROM runtime_endpoints 
         WHERE runtime_id = ${runtimeId}
     `);
@@ -302,11 +302,29 @@ public isolated function getEndpointsForRuntime(string runtimeId) returns types:
             types:Endpoint endpoint = {
                 name: endpointRecord.endpoint_name,
                 'type: endpointRecord.endpoint_type,
-                address: endpointRecord.address,
                 state: endpointRecord.state
             };
             endpointList.push(endpoint);
         };
+
+    // Attach attributes per endpoint
+    foreach int i in 0..<(endpointList.length()) {
+        types:Endpoint ep = endpointList[i];
+        stream<types:EndpointAttribute, sql:Error?> attrStream = dbClient->query(`
+            SELECT attribute_name, attribute_value
+            FROM runtime_endpoint_attributes
+            WHERE runtime_id = ${runtimeId} AND endpoint_name = ${ep.name}
+        `);
+        types:EndpointAttribute[] attrs = [];
+        check from types:EndpointAttribute a in attrStream
+            do {
+                attrs.push(a);
+            };
+        if attrs.length() > 0 {
+            ep.attributes = attrs;
+            endpointList[i] = ep;
+        }
+    }
 
     return endpointList;
 }

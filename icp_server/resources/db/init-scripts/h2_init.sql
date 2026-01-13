@@ -870,13 +870,29 @@ CREATE TABLE runtime_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     endpoint_name VARCHAR(200) NOT NULL,
     endpoint_type VARCHAR(100) NOT NULL,
-    address VARCHAR(500),
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     CONSTRAINT uk_runtime_endpoint UNIQUE (runtime_id, endpoint_name)
 );
+
+-- Endpoint Attributes (MI)
+CREATE TABLE runtime_endpoint_attributes (
+    id BIGINT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    runtime_id VARCHAR(100) NOT NULL,
+    endpoint_name VARCHAR(200) NOT NULL,
+    attribute_name VARCHAR(200) NOT NULL,
+    attribute_value TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_runtime_endpoint_attributes_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
+    CONSTRAINT uk_runtime_endpoint_attribute UNIQUE (runtime_id, endpoint_name, attribute_name)
+);
+
+CREATE INDEX idx_runtime_endpoint_attributes_runtime_id ON runtime_endpoint_attributes (runtime_id);
+CREATE INDEX idx_runtime_endpoint_attributes_endpoint_name ON runtime_endpoint_attributes (endpoint_name);
+CREATE INDEX idx_runtime_endpoint_attributes_attribute_name ON runtime_endpoint_attributes (attribute_name);
 
 CREATE INDEX idx_runtime_endpoints_runtime_id ON runtime_endpoints (runtime_id);
 

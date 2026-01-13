@@ -727,7 +727,6 @@ CREATE TABLE runtime_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     endpoint_name VARCHAR(200) NOT NULL,
     endpoint_type VARCHAR(100) NOT NULL,
-    address VARCHAR(500) NULL,
     state ENUM(
         'ENABLED',
         'DISABLED',
@@ -743,6 +742,26 @@ CREATE TABLE runtime_endpoints (
     INDEX idx_endpoint_name (endpoint_name),
     INDEX idx_endpoint_type (endpoint_type),
     INDEX idx_state (state)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- Endpoint Attributes (MI)
+CREATE TABLE runtime_endpoint_attributes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    runtime_id VARCHAR(100) NOT NULL,
+    endpoint_name VARCHAR(200) NOT NULL,
+    attribute_name VARCHAR(200) NOT NULL,
+    attribute_value TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_runtime_endpoint_attributes_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
+    UNIQUE KEY uk_runtime_endpoint_attribute (
+        runtime_id,
+        endpoint_name,
+        attribute_name
+    ),
+    INDEX idx_runtime_endpoint_attributes_runtime_id (runtime_id),
+    INDEX idx_runtime_endpoint_attributes_endpoint_name (endpoint_name),
+    INDEX idx_runtime_endpoint_attributes_attribute_name (attribute_name)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Inbound Endpoints (MI)

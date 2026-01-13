@@ -351,7 +351,6 @@ public type ProxyServiceRecordInDB record {
 public type EndpointRecordInDB record {
     string endpoint_name;
     string endpoint_type;
-    string address?;
     string state;
 };
 
@@ -528,13 +527,25 @@ public type Endpoint record {
     }
     string name;
     string 'type;
-    string address?;
     @sql:Column {
         name: "endpoint_state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
+    EndpointAttribute[]? attributes?;
     string[] runtimeIds?;
     ArtifactRuntimeInfo[]? runtimes?;
+};
+
+// Attribute for endpoints (heartbeat uses name/value)
+public type EndpointAttribute record {
+    @sql:Column {
+        name: "attribute_name"
+    }
+    string name;
+    @sql:Column {
+        name: "attribute_value"
+    }
+    string value?;
 };
 
 public type InboundEndpoint record {
