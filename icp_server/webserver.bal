@@ -22,8 +22,9 @@ import ballerina/log;
 service / on httpListener {
 
     function init() {
+        log:printInfo("Starting console on " + serverHost + ":" + serverPort.toString());
         log:printInfo("--------------------------------");
-        log:printInfo("WSO2 Integrator: ICP Console started at https://" + serverHost + ":" + serverPort.toString());
+        log:printInfo("WSO2 Integrator: ICP Console started at https://localhost:" + serverPort.toString());
         log:printInfo("--------------------------------");
     }
 

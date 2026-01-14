@@ -26,8 +26,17 @@ import ballerina/lang.value;
 import ballerina/log;
 
 // GraphQL listener configuration
-// TODO: Enable SSL
-listener graphql:Listener graphqlListener = new (graphqlPort);
+listener graphql:Listener graphqlListener = new (graphqlPort,
+    configuration = {
+        host: serverHost,
+        secureSocket: {
+            key: {
+                path: keystorePath,
+                password: keystorePassword
+            }
+        }
+    }
+);
 
 const string ICP_ARTIFACTS_PATH = "/icp/artifacts";
 
