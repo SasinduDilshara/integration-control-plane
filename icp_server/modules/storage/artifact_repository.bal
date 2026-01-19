@@ -75,10 +75,7 @@ isolated function calculateServiceHash(types:Service 'service) returns string {
         string? url = 'resource?.url;
         string[]? methodsOpt = 'resource?.methods;
         string[] methods = methodsOpt ?: [];
-        string methodsStr = "";
-        foreach string m in methods {
-            methodsStr = methodsStr + m + ",";
-        }
+        string methodsStr = string:'join(",", ...methods);
         serviceKey = serviceKey + string `-${url ?: ""}-${methodsStr}`;
     }
 
@@ -144,7 +141,7 @@ public isolated function getServicesByEnvironmentAndComponent(string environment
                 serviceRuntimeMap[hash] = [runtimeId];
                 serviceList.push('service);
             } else {
-                string[] existing = serviceRuntimeMap[hash] ?: [];
+                string[] existing = <string[]>serviceRuntimeMap[hash];
                 existing.push(runtimeId);
                 serviceRuntimeMap[hash] = existing;
             }
@@ -193,7 +190,7 @@ public isolated function getListenersByEnvironmentAndComponent(string environmen
                 listenerRuntimeMap[hash] = [runtimeId];
                 listenerList.push(listenerRecord);
             } else {
-                string[] existing = listenerRuntimeMap[hash] ?: [];
+                string[] existing = <string[]>listenerRuntimeMap[hash];
                 existing.push(runtimeId);
                 listenerRuntimeMap[hash] = existing;
             }
@@ -242,7 +239,7 @@ public isolated function getRestApisByEnvironmentAndComponent(string environment
                 apiRuntimeMap[key] = [runtimeId];
                 apiList.push(api);
             } else {
-                string[] existing = apiRuntimeMap[key] ?: [];
+                string[] existing = <string[]>apiRuntimeMap[key];
                 existing.push(runtimeId);
                 apiRuntimeMap[key] = existing;
             }
@@ -291,7 +288,7 @@ public isolated function getCarbonAppsByEnvironmentAndComponent(string environme
                 appRuntimeMap[key] = [runtimeId];
                 appList.push(app);
             } else {
-                string[] existing = appRuntimeMap[key] ?: [];
+                string[] existing = <string[]>appRuntimeMap[key];
                 existing.push(runtimeId);
                 appRuntimeMap[key] = existing;
             }
@@ -339,7 +336,7 @@ public isolated function getInboundEndpointsByEnvironmentAndComponent(string env
                 inboundRuntimeMap[key] = [runtimeId];
                 inboundList.push(inbound);
             } else {
-                string[] existing = inboundRuntimeMap[key] ?: [];
+                string[] existing = <string[]>inboundRuntimeMap[key];
                 existing.push(runtimeId);
                 inboundRuntimeMap[key] = existing;
             }
@@ -387,7 +384,7 @@ public isolated function getEndpointsByEnvironmentAndComponent(string environmen
                 endpointRuntimeMap[key] = [runtimeId];
                 endpointList.push(endpoint);
             } else {
-                string[] existing = endpointRuntimeMap[key] ?: [];
+                string[] existing = <string[]>endpointRuntimeMap[key];
                 existing.push(runtimeId);
                 endpointRuntimeMap[key] = existing;
             }
@@ -435,7 +432,7 @@ public isolated function getSequencesByEnvironmentAndComponent(string environmen
                 sequenceRuntimeMap[key] = [runtimeId];
                 sequenceList.push(sequence);
             } else {
-                string[] existing = sequenceRuntimeMap[key] ?: [];
+                string[] existing = <string[]>sequenceRuntimeMap[key];
                 existing.push(runtimeId);
                 sequenceRuntimeMap[key] = existing;
             }
@@ -485,7 +482,7 @@ public isolated function getProxyServicesByEnvironmentAndComponent(string enviro
                 proxyIndexMap[key] = proxyList.length();
                 proxyList.push(proxy);
             } else {
-                string[] existing = proxyRuntimeMap[key] ?: [];
+                string[] existing = <string[]>proxyRuntimeMap[key];
                 existing.push(runtimeId);
                 proxyRuntimeMap[key] = existing;
                 // Merge endpoints across runtimes
@@ -561,7 +558,7 @@ public isolated function getTasksByEnvironmentAndComponent(string environmentId,
                 taskRuntimeMap[key] = [runtimeId];
                 taskList.push(task);
             } else {
-                string[] existing = taskRuntimeMap[key] ?: [];
+                string[] existing = <string[]>taskRuntimeMap[key];
                 existing.push(runtimeId);
                 taskRuntimeMap[key] = existing;
             }
@@ -609,7 +606,7 @@ public isolated function getTemplatesByEnvironmentAndComponent(string environmen
                 templateRuntimeMap[key] = [runtimeId];
                 templateList.push(template);
             } else {
-                string[] existing = templateRuntimeMap[key] ?: [];
+                string[] existing = <string[]>templateRuntimeMap[key];
                 existing.push(runtimeId);
                 templateRuntimeMap[key] = existing;
             }
@@ -657,7 +654,7 @@ public isolated function getMessageStoresByEnvironmentAndComponent(string enviro
                 storeRuntimeMap[key] = [runtimeId];
                 storeList.push(store);
             } else {
-                string[] existing = storeRuntimeMap[key] ?: [];
+                string[] existing = <string[]>storeRuntimeMap[key];
                 existing.push(runtimeId);
                 storeRuntimeMap[key] = existing;
             }
@@ -705,7 +702,7 @@ public isolated function getMessageProcessorsByEnvironmentAndComponent(string en
                 processorRuntimeMap[key] = [runtimeId];
                 processorList.push(proc);
             } else {
-                string[] existing = processorRuntimeMap[key] ?: [];
+                string[] existing = <string[]>processorRuntimeMap[key];
                 existing.push(runtimeId);
                 processorRuntimeMap[key] = existing;
             }
@@ -753,7 +750,7 @@ public isolated function getLocalEntriesByEnvironmentAndComponent(string environ
                 entryRuntimeMap[key] = [runtimeId];
                 entryList.push(entry);
             } else {
-                string[] existing = entryRuntimeMap[key] ?: [];
+                string[] existing = <string[]>entryRuntimeMap[key];
                 existing.push(runtimeId);
                 entryRuntimeMap[key] = existing;
             }
@@ -801,7 +798,7 @@ public isolated function getDataServicesByEnvironmentAndComponent(string environ
                 dsRuntimeMap[key] = [runtimeId];
                 dataServiceList.push(ds);
             } else {
-                string[] existing = dsRuntimeMap[key] ?: [];
+                string[] existing = <string[]>dsRuntimeMap[key];
                 existing.push(runtimeId);
                 dsRuntimeMap[key] = existing;
             }
@@ -849,7 +846,7 @@ public isolated function getDataSourcesByEnvironmentAndComponent(string environm
                 sourceRuntimeMap[key] = [runtimeId];
                 sourceList.push(ds);
             } else {
-                string[] existing = sourceRuntimeMap[key] ?: [];
+                string[] existing = <string[]>sourceRuntimeMap[key];
                 existing.push(runtimeId);
                 sourceRuntimeMap[key] = existing;
             }
@@ -897,7 +894,7 @@ public isolated function getRegistryResourcesByEnvironmentAndComponent(string en
                 resourceRuntimeMap[key] = [runtimeId];
                 resourceList.push(res);
             } else {
-                string[] existing = resourceRuntimeMap[key] ?: [];
+                string[] existing = <string[]>resourceRuntimeMap[key];
                 existing.push(runtimeId);
                 resourceRuntimeMap[key] = existing;
             }
@@ -945,7 +942,7 @@ public isolated function getConnectorsByEnvironmentAndComponent(string environme
                 connectorRuntimeMap[key] = [runtimeId];
                 connectorList.push(conn);
             } else {
-                string[] existing = connectorRuntimeMap[key] ?: [];
+                string[] existing = <string[]>connectorRuntimeMap[key];
                 existing.push(runtimeId);
                 connectorRuntimeMap[key] = existing;
             }
