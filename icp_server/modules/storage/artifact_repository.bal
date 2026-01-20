@@ -67,11 +67,16 @@ isolated function getRuntimeStatusMap(string[] runtimeIds) returns map<string>|e
 // Helper function to calculate a hash for a service based on its key properties
 isolated function calculateServiceHash(types:Service 'service) returns string {
     // Create a unique string representation of the service including resources
-    string serviceKey = string `${('service.name)}-${('service.package)}-${('service.basePath)}-${('service.'type)}`;
+    // Note: name is excluded as it may vary across runtimes for the same service
+    string serviceKey = string `${('service.package)}-${('service.basePath)}-${('service.'type)}`;
 
-    // Add resources to the hash calculation
+    // Add resources to the hash calculation - use url and methods instead of path/method
     foreach types:Resource 'resource in 'service.resources {
-        serviceKey = serviceKey + string `-${('resource.path)}-${('resource.method)}`;
+        string? url = 'resource?.url;
+        string[]? methodsOpt = 'resource?.methods;
+        string[] methods = methodsOpt ?: [];
+        string methodsStr = string:'join(",", ...methods);
+        serviceKey = serviceKey + string `-${url ?: ""}-${methodsStr}`;
     }
 
     // Calculate SHA-256 hash
@@ -83,7 +88,8 @@ isolated function calculateServiceHash(types:Service 'service) returns string {
 // Helper function to calculate a hash for a listener based on its key properties
 isolated function calculateListenerHash(types:Listener listenerRecord) returns string {
     // Create a unique string representation of the listener
-    string listenerKey = string `${listenerRecord.name}-${listenerRecord.package}-${listenerRecord.protocol}`;
+    // Note: name is excluded as it may vary across runtimes for the same listener
+    string listenerKey = string `${listenerRecord.package}-${listenerRecord.protocol}`;
 
     // Add optional fields if present
     string? host = listenerRecord?.host;
@@ -135,7 +141,7 @@ public isolated function getServicesByEnvironmentAndComponent(string environment
                 serviceRuntimeMap[hash] = [runtimeId];
                 serviceList.push('service);
             } else {
-                string[] existing = serviceRuntimeMap[hash] ?: [];
+                string[] existing = <string[]>serviceRuntimeMap[hash];
                 existing.push(runtimeId);
                 serviceRuntimeMap[hash] = existing;
             }
@@ -165,7 +171,6 @@ public isolated function getServicesByEnvironmentAndComponent(string environment
 // Get listeners for a specific environment and component
 public isolated function getListenersByEnvironmentAndComponent(string environmentId, string componentId) returns types:Listener[]|error {
     types:Listener[] listenerList = [];
-    map<boolean> seenHashes = {}; // Track unique listener hashes
     map<string[]> listenerRuntimeMap = {};
 
     // Get all runtime IDs for this environment and component
@@ -181,19 +186,15 @@ public isolated function getListenersByEnvironmentAndComponent(string environmen
         types:Listener[] runtimeListeners = check getListenersForRuntime(runtimeId);
         foreach types:Listener listenerRecord in runtimeListeners {
             string hash = calculateListenerHash(listenerRecord);
-            string[] existing = listenerRuntimeMap[hash] ?: [];
-            if existing.length() == 0 {
+            if !listenerRuntimeMap.hasKey(hash) {
                 listenerRuntimeMap[hash] = [runtimeId];
-                if !seenHashes.hasKey(hash) {
-                    listenerList.push(listenerRecord);
-                    seenHashes[hash] = true;
-                }
+                listenerList.push(listenerRecord);
             } else {
+                string[] existing = <string[]>listenerRuntimeMap[hash];
                 existing.push(runtimeId);
                 listenerRuntimeMap[hash] = existing;
             }
         }
-
     }
 
     // Build status map once
@@ -234,11 +235,11 @@ public isolated function getRestApisByEnvironmentAndComponent(string environment
         types:RestApi[] runtimeApis = check getApisForRuntime(runtimeId);
         foreach types:RestApi api in runtimeApis {
             string key = api.name;
-            string[] existing = apiRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !apiRuntimeMap.hasKey(key) {
                 apiRuntimeMap[key] = [runtimeId];
                 apiList.push(api);
             } else {
+                string[] existing = <string[]>apiRuntimeMap[key];
                 existing.push(runtimeId);
                 apiRuntimeMap[key] = existing;
             }
@@ -283,11 +284,11 @@ public isolated function getCarbonAppsByEnvironmentAndComponent(string environme
         types:CarbonApp[] runtimeApps = check getCarbonAppsForRuntime(runtimeId);
         foreach types:CarbonApp app in runtimeApps {
             string key = app.name;
-            string[] existing = appRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !appRuntimeMap.hasKey(key) {
                 appRuntimeMap[key] = [runtimeId];
                 appList.push(app);
             } else {
+                string[] existing = <string[]>appRuntimeMap[key];
                 existing.push(runtimeId);
                 appRuntimeMap[key] = existing;
             }
@@ -331,11 +332,11 @@ public isolated function getInboundEndpointsByEnvironmentAndComponent(string env
         types:InboundEndpoint[] runtimeInbounds = check getInboundEndpointsForRuntime(runtimeId);
         foreach types:InboundEndpoint inbound in runtimeInbounds {
             string key = inbound.name;
-            string[] existing = inboundRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !inboundRuntimeMap.hasKey(key) {
                 inboundRuntimeMap[key] = [runtimeId];
                 inboundList.push(inbound);
             } else {
+                string[] existing = <string[]>inboundRuntimeMap[key];
                 existing.push(runtimeId);
                 inboundRuntimeMap[key] = existing;
             }
@@ -379,11 +380,11 @@ public isolated function getEndpointsByEnvironmentAndComponent(string environmen
         types:Endpoint[] runtimeEndpoints = check getEndpointsForRuntime(runtimeId);
         foreach types:Endpoint endpoint in runtimeEndpoints {
             string key = endpoint.name;
-            string[] existing = endpointRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !endpointRuntimeMap.hasKey(key) {
                 endpointRuntimeMap[key] = [runtimeId];
                 endpointList.push(endpoint);
             } else {
+                string[] existing = <string[]>endpointRuntimeMap[key];
                 existing.push(runtimeId);
                 endpointRuntimeMap[key] = existing;
             }
@@ -427,11 +428,11 @@ public isolated function getSequencesByEnvironmentAndComponent(string environmen
         types:Sequence[] runtimeSequences = check getSequencesForRuntime(runtimeId);
         foreach types:Sequence sequence in runtimeSequences {
             string key = sequence.name;
-            string[] existing = sequenceRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !sequenceRuntimeMap.hasKey(key) {
                 sequenceRuntimeMap[key] = [runtimeId];
                 sequenceList.push(sequence);
             } else {
+                string[] existing = <string[]>sequenceRuntimeMap[key];
                 existing.push(runtimeId);
                 sequenceRuntimeMap[key] = existing;
             }
@@ -476,12 +477,12 @@ public isolated function getProxyServicesByEnvironmentAndComponent(string enviro
         types:ProxyService[] runtimeProxies = check getProxyServicesForRuntime(runtimeId);
         foreach types:ProxyService proxy in runtimeProxies {
             string key = proxy.name;
-            string[] existing = proxyRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !proxyRuntimeMap.hasKey(key) {
                 proxyRuntimeMap[key] = [runtimeId];
                 proxyIndexMap[key] = proxyList.length();
                 proxyList.push(proxy);
             } else {
+                string[] existing = <string[]>proxyRuntimeMap[key];
                 existing.push(runtimeId);
                 proxyRuntimeMap[key] = existing;
                 // Merge endpoints across runtimes
@@ -553,11 +554,11 @@ public isolated function getTasksByEnvironmentAndComponent(string environmentId,
         types:Task[] runtimeTasks = check getTasksForRuntime(runtimeId);
         foreach types:Task task in runtimeTasks {
             string key = task.name;
-            string[] existing = taskRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !taskRuntimeMap.hasKey(key) {
                 taskRuntimeMap[key] = [runtimeId];
                 taskList.push(task);
             } else {
+                string[] existing = <string[]>taskRuntimeMap[key];
                 existing.push(runtimeId);
                 taskRuntimeMap[key] = existing;
             }
@@ -601,11 +602,11 @@ public isolated function getTemplatesByEnvironmentAndComponent(string environmen
         types:Template[] runtimeTemplates = check getTemplatesForRuntime(runtimeId);
         foreach types:Template template in runtimeTemplates {
             string key = template.name;
-            string[] existing = templateRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !templateRuntimeMap.hasKey(key) {
                 templateRuntimeMap[key] = [runtimeId];
                 templateList.push(template);
             } else {
+                string[] existing = <string[]>templateRuntimeMap[key];
                 existing.push(runtimeId);
                 templateRuntimeMap[key] = existing;
             }
@@ -649,11 +650,11 @@ public isolated function getMessageStoresByEnvironmentAndComponent(string enviro
         types:MessageStore[] runtimeStores = check getMessageStoresForRuntime(runtimeId);
         foreach types:MessageStore store in runtimeStores {
             string key = store.name;
-            string[] existing = storeRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !storeRuntimeMap.hasKey(key) {
                 storeRuntimeMap[key] = [runtimeId];
                 storeList.push(store);
             } else {
+                string[] existing = <string[]>storeRuntimeMap[key];
                 existing.push(runtimeId);
                 storeRuntimeMap[key] = existing;
             }
@@ -697,11 +698,11 @@ public isolated function getMessageProcessorsByEnvironmentAndComponent(string en
         types:MessageProcessor[] runtimeProcessors = check getMessageProcessorsForRuntime(runtimeId);
         foreach types:MessageProcessor proc in runtimeProcessors {
             string key = proc.name;
-            string[] existing = processorRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !processorRuntimeMap.hasKey(key) {
                 processorRuntimeMap[key] = [runtimeId];
                 processorList.push(proc);
             } else {
+                string[] existing = <string[]>processorRuntimeMap[key];
                 existing.push(runtimeId);
                 processorRuntimeMap[key] = existing;
             }
@@ -745,11 +746,11 @@ public isolated function getLocalEntriesByEnvironmentAndComponent(string environ
         types:LocalEntry[] runtimeEntries = check getLocalEntriesForRuntime(runtimeId);
         foreach types:LocalEntry entry in runtimeEntries {
             string key = entry.name;
-            string[] existing = entryRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !entryRuntimeMap.hasKey(key) {
                 entryRuntimeMap[key] = [runtimeId];
                 entryList.push(entry);
             } else {
+                string[] existing = <string[]>entryRuntimeMap[key];
                 existing.push(runtimeId);
                 entryRuntimeMap[key] = existing;
             }
@@ -793,11 +794,11 @@ public isolated function getDataServicesByEnvironmentAndComponent(string environ
         types:DataService[] runtimeDataServices = check getDataServicesForRuntime(runtimeId);
         foreach types:DataService ds in runtimeDataServices {
             string key = ds.name;
-            string[] existing = dsRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !dsRuntimeMap.hasKey(key) {
                 dsRuntimeMap[key] = [runtimeId];
                 dataServiceList.push(ds);
             } else {
+                string[] existing = <string[]>dsRuntimeMap[key];
                 existing.push(runtimeId);
                 dsRuntimeMap[key] = existing;
             }
@@ -841,11 +842,11 @@ public isolated function getDataSourcesByEnvironmentAndComponent(string environm
         types:DataSource[] runtimeSources = check getDataSourcesForRuntime(runtimeId);
         foreach types:DataSource ds in runtimeSources {
             string key = ds.name;
-            string[] existing = sourceRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !sourceRuntimeMap.hasKey(key) {
                 sourceRuntimeMap[key] = [runtimeId];
                 sourceList.push(ds);
             } else {
+                string[] existing = <string[]>sourceRuntimeMap[key];
                 existing.push(runtimeId);
                 sourceRuntimeMap[key] = existing;
             }
@@ -889,11 +890,11 @@ public isolated function getRegistryResourcesByEnvironmentAndComponent(string en
         types:RegistryResource[] runtimeResources = check getRegistryResourcesForRuntime(runtimeId);
         foreach types:RegistryResource res in runtimeResources {
             string key = res.name;
-            string[] existing = resourceRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !resourceRuntimeMap.hasKey(key) {
                 resourceRuntimeMap[key] = [runtimeId];
                 resourceList.push(res);
             } else {
+                string[] existing = <string[]>resourceRuntimeMap[key];
                 existing.push(runtimeId);
                 resourceRuntimeMap[key] = existing;
             }
@@ -937,11 +938,11 @@ public isolated function getConnectorsByEnvironmentAndComponent(string environme
         foreach types:Connector conn in runtimeConnectors {
             // Use name + package + version as uniqueness key across runtimes
             string key = string `${conn.name}|${conn.'package}|${conn.version ?: ""}`;
-            string[] existing = connectorRuntimeMap[key] ?: [];
-            if existing.length() == 0 {
+            if !connectorRuntimeMap.hasKey(key) {
                 connectorRuntimeMap[key] = [runtimeId];
                 connectorList.push(conn);
             } else {
+                string[] existing = <string[]>connectorRuntimeMap[key];
                 existing.push(runtimeId);
                 connectorRuntimeMap[key] = existing;
             }
