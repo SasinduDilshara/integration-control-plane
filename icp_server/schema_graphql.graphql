@@ -49,6 +49,9 @@ type Mutation {
   deleteComponent(componentId: String!): Boolean!
   deleteComponentV2(orgHandler: String!, componentId: String!, projectId: String!): DeleteComponentV2Response!
   updateComponent(component: ComponentUpdateInput!): Component!
+
+  # Artifact Control Mutations
+  changeArtifactStatus(input: ArtifactStatusChangeInput!): ArtifactStatusChangeResponse!
 }
 
 # ============================================
@@ -629,6 +632,27 @@ input ComponentUpdateInput {
   endpointShortUrlEnabled: Boolean
   isUnifiedConfigMapping: Boolean
   componentSubType: String
+}
+
+# ============================================
+# Artifact Status Change Input/Response
+# ============================================
+
+# Input for changing artifact status
+input ArtifactStatusChangeInput {
+  componentId: String!
+  artifactType: String!
+  artifactName: String!
+  status: String!
+}
+
+# Response for artifact status change
+type ArtifactStatusChangeResponse {
+  status: String!
+  message: String!
+  successCount: Int!
+  failedCount: Int!
+  details: [String!]!
 }
 
 # ============================================

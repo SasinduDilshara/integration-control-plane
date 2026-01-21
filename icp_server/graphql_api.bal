@@ -97,6 +97,59 @@ isolated function issueRuntimeHmacToken() returns string|error {
     return hmacToken;
 }
 
+// Helper: send artifact status change request to a runtime
+isolated function sendArtifactStatusChange(types:Runtime runtime, string artifactType, string artifactName, string status) returns error? {
+    string baseUrl = check buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+    
+    http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
+        ? new (baseUrl, {secureSocket: {enable: false}})
+        : new (baseUrl);
+    
+    if mgmtClient is error {
+        log:printError("Failed to create management API client for runtime", runtimeId = runtime.runtimeId, 'error = mgmtClient);
+        return error("Failed to create management API client");
+    }
+
+    string hmacToken = check issueRuntimeHmacToken();
+    
+    json payload = {
+        "type": artifactType,
+        "name": artifactName,
+        "status": status
+    };
+
+    string artifactPath = string `${ICP_ARTIFACTS_PATH}/status`;
+    log:printDebug("Sending artifact status change request",
+        runtimeId = runtime.runtimeId,
+        url = string `${baseUrl}${artifactPath}`,
+        artifactType = artifactType,
+        artifactName = artifactName,
+        status = status);
+
+    http:Response|error resp = mgmtClient->post(artifactPath, payload, {
+        "Authorization": string `Bearer ${hmacToken}`,
+        "Content-Type": "application/json"
+    });
+
+    if resp is error {
+        log:printError("HTTP request failed for artifact status change", runtimeId = runtime.runtimeId, 'error = resp);
+        return error(string `HTTP request failed: ${resp.message()}`);
+    }
+
+    if resp.statusCode != http:STATUS_OK && resp.statusCode != http:STATUS_ACCEPTED {
+        string|error errPayload = resp.getTextPayload();
+        string errMsg = errPayload is string ? errPayload : "Unknown error";
+        log:printError("Artifact status change failed",
+            runtimeId = runtime.runtimeId,
+            statusCode = resp.statusCode,
+            response = errMsg);
+        return error(string `Status change failed with status ${resp.statusCode}: ${errMsg}`);
+    }
+
+    log:printDebug("Artifact status changed successfully on runtime", runtimeId = runtime.runtimeId);
+    return;
+}
+
 // GraphQL service for runtime details
 @graphql:ServiceConfig {
     contextInit,
@@ -1240,6 +1293,86 @@ service /graphql on graphqlListener {
         // Call the existing backend method to maintain consistency
         check storage:updateComponent(targetComponentId, targetName, targetDisplayName, targetDescription, userContext.userId);
         return check storage:getComponentById(targetComponentId);
+    }
+
+    // Change artifact status (active/inactive) for all MI runtimes of a component
+    isolated remote function changeArtifactStatus(graphql:Context context, types:ArtifactStatusChangeInput input) returns types:ArtifactStatusChangeResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        types:Component? component = check storage:getComponentById(input.componentId);
+        if component is () {
+            return error("Integration not found");
+        }
+
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = input.componentId);
+
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to change artifact status without permission", 
+                userId = userContext.userId, componentId = input.componentId, artifactName = input.artifactName);
+            return error("Insufficient permissions to change artifact status");
+        }
+
+        types:Runtime[] runtimes = check storage:getRuntimes("RUNNING", "MI", (), component.projectId, input.componentId);
+
+        if runtimes.length() == 0 {
+            log:printWarn("No online MI runtimes found for component", componentId = input.componentId);
+            return {
+                status: "failed",
+                message: "No online MI runtimes found for this component",
+                successCount: 0,
+                failedCount: 0,
+                details: []
+            };
+        }
+
+        log:printInfo("Changing artifact status across MI runtimes",
+            componentId = input.componentId,
+            artifactType = input.artifactType,
+            artifactName = input.artifactName,
+            status = input.status,
+            runtimeCount = runtimes.length());
+
+        int successCount = 0;
+        int failedCount = 0;
+        string[] details = [];
+
+        foreach types:Runtime runtime in runtimes {
+            error? result = sendArtifactStatusChange(runtime, input.artifactType, input.artifactName, input.status);
+            if result is error {
+                failedCount += 1;
+                string detail = string `Runtime ${runtime.runtimeId}: FAILED - ${result.message()}`;
+                details.push(detail);
+                log:printError("Failed to change artifact status on runtime",
+                    runtimeId = runtime.runtimeId,
+                    artifactName = input.artifactName,
+                    errorMessage = result.message());
+            } else {                                                                                               
+                successCount += 1;
+                string detail = string `Runtime ${runtime.runtimeId}: SUCCESS`;
+                details.push(detail);
+                log:printDebug("Successfully changed artifact status on runtime",
+                    runtimeId = runtime.runtimeId,
+                    artifactName = input.artifactName);
+            }
+        }
+
+        string overallStatus = successCount > 0 ? "success" : "failed";
+        string message = string `Artifact status changed on ${successCount} out of ${runtimes.length()} runtime(s)`;
+
+        log:printInfo("Artifact status change completed",
+            componentId = input.componentId,
+            artifactName = input.artifactName,
+            successCount = successCount,
+            failedCount = failedCount);
+
+        return {
+            status: overallStatus,
+            message: message,
+            successCount: successCount,
+            failedCount: failedCount,
+            details: details
+        };
     }
 
     // Get available artifact types for a component

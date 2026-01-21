@@ -470,9 +470,7 @@ isolated function upsertRuntime(types:Heartbeat heartbeat) returns boolean|error
 
 // Insert all runtime artifacts
 isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns error? {
-    check deleteExistingArtifacts(heartbeat.runtime);
-
-    // Insert services
+    // Insert services with UPSERT logic
     foreach types:Service serviceDetail in heartbeat.artifacts.services {
         _ = check dbClient->execute(`
             INSERT INTO runtime_services (
@@ -482,6 +480,10 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
                 ${serviceDetail.package}, ${serviceDetail.basePath},
                 ${serviceDetail.state}
             )
+            ON DUPLICATE KEY UPDATE
+                base_path = VALUES(base_path),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
 
         foreach types:Resource resourceDetail in serviceDetail.resources {
@@ -493,11 +495,14 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
                     ${heartbeat.runtime}, ${serviceDetail.name},
                     ${resourceDetail.url}, ${methodsJson}
                 )
+                ON DUPLICATE KEY UPDATE
+                    methods = VALUES(methods),
+                    updated_at = CURRENT_TIMESTAMP
             `);
         }
     }
 
-    // Insert listeners
+    // Insert listeners with UPSERT logic
     foreach types:Listener listenerDetail in heartbeat.artifacts.listeners {
         string? host = listenerDetail?.host;
         int? port = listenerDetail?.port;
@@ -510,6 +515,13 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
                 ${host}, ${port},
                 ${listenerDetail.state}
             )
+            ON DUPLICATE KEY UPDATE
+                listener_package = VALUES(listener_package),
+                protocol = VALUES(protocol),
+                listener_host = VALUES(listener_host),
+                listener_port = VALUES(listener_port),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -552,6 +564,12 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                 ${heartbeat.runtime}, ${api.name}, ${api.url},
                 ${api.context}, ${api.version}, ${api.state}
             )
+            ON DUPLICATE KEY UPDATE
+                url = VALUES(url),
+                context = VALUES(context),
+                version = VALUES(version),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
 
         // Insert API resources for this API
@@ -564,6 +582,9 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ${heartbeat.runtime}, ${api.name},
                     ${apiResource.path}, ${apiResource.methods}
                 )
+                ON DUPLICATE KEY UPDATE
+                    methods = VALUES(methods),
+                    updated_at = CURRENT_TIMESTAMP
             `);
         }
     }
@@ -575,6 +596,9 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
             ) VALUES (
                 ${heartbeat.runtime}, ${proxy.name}, ${proxy.state}
             )
+            ON DUPLICATE KEY UPDATE
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
 
         // Persist endpoints if present
@@ -586,6 +610,8 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ) VALUES (
                         ${heartbeat.runtime}, ${proxy.name}, ${ep}
                     )
+                    ON DUPLICATE KEY UPDATE
+                        updated_at = CURRENT_TIMESTAMP
                 `);
             }
         }
@@ -599,6 +625,10 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                 ${heartbeat.runtime}, ${endpoint.name}, ${endpoint.'type},
                 ${endpoint.state}
             )
+            ON DUPLICATE KEY UPDATE
+                endpoint_type = VALUES(endpoint_type),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
 
         // Persist endpoint attributes if present
@@ -611,6 +641,9 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                     ) VALUES (
                         ${heartbeat.runtime}, ${endpoint.name}, ${attr.name}, ${attr?.value}
                     )
+                    ON DUPLICATE KEY UPDATE
+                        attribute_value = VALUES(attribute_value),
+                        updated_at = CURRENT_TIMESTAMP
                 `);
             }
         }
@@ -627,6 +660,13 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${inbound.name}, ${inbound.protocol},
                 ${inbound.sequence}, ${inbound.state}, ${inbound.statistics}, ${inbound.onError}
             )
+            ON DUPLICATE KEY UPDATE
+                protocol = VALUES(protocol),
+                sequence = VALUES(sequence),
+                state = VALUES(state),
+                statistics = VALUES(statistics),
+                on_error = VALUES(on_error),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -638,6 +678,11 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${sequence.name}, ${sequence.'type},
                 ${sequence.container}, ${sequence.state}
             )
+            ON DUPLICATE KEY UPDATE
+                sequence_type = VALUES(sequence_type),
+                container = VALUES(container),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -649,6 +694,11 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${task.name}, ${task.'class},
                 ${task.group}, ${task.state}
             )
+            ON DUPLICATE KEY UPDATE
+                task_class = VALUES(task_class),
+                task_group = VALUES(task_group),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -659,6 +709,9 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
             ) VALUES (
                 ${heartbeat.runtime}, ${template.name}, ${template.'type}
             )
+            ON DUPLICATE KEY UPDATE
+                template_type = VALUES(template_type),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -669,6 +722,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
             ) VALUES (
                 ${heartbeat.runtime}, ${store.name}, ${store.'type}, ${store.size}
             )
+            ON DUPLICATE KEY UPDATE
+                store_type = VALUES(store_type),
+                size = VALUES(size),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -680,6 +737,11 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${processor.name}, ${processor.'type},
                 ${processor.'class}, ${processor.state}
             )
+            ON DUPLICATE KEY UPDATE
+                processor_type = VALUES(processor_type),
+                processor_class = VALUES(processor_class),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -691,6 +753,11 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${entry.name}, ${entry.'type},
                 ${entry.value}, ${entry.state}
             )
+            ON DUPLICATE KEY UPDATE
+                entry_type = VALUES(entry_type),
+                entry_value = VALUES(entry_value),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -702,6 +769,11 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${dataService.name}, ${dataService.description},
                 ${dataService.wsdl}, ${dataService.state}
             )
+            ON DUPLICATE KEY UPDATE
+                description = VALUES(description),
+                wsdl = VALUES(wsdl),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -715,6 +787,11 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
             ) VALUES (
                 ${heartbeat.runtime}, ${app.name}, ${app.version}, ${app.state}, ${artifactsJson}
             )
+            ON DUPLICATE KEY UPDATE
+                version = VALUES(version),
+                state = VALUES(state),
+                artifacts = VALUES(artifacts),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -726,6 +803,13 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${dataSource.name}, ${dataSource.'type}, ${dataSource.driver},
                 ${dataSource.url}, ${dataSource.username}, ${dataSource.state}
             )
+            ON DUPLICATE KEY UPDATE
+                datasource_type = VALUES(datasource_type),
+                driver = VALUES(driver),
+                url = VALUES(url),
+                username = VALUES(username),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -737,6 +821,10 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 ${heartbeat.runtime}, ${connector.name}, ${connector.package},
                 ${connector.version}, ${connector.state}
             )
+            ON DUPLICATE KEY UPDATE
+                version = VALUES(version),
+                state = VALUES(state),
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 
@@ -747,6 +835,8 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
             ) VALUES (
                 ${heartbeat.runtime}, ${registryResource.name}, ${registryResource.'type}
             )
+            ON DUPLICATE KEY UPDATE
+                updated_at = CURRENT_TIMESTAMP
         `);
     }
 }

@@ -530,7 +530,7 @@ public type Endpoint record {
     @sql:Column {
         name: "endpoint_state"
     }
-    string state = "ENABLED"; // "ENABLED", "DISABLED"
+    string state; // "enabled", "disabled"
     EndpointAttribute[]? attributes?;
     string[] runtimeIds?;
     ArtifactRuntimeInfo[]? runtimes?;
@@ -1734,5 +1734,22 @@ public type Parameter record {|
 public type LocalEntryValue record {|
     string name;
     string value;
+|};
+
+// Input type for changing artifact status
+public type ArtifactStatusChangeInput record {|
+    string componentId;
+    string artifactType; // e.g., "proxy-service", "endpoint", "inbound-endpoint", "message-processor"
+    string artifactName;
+    string status; // "active" or "inactive"
+|};
+
+// Response for artifact status change
+public type ArtifactStatusChangeResponse record {|
+    string status; // "success" or "failed"
+    string message;
+    int successCount; // Number of runtimes successfully updated
+    int failedCount; // Number of runtimes that failed
+    string[] details; // Detailed status per runtime
 |};
 
