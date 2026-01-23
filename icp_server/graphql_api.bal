@@ -839,6 +839,71 @@ service /graphql on graphqlListener {
         return true;
     }
 
+    // Update listener state (enable/disable) by issuing control commands
+    isolated remote function updateListenerState(graphql:Context context, types:ListenerControlInput input) returns types:ListenerControlResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Validate inputs
+        if input.runtimeIds.length() == 0 {
+            return error("At least one runtime ID must be provided");
+        }
+
+        if input.listenerName.trim().length() == 0 {
+            return error("Listener name cannot be empty");
+        }
+
+        string[] commandIds = [];
+
+        // Process each runtime ID
+        foreach string runtimeId in input.runtimeIds {
+            // Fetch the runtime to get its context
+            types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+
+            if runtime is () {
+                log:printWarn(string `Runtime ${runtimeId} not found, skipping`);
+                continue;
+            }
+
+            // Build scope from runtime's context
+            types:AccessScope scope = auth:buildScopeFromContext(
+                    runtime.component.projectId,
+                    runtime.component.id,
+                    runtime.environment.id
+            );
+
+            // Check permission to manage this integration's runtime
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+                log:printWarn(string `User ${userContext.userId} lacks permission to manage runtime ${runtimeId}`);
+                return error(string `Access denied: insufficient permissions to control listener on runtime ${runtimeId}`);
+            }
+
+            // Insert control command
+            string commandId = check storage:insertControlCommand(
+                    runtimeId,
+                    input.listenerName,
+                    input.action,
+                    userContext.userId
+            );
+
+            commandIds.push(commandId);
+            log:printInfo(string `Created control command ${commandId} for runtime ${runtimeId} to ${input.action} listener ${input.listenerName}`);
+        }
+
+        if commandIds.length() == 0 {
+            return {
+                success: false,
+                message: "No valid runtimes found to issue control commands",
+                commandIds: []
+            };
+        }
+
+        return {
+            success: true,
+            message: string `Successfully created ${commandIds.length()} control command(s) to ${input.action} listener ${input.listenerName}`,
+            commandIds: commandIds
+        };
+    }
+
     // ----------- Environment Resources
     // Create a new environment (super admin only)
     isolated remote function createEnvironment(graphql:Context context, types:EnvironmentInput environment) returns types:Environment|error? {

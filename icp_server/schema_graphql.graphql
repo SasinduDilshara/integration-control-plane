@@ -53,6 +53,9 @@ type Mutation {
   # Artifact Control Mutations
   changeArtifactStatus(input: ArtifactStatusChangeInput!): ArtifactStatusChangeResponse!
   changeArtifactTracing(input: ArtifactTracingChangeInput!): ArtifactTracingChangeResponse!
+
+  # Listener Control Mutations
+  updateListenerState(input: ListenerControlInput!): ListenerControlResponse!
 }
 
 # ============================================
@@ -891,4 +894,21 @@ type SourceConfigMigrationStatus {
   canMigrate: Boolean!
   existingFileName: String!
   existingFileSchemaVersion: String!
+}
+
+# ============================================
+# Listener Control Input - used for enabling/disabling listeners
+# ============================================
+input ListenerControlInput {
+  runtimeIds: [String!]!
+  listenerName: String!
+  action: ControlAction!
+}
+
+# ============================================
+# Listener Control Response
+# ============================================
+type ListenerControlResponse {
+  success: Boolean!\n  message: String!
+  commandIds: [String!]!
 }

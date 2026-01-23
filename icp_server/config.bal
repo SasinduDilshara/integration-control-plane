@@ -36,8 +36,6 @@ configurable string truststorePassword = "ballerina";
 configurable string webServerKeystorePath = check file:joinPath("..", "conf", "security", "keystore.p12");
 configurable string webServerKeystorePassword = "changeit";
 
-configurable types:DeploymentType deploymentType = "VM";
-
 configurable int schedulerIntervalSeconds = 600;
 configurable int refreshTokenCleanupIntervalSeconds = 86400; // 24 hours (in seconds)
 
@@ -94,7 +92,7 @@ configurable string opensearchPassword = "Ballerina@123";
 configurable boolean artifactsApiAllowInsecureTLS = true;
 
 // Build SSO configuration from configurable values
- public isolated function getSSOConfig() returns types:SSOConfig => {
+public isolated function getSSOConfig() returns types:SSOConfig => {
     enabled: ssoEnabled,
     issuer: ssoIssuer,
     authorizationEndpoint: ssoAuthorizationEndpoint,

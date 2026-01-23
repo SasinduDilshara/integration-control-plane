@@ -45,8 +45,6 @@ public enum DeploymentState {
 public enum ArtifactState {
     ENABLED,
     DISABLED,
-    STARTING,
-    STOPPING,
     FAILED
 }
 
@@ -156,26 +154,32 @@ public type DeltaHeartbeat record {|
 |};
 
 // === ICP Control Types ===
+public enum ControlCommandStatus {
+    PENDING,
+    SENT,
+    ACKNOWLEDGED,
+    FAILED,
+    COMPLETED
+};
+
+public enum ControlAction {
+    START,
+    STOP
+}
 
 public type ControlCommand record {
     string commandId;
     string runtimeId;
-    string targetArtifact;
-    string action;
+    Artifact targetArtifact;
+    ControlAction action;
     time:Utc issuedAt;
-    string status; // pending, sent, acknowledged, failed
+    ControlCommandStatus status; // pending, sent, acknowledged, failed
 };
 
 public type HeartbeatResponse record {
     boolean acknowledged;
     boolean fullHeartbeatRequired?;
     ControlCommand[] commands?;
-    string[] errors?;
-};
-
-public type RuntimeRegistrationResponse record {
-    boolean success;
-    string message?;
     string[] errors?;
 };
 
@@ -256,6 +260,15 @@ public type RuntimeDBRecord record {
     string server_name?;
     time:Utc registration_time?;
     time:Utc last_heartbeat?;
+};
+
+public type ControlCommandDBRecord record {
+    string command_id;
+    string runtime_id;
+    string target_artifact;
+    string action;
+    time:Utc issued_at;
+    string status;
 };
 
 // GraphQL response types
@@ -476,7 +489,7 @@ public type Listener record {
     string path?; // File system path
 
     @sql:Column {
-        name: "listener_state"
+        name: "state"
     }
     string state = "ENABLED"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
@@ -1778,3 +1791,15 @@ public type ArtifactTracingChangeResponse record {|
     string[] details; // Detailed status per runtime
 |};
 
+// === Listener Control Types ===
+public type ListenerControlInput record {|
+    string[] runtimeIds;
+    string listenerName;
+    ControlAction action;
+|};
+
+public type ListenerControlResponse record {|
+    boolean success;
+    string message;
+    string[] commandIds;
+|};

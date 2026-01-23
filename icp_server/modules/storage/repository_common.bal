@@ -17,6 +17,7 @@
 import icp_server.types as types;
 
 import ballerina/sql;
+import ballerina/uuid;
 
 // Shared database connection manager and client
 final DatabaseConnectionManager dbManager = check new (dbType);
@@ -55,7 +56,7 @@ isolated function retrieveAndMarkCommandsAsSent(string runtimeId) returns types:
 
     // Retrieve pending control commands for this runtime
     // Lock pending commands to avoid concurrent modifications
-    stream<types:ControlCommand, sql:Error?> commandStream = dbClient->query(`
+    stream<types:ControlCommandDBRecord, sql:Error?> commandStream = dbClient->query(`
         SELECT command_id, runtime_id, target_artifact, action, issued_at, status
         FROM control_commands
         WHERE runtime_id = ${runtimeId}
@@ -63,8 +64,16 @@ isolated function retrieveAndMarkCommandsAsSent(string runtimeId) returns types:
         ORDER BY issued_at ASC
     `);
 
-    check from types:ControlCommand command in commandStream
+    check from types:ControlCommandDBRecord dbCommand in commandStream
         do {
+            types:ControlCommand command = {
+                commandId: dbCommand.command_id,
+                runtimeId: dbCommand.runtime_id,
+                targetArtifact: {name: dbCommand.target_artifact},
+                action: dbCommand.action == "START" ? types:START : types:STOP,
+                issuedAt: dbCommand.issued_at,
+                status: convertToControlCommandStatus(dbCommand.status)
+            };
             pendingCommands.push(command);
         };
 
@@ -80,6 +89,30 @@ isolated function retrieveAndMarkCommandsAsSent(string runtimeId) returns types:
     }
 
     return pendingCommands;
+}
+
+// Convert database status string to ControlCommandStatus enum
+isolated function convertToControlCommandStatus(string status) returns types:ControlCommandStatus {
+    match status {
+        "pending" => {
+            return types:PENDING;
+        }
+        "sent" => {
+            return types:SENT;
+        }
+        "acknowledged" => {
+            return types:ACKNOWLEDGED;
+        }
+        "failed" => {
+            return types:FAILED;
+        }
+        "completed" => {
+            return types:COMPLETED;
+        }
+        _ => {
+            return types:PENDING;
+        }
+    }
 }
 
 // Count total artifacts in heartbeat
@@ -117,4 +150,29 @@ isolated function countTotalArtifacts(types:Artifacts artifacts) returns int {
     totalArtifacts += (<types:RegistryResource[]>artifacts.registryResources).length();
 
     return totalArtifacts;
+}
+
+// Insert a control command for a runtime
+public isolated function insertControlCommand(
+        string runtimeId,
+        string targetArtifact,
+        types:ControlAction action,
+        string? issuedBy = ()
+) returns string|error {
+    // Generate a unique command ID
+    string commandId = uuid:createType1AsString();
+
+    // Convert action enum to string
+    string actionStr = action.toString();
+
+    // Insert control command
+    _ = check dbClient->execute(`
+        INSERT INTO control_commands (
+            command_id, runtime_id, target_artifact, action, status, issued_at, issued_by
+        ) VALUES (
+            ${commandId}, ${runtimeId}, ${targetArtifact}, ${actionStr}, 'pending', CURRENT_TIMESTAMP, ${issuedBy}
+        )
+    `);
+
+    return commandId;
 }

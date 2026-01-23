@@ -157,7 +157,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
     // Commands are marked as 'sent' atomically with audit log creation
     transaction {
         // Retrieve pending control commands for this runtime (no DB-specific locks)
-        stream<types:ControlCommand, sql:Error?> commandStream = dbClient->query(`
+        stream<types:ControlCommandDBRecord, sql:Error?> commandStream = dbClient->query(`
             SELECT command_id, runtime_id, target_artifact, action, issued_at, status
             FROM control_commands
             WHERE runtime_id = ${deltaHeartbeat.runtime}
@@ -165,8 +165,16 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
             ORDER BY issued_at ASC
         `);
 
-        check from types:ControlCommand command in commandStream
+        check from types:ControlCommandDBRecord dbCommand in commandStream
             do {
+                types:ControlCommand command = {
+                    commandId: dbCommand.command_id,
+                    runtimeId: dbCommand.runtime_id,
+                    targetArtifact: {name: dbCommand.target_artifact},
+                    action: dbCommand.action == "START" ? types:START : types:STOP,
+                    issuedAt: dbCommand.issued_at,
+                    status: convertToControlCommandStatus(dbCommand.status)
+                };
                 pendingCommands.push(command);
             };
 
