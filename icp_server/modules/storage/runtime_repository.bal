@@ -177,13 +177,21 @@ public isolated function markOfflineRuntimes() returns error? {
         }
     } else {
         // For VM deployments, mark runtimes as offline
-        sql:ParameterizedQuery updateQuery = `
-            UPDATE runtimes
-            SET status = 'OFFLINE'
-            WHERE status != 'OFFLINE'
-            AND last_heartbeat IS NOT NULL
-            AND TIMESTAMPDIFF(SECOND, last_heartbeat, CURRENT_TIMESTAMP) > ${heartbeatTimeoutSeconds}
-        `;
+        // Build the appropriate SQL based on database type
+        sql:ParameterizedQuery updateQuery;
+        if dbType == MSSQL {
+            updateQuery = `UPDATE runtimes
+                SET status = 'OFFLINE'
+                WHERE status != 'OFFLINE'
+                AND last_heartbeat IS NOT NULL
+                AND DATEDIFF(SECOND, last_heartbeat, CURRENT_TIMESTAMP) > ${heartbeatTimeoutSeconds}`;
+        } else {
+            updateQuery = `UPDATE runtimes
+                SET status = 'OFFLINE'
+                WHERE status != 'OFFLINE'
+                AND last_heartbeat IS NOT NULL
+                AND TIMESTAMPDIFF(SECOND, last_heartbeat, CURRENT_TIMESTAMP) > ${heartbeatTimeoutSeconds}`;
+        }
         sql:ExecutionResult result = check dbClient->execute(updateQuery);
 
         int? affectedCount = result.affectedRowCount;
@@ -196,16 +204,16 @@ public isolated function markOfflineRuntimes() returns error? {
 // Get services for a specific runtime
 public isolated function getServicesForRuntime(string runtimeId) returns types:Service[]|error {
     types:Service[] serviceList = [];
-    stream<types:Service, sql:Error?> serviceStream = dbClient->query(`
+    stream<types:ServiceRecordInDB, sql:Error?> serviceStream = dbClient->query(`
         SELECT service_name, service_package, base_path, state 
         FROM runtime_services 
         WHERE runtime_id = ${runtimeId}
     `);
 
-    check from types:Service serviceRecord in serviceStream
+    check from types:ServiceRecordInDB serviceRecord in serviceStream
         do {
-
-            serviceList.push(check mapToService(serviceRecord, runtimeId));
+            types:Service mappedService = check mapToService(serviceRecord, runtimeId);
+            serviceList.push(mappedService);
         };
 
     return serviceList;
@@ -353,11 +361,21 @@ public isolated function getEndpointsForRuntime(string runtimeId) returns types:
 // Get inbound endpoints for a specific runtime
 public isolated function getInboundEndpointsForRuntime(string runtimeId) returns types:InboundEndpoint[]|error {
     types:InboundEndpoint[] inboundList = [];
-    stream<types:InboundEndpoint, sql:Error?> inboundStream = dbClient->query(`
-        SELECT inbound_name, protocol, sequence, state, statistics, on_error, tracing
-        FROM runtime_inbound_endpoints 
-        WHERE runtime_id = ${runtimeId}
-    `);
+    sql:ParameterizedQuery query;
+    if isMSSQL() {
+        query = `
+            SELECT inbound_name, protocol, sequence, state, [statistics], on_error, tracing
+            FROM runtime_inbound_endpoints 
+            WHERE runtime_id = ${runtimeId}
+        `;
+    } else {
+        query = `
+            SELECT inbound_name, protocol, sequence, state, statistics, on_error, tracing
+            FROM runtime_inbound_endpoints 
+            WHERE runtime_id = ${runtimeId}
+        `;
+    }
+    stream<types:InboundEndpoint, sql:Error?> inboundStream = dbClient->query(query);
 
     check from types:InboundEndpoint inboundRecord in inboundStream
         do {
@@ -721,12 +739,14 @@ public isolated function mapToRuntime(types:RuntimeDBRecord runtimeRecord) retur
 }
 
 // Helper function to map service record and get resources
-public isolated function mapToService(types:Service serviceRecord, string runtimeId) returns types:Service|error {
+public isolated function mapToService(types:ServiceRecordInDB serviceRecord, string runtimeId) returns types:Service|error {
     types:Resource[] resourceList = [];
+    string serviceName = serviceRecord.service_name;
+
     stream<types:ResourceRecord, sql:Error?> resourceStream = dbClient->query(`
         SELECT resource_url, methods 
         FROM service_resources 
-        WHERE runtime_id = ${runtimeId} AND service_name = ${serviceRecord.name}
+        WHERE runtime_id = ${runtimeId} AND service_name = ${serviceName}
     `);
 
     check from types:ResourceRecord resourceRecord in resourceStream
@@ -745,9 +765,9 @@ public isolated function mapToService(types:Service serviceRecord, string runtim
         };
 
     return {
-        name: serviceRecord.name,
-        package: serviceRecord.package,
-        basePath: serviceRecord.basePath,
+        name: serviceRecord.service_name,
+        package: serviceRecord.service_package,
+        basePath: serviceRecord.base_path,
         state: "ENABLED", // Default state
         'type: "API", // Default type
         resources: resourceList,

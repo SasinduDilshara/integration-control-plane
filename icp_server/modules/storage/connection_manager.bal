@@ -18,12 +18,15 @@ import ballerina/log;
 import ballerina/sql;
 import ballerinax/h2.driver as _;
 import ballerinax/java.jdbc as jdbc;
+import ballerinax/mssql;
+import ballerinax/mssql.driver as _;
 import ballerinax/mysql;
 import ballerinax/mysql.driver as _;
 
 enum DatabaseType {
     MYSQL = "mysql",
-    H2 = "h2"
+    H2 = "h2",
+    MSSQL = "mssql"
 }
 
 public client class DatabaseConnectionManager {
@@ -42,6 +45,11 @@ public client class DatabaseConnectionManager {
             log:printInfo("Initializing MySQL Database...");
             self.dbClient = check new mysql:Client(dbHost, dbUser, dbPassword, dbName, dbPort, connectionPool = pool);
             log:printInfo("MySQL Database initialized successfully.");
+        } else if dbType == MSSQL {
+            log:printInfo("Initializing MSSQL Database...");
+            log:printInfo(string `Connecting to MSSQL: ${dbHost}:${dbPort}/${dbName}`);
+            self.dbClient = check new mssql:Client(host = dbHost, user = dbUser, password = dbPassword, database = dbName, port = dbPort, connectionPool = pool);
+            log:printInfo("MSSQL Database initialized successfully.");
         } else {
             log:printInfo("Initializing H2 Database...");
             self.dbClient = check new jdbc:Client("jdbc:h2:file:./database/icpdb;MODE=MySQL;AUTO_SERVER=TRUE", "sa", "");

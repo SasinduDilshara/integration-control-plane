@@ -480,20 +480,43 @@ isolated function upsertRuntime(types:Heartbeat heartbeat) returns boolean|error
 isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns error? {
     // Insert services with UPSERT logic
     foreach types:Service serviceDetail in heartbeat.artifacts.services {
+        if dbType == MSSQL {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_services AS target
+                USING (VALUES (${heartbeat.runtime}, ${serviceDetail.name}, ${serviceDetail.package}, 
+                       ${serviceDetail.basePath}, ${serviceDetail.state})) 
+                       AS source (runtime_id, service_name, service_package, base_path, state)
+                ON (target.runtime_id = source.runtime_id AND target.service_name = source.service_name 
+                    AND target.service_package = source.service_package)
+                WHEN MATCHED THEN
+                    UPDATE SET base_path = source.base_path, state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, service_name, service_package, base_path, state)
+                    VALUES (source.runtime_id, source.service_name, source.service_package, source.base_path, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_services (
+                    runtime_id, service_name, service_package, base_path, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${serviceDetail.name},
+                    ${serviceDetail.package}, ${serviceDetail.basePath},
+                    ${serviceDetail.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    base_path = VALUES(base_path),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
+
+        // Delete all existing resources for this service before inserting new ones
         _ = check dbClient->execute(`
-            INSERT INTO runtime_services (
-                runtime_id, service_name, service_package, base_path, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${serviceDetail.name},
-                ${serviceDetail.package}, ${serviceDetail.basePath},
-                ${serviceDetail.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                base_path = VALUES(base_path),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
+            DELETE FROM service_resources 
+            WHERE runtime_id = ${heartbeat.runtime} AND service_name = ${serviceDetail.name}
         `);
 
+        // Insert new resources
         foreach types:Resource resourceDetail in serviceDetail.resources {
             string methodsJson = resourceDetail.methods.toJsonString();
             _ = check dbClient->execute(`
@@ -503,9 +526,6 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
                     ${heartbeat.runtime}, ${serviceDetail.name},
                     ${resourceDetail.url}, ${methodsJson}
                 )
-                ON DUPLICATE KEY UPDATE
-                    methods = VALUES(methods),
-                    updated_at = CURRENT_TIMESTAMP
             `);
         }
     }
@@ -514,23 +534,41 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
     foreach types:Listener listenerDetail in heartbeat.artifacts.listeners {
         string? host = listenerDetail?.host;
         int? port = listenerDetail?.port;
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_listeners (
-                runtime_id, listener_name, listener_package, protocol, listener_host, listener_port, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${listenerDetail.name},
-                ${listenerDetail.package}, ${listenerDetail.protocol},
-                ${host}, ${port},
-                ${listenerDetail.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                listener_package = VALUES(listener_package),
-                protocol = VALUES(protocol),
-                listener_host = VALUES(listener_host),
-                listener_port = VALUES(listener_port),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if dbType == MSSQL {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_listeners AS target
+                USING (VALUES (${heartbeat.runtime}, ${listenerDetail.name}, ${listenerDetail.package}, 
+                       ${listenerDetail.protocol}, ${host}, ${port}, ${listenerDetail.state})) 
+                       AS source (runtime_id, listener_name, listener_package, protocol, listener_host, listener_port, state)
+                ON (target.runtime_id = source.runtime_id AND target.listener_name = source.listener_name)
+                WHEN MATCHED THEN
+                    UPDATE SET listener_package = source.listener_package, protocol = source.protocol,
+                               listener_host = source.listener_host, listener_port = source.listener_port,
+                               state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, listener_name, listener_package, protocol, listener_host, listener_port, state)
+                    VALUES (source.runtime_id, source.listener_name, source.listener_package, source.protocol,
+                            source.listener_host, source.listener_port, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_listeners (
+                    runtime_id, listener_name, listener_package, protocol, listener_host, listener_port, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${listenerDetail.name},
+                    ${listenerDetail.package}, ${listenerDetail.protocol},
+                    ${host}, ${port},
+                    ${listenerDetail.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    listener_package = VALUES(listener_package),
+                    protocol = VALUES(protocol),
+                    listener_host = VALUES(listener_host),
+                    listener_port = VALUES(listener_port),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     check insertMIArtifacts(heartbeat);
@@ -565,97 +603,184 @@ isolated function deleteExistingArtifacts(string runtimeId) returns error? {
 // Insert MI artifacts
 isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
     foreach types:RestApi api in <types:RestApi[]>heartbeat.artifacts.apis {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_apis (
-                runtime_id, api_name, url, context, version, state, tracing
-            ) VALUES (
-                ${heartbeat.runtime}, ${api.name}, ${api.url},
-                ${api.context}, ${api.version}, ${api.state}, ${api.tracing}
-            )
-            ON DUPLICATE KEY UPDATE
-                url = VALUES(url),
-                context = VALUES(context),
-                version = VALUES(version),
-                state = VALUES(state),
-                tracing = VALUES(tracing),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if dbType == MSSQL {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_apis AS target
+                USING (VALUES (${heartbeat.runtime}, ${api.name}, ${api.url}, ${api.context}, 
+                       ${api.version}, ${api.state}, ${api.tracing})) 
+                       AS source (runtime_id, api_name, url, context, version, state, tracing)
+                ON (target.runtime_id = source.runtime_id AND target.api_name = source.api_name)
+                WHEN MATCHED THEN
+                    UPDATE SET url = source.url, context = source.context, version = source.version,
+                               state = source.state, tracing = source.tracing, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, api_name, url, context, version, state, tracing)
+                    VALUES (source.runtime_id, source.api_name, source.url, source.context, source.version, source.state, source.tracing);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_apis (
+                    runtime_id, api_name, url, context, version, state, tracing
+                ) VALUES (
+                    ${heartbeat.runtime}, ${api.name}, ${api.url},
+                    ${api.context}, ${api.version}, ${api.state}, ${api.tracing}
+                )
+                ON DUPLICATE KEY UPDATE
+                    url = VALUES(url),
+                    context = VALUES(context),
+                    version = VALUES(version),
+                    state = VALUES(state),
+                    tracing = VALUES(tracing),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
 
         // Insert API resources for this API
         foreach types:ApiResource apiResource in api.resources {
             // MI sends methods as a single string (e.g., "POST"), store as-is
-            _ = check dbClient->execute(`
-                INSERT INTO runtime_api_resources (
-                    runtime_id, api_name, resource_path, methods
-                ) VALUES (
-                    ${heartbeat.runtime}, ${api.name},
-                    ${apiResource.path}, ${apiResource.methods}
-                )
-                ON DUPLICATE KEY UPDATE
-                    methods = VALUES(methods),
-                    updated_at = CURRENT_TIMESTAMP
-            `);
-        }
-    }
-
-    foreach types:ProxyService proxy in <types:ProxyService[]>heartbeat.artifacts.proxyServices {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_proxy_services (
-                runtime_id, proxy_name, state, tracing
-            ) VALUES (
-                ${heartbeat.runtime}, ${proxy.name}, ${proxy.state}, ${proxy.tracing}
-            )
-            ON DUPLICATE KEY UPDATE
-                state = VALUES(state),
-                tracing = VALUES(tracing),
-                updated_at = CURRENT_TIMESTAMP
-        `);
-
-        // Persist endpoints if present
-        if proxy.endpoints is string[] {
-            foreach string ep in <string[]>proxy.endpoints {
+            if dbType == MSSQL {
                 _ = check dbClient->execute(`
-                    INSERT INTO runtime_proxy_service_endpoints (
-                        runtime_id, proxy_name, endpoint_url
+                    MERGE INTO runtime_api_resources AS target
+                    USING (VALUES (${heartbeat.runtime}, ${api.name}, ${apiResource.path}, ${apiResource.methods})) 
+                           AS source (runtime_id, api_name, resource_path, methods)
+                    ON (target.runtime_id = source.runtime_id AND target.api_name = source.api_name 
+                        AND target.resource_path = source.resource_path)
+                    WHEN MATCHED THEN
+                        UPDATE SET methods = source.methods, updated_at = CURRENT_TIMESTAMP
+                    WHEN NOT MATCHED THEN
+                        INSERT (runtime_id, api_name, resource_path, methods)
+                        VALUES (source.runtime_id, source.api_name, source.resource_path, source.methods);
+                `);
+            } else {
+                _ = check dbClient->execute(`
+                    INSERT INTO runtime_api_resources (
+                        runtime_id, api_name, resource_path, methods
                     ) VALUES (
-                        ${heartbeat.runtime}, ${proxy.name}, ${ep}
+                        ${heartbeat.runtime}, ${api.name},
+                        ${apiResource.path}, ${apiResource.methods}
                     )
                     ON DUPLICATE KEY UPDATE
+                        methods = VALUES(methods),
                         updated_at = CURRENT_TIMESTAMP
                 `);
             }
         }
     }
 
+    foreach types:ProxyService proxy in <types:ProxyService[]>heartbeat.artifacts.proxyServices {
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_proxy_services AS target
+                USING (VALUES (${heartbeat.runtime}, ${proxy.name}, ${proxy.state}, ${proxy.tracing}))
+                       AS source (runtime_id, proxy_name, state, tracing)
+                ON (target.runtime_id = source.runtime_id AND target.proxy_name = source.proxy_name)
+                WHEN MATCHED THEN
+                    UPDATE SET state = source.state, tracing = source.tracing, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, proxy_name, state, tracing)
+                    VALUES (source.runtime_id, source.proxy_name, source.state, source.tracing);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_proxy_services (
+                    runtime_id, proxy_name, state, tracing
+                ) VALUES (
+                    ${heartbeat.runtime}, ${proxy.name}, ${proxy.state}, ${proxy.tracing}
+                )
+                ON DUPLICATE KEY UPDATE
+                    state = VALUES(state),
+                    tracing = VALUES(tracing),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
+
+        // Persist endpoints if present
+        if proxy.endpoints is string[] {
+            foreach string ep in <string[]>proxy.endpoints {
+                if isMSSQL() {
+                    _ = check dbClient->execute(`
+                        MERGE INTO runtime_proxy_service_endpoints AS target
+                        USING (VALUES (${heartbeat.runtime}, ${proxy.name}, ${ep}))
+                               AS source (runtime_id, proxy_name, endpoint_url)
+                        ON (target.runtime_id = source.runtime_id AND target.proxy_name = source.proxy_name AND target.endpoint_url = source.endpoint_url)
+                        WHEN MATCHED THEN
+                            UPDATE SET updated_at = CURRENT_TIMESTAMP
+                        WHEN NOT MATCHED THEN
+                            INSERT (runtime_id, proxy_name, endpoint_url)
+                            VALUES (source.runtime_id, source.proxy_name, source.endpoint_url);
+                    `);
+                } else {
+                    _ = check dbClient->execute(`
+                        INSERT INTO runtime_proxy_service_endpoints (
+                            runtime_id, proxy_name, endpoint_url
+                        ) VALUES (
+                            ${heartbeat.runtime}, ${proxy.name}, ${ep}
+                        )
+                        ON DUPLICATE KEY UPDATE
+                            updated_at = CURRENT_TIMESTAMP
+                    `);
+                }
+            }
+        }
+    }
+
     foreach types:Endpoint endpoint in <types:Endpoint[]>heartbeat.artifacts.endpoints {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_endpoints (
-                runtime_id, endpoint_name, endpoint_type, state, tracing
-            ) VALUES (
-                ${heartbeat.runtime}, ${endpoint.name}, ${endpoint.'type},
-                ${endpoint.state}, ${endpoint.tracing}
-            )
-            ON DUPLICATE KEY UPDATE
-                endpoint_type = VALUES(endpoint_type),
-                state = VALUES(state),
-                tracing = VALUES(tracing),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_endpoints AS target
+                USING (VALUES (${heartbeat.runtime}, ${endpoint.name}, ${endpoint.'type}, ${endpoint.state}, ${endpoint.tracing}))
+                       AS source (runtime_id, endpoint_name, endpoint_type, state, tracing)
+                ON (target.runtime_id = source.runtime_id AND target.endpoint_name = source.endpoint_name)
+                WHEN MATCHED THEN
+                    UPDATE SET endpoint_type = source.endpoint_type, state = source.state, tracing = source.tracing, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, endpoint_name, endpoint_type, state, tracing)
+                    VALUES (source.runtime_id, source.endpoint_name, source.endpoint_type, source.state, source.tracing);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_endpoints (
+                    runtime_id, endpoint_name, endpoint_type, state, tracing
+                ) VALUES (
+                    ${heartbeat.runtime}, ${endpoint.name}, ${endpoint.'type},
+                    ${endpoint.state}, ${endpoint.tracing}
+                )
+                ON DUPLICATE KEY UPDATE
+                    endpoint_type = VALUES(endpoint_type),
+                    state = VALUES(state),
+                    tracing = VALUES(tracing),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
 
         // Persist endpoint attributes if present
         var attrsVal = endpoint?.attributes;
         if attrsVal is types:EndpointAttribute[] {
             foreach types:EndpointAttribute attr in attrsVal {
-                _ = check dbClient->execute(`
-                    INSERT INTO runtime_endpoint_attributes (
-                        runtime_id, endpoint_name, attribute_name, attribute_value
-                    ) VALUES (
-                        ${heartbeat.runtime}, ${endpoint.name}, ${attr.name}, ${attr?.value}
-                    )
-                    ON DUPLICATE KEY UPDATE
-                        attribute_value = VALUES(attribute_value),
-                        updated_at = CURRENT_TIMESTAMP
-                `);
+                if isMSSQL() {
+                    _ = check dbClient->execute(`
+                        MERGE INTO runtime_endpoint_attributes AS target
+                        USING (VALUES (${heartbeat.runtime}, ${endpoint.name}, ${attr.name}, ${attr?.value}))
+                               AS source (runtime_id, endpoint_name, attribute_name, attribute_value)
+                        ON (target.runtime_id = source.runtime_id AND target.endpoint_name = source.endpoint_name AND target.attribute_name = source.attribute_name)
+                        WHEN MATCHED THEN
+                            UPDATE SET attribute_value = source.attribute_value, updated_at = CURRENT_TIMESTAMP
+                        WHEN NOT MATCHED THEN
+                            INSERT (runtime_id, endpoint_name, attribute_name, attribute_value)
+                            VALUES (source.runtime_id, source.endpoint_name, source.attribute_name, source.attribute_value);
+                    `);
+                } else {
+                    _ = check dbClient->execute(`
+                        INSERT INTO runtime_endpoint_attributes (
+                            runtime_id, endpoint_name, attribute_name, attribute_value
+                        ) VALUES (
+                            ${heartbeat.runtime}, ${endpoint.name}, ${attr.name}, ${attr?.value}
+                        )
+                        ON DUPLICATE KEY UPDATE
+                            attribute_value = VALUES(attribute_value),
+                            updated_at = CURRENT_TIMESTAMP
+                    `);
+                }
             }
         }
     }
@@ -664,192 +789,360 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
 // Insert additional MI artifacts
 isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns error? {
     foreach types:InboundEndpoint inbound in <types:InboundEndpoint[]>heartbeat.artifacts.inboundEndpoints {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_inbound_endpoints (
-                runtime_id, inbound_name, protocol, sequence, state, statistics, on_error, tracing
-            ) VALUES (
-                ${heartbeat.runtime}, ${inbound.name}, ${inbound.protocol},
-                ${inbound.sequence}, ${inbound.state}, ${inbound.statistics}, ${inbound.onError}, ${inbound.tracing}
-            )
-            ON DUPLICATE KEY UPDATE
-                protocol = VALUES(protocol),
-                sequence = VALUES(sequence),
-                state = VALUES(state),
-                statistics = VALUES(statistics),
-                on_error = VALUES(on_error),
-                tracing = VALUES(tracing),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_inbound_endpoints AS target
+                USING (VALUES (${heartbeat.runtime}, ${inbound.name}, ${inbound.protocol}, ${inbound.sequence}, ${inbound.state}, ${inbound.statistics}, ${inbound.onError}, ${inbound.tracing}))
+                       AS source (runtime_id, inbound_name, protocol, sequence, state, [statistics], on_error, tracing)
+                ON (target.runtime_id = source.runtime_id AND target.inbound_name = source.inbound_name)
+                WHEN MATCHED THEN
+                    UPDATE SET protocol = source.protocol, sequence = source.sequence, state = source.state, [statistics] = source.[statistics], on_error = source.on_error, tracing = source.tracing, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, inbound_name, protocol, sequence, state, [statistics], on_error, tracing)
+                    VALUES (source.runtime_id, source.inbound_name, source.protocol, source.sequence, source.state, source.[statistics], source.on_error, source.tracing);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_inbound_endpoints (
+                    runtime_id, inbound_name, protocol, sequence, state, statistics, on_error, tracing
+                ) VALUES (
+                    ${heartbeat.runtime}, ${inbound.name}, ${inbound.protocol},
+                    ${inbound.sequence}, ${inbound.state}, ${inbound.statistics}, ${inbound.onError}, ${inbound.tracing}
+                )
+                ON DUPLICATE KEY UPDATE
+                    protocol = VALUES(protocol),
+                    sequence = VALUES(sequence),
+                    state = VALUES(state),
+                    statistics = VALUES(statistics),
+                    on_error = VALUES(on_error),
+                    tracing = VALUES(tracing),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:Sequence sequence in <types:Sequence[]>heartbeat.artifacts.sequences {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_sequences (
-                runtime_id, sequence_name, sequence_type, container, state, tracing
-            ) VALUES (
-                ${heartbeat.runtime}, ${sequence.name}, ${sequence.'type},
-                ${sequence.container}, ${sequence.state}, ${sequence.tracing}
-            )
-            ON DUPLICATE KEY UPDATE
-                sequence_type = VALUES(sequence_type),
-                container = VALUES(container),
-                state = VALUES(state),
-                tracing = VALUES(tracing),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_sequences AS target
+                USING (VALUES (${heartbeat.runtime}, ${sequence.name}, ${sequence.'type}, ${sequence.container}, ${sequence.state}, ${sequence.tracing}))
+                       AS source (runtime_id, sequence_name, sequence_type, container, state, tracing)
+                ON (target.runtime_id = source.runtime_id AND target.sequence_name = source.sequence_name)
+                WHEN MATCHED THEN
+                    UPDATE SET sequence_type = source.sequence_type, container = source.container, state = source.state, tracing = source.tracing, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, sequence_name, sequence_type, container, state, tracing)
+                    VALUES (source.runtime_id, source.sequence_name, source.sequence_type, source.container, source.state, source.tracing);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_sequences (
+                    runtime_id, sequence_name, sequence_type, container, state, tracing
+                ) VALUES (
+                    ${heartbeat.runtime}, ${sequence.name}, ${sequence.'type},
+                    ${sequence.container}, ${sequence.state}, ${sequence.tracing}
+                )
+                ON DUPLICATE KEY UPDATE
+                    sequence_type = VALUES(sequence_type),
+                    container = VALUES(container),
+                    state = VALUES(state),
+                    tracing = VALUES(tracing),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:Task task in <types:Task[]>heartbeat.artifacts.tasks {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_tasks (
-                runtime_id, task_name, task_class, task_group, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${task.name}, ${task.'class},
-                ${task.group}, ${task.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                task_class = VALUES(task_class),
-                task_group = VALUES(task_group),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_tasks AS target
+                USING (VALUES (${heartbeat.runtime}, ${task.name}, ${task.'class}, ${task.group}, ${task.state}))
+                       AS source (runtime_id, task_name, task_class, task_group, state)
+                ON (target.runtime_id = source.runtime_id AND target.task_name = source.task_name)
+                WHEN MATCHED THEN
+                    UPDATE SET task_class = source.task_class, task_group = source.task_group, state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, task_name, task_class, task_group, state)
+                    VALUES (source.runtime_id, source.task_name, source.task_class, source.task_group, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_tasks (
+                    runtime_id, task_name, task_class, task_group, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${task.name}, ${task.'class},
+                    ${task.group}, ${task.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    task_class = VALUES(task_class),
+                    task_group = VALUES(task_group),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:Template template in <types:Template[]>heartbeat.artifacts.templates {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_templates (
-                runtime_id, template_name, template_type
-            ) VALUES (
-                ${heartbeat.runtime}, ${template.name}, ${template.'type}
-            )
-            ON DUPLICATE KEY UPDATE
-                template_type = VALUES(template_type),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_templates AS target
+                USING (VALUES (${heartbeat.runtime}, ${template.name}, ${template.'type}))
+                       AS source (runtime_id, template_name, template_type)
+                ON (target.runtime_id = source.runtime_id AND target.template_name = source.template_name)
+                WHEN MATCHED THEN
+                    UPDATE SET template_type = source.template_type, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, template_name, template_type)
+                    VALUES (source.runtime_id, source.template_name, source.template_type);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_templates (
+                    runtime_id, template_name, template_type
+                ) VALUES (
+                    ${heartbeat.runtime}, ${template.name}, ${template.'type}
+                )
+                ON DUPLICATE KEY UPDATE
+                    template_type = VALUES(template_type),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:MessageStore store in <types:MessageStore[]>heartbeat.artifacts.messageStores {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_message_stores (
-                runtime_id, store_name, store_type, size
-            ) VALUES (
-                ${heartbeat.runtime}, ${store.name}, ${store.'type}, ${store.size}
-            )
-            ON DUPLICATE KEY UPDATE
-                store_type = VALUES(store_type),
-                size = VALUES(size),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_message_stores AS target
+                USING (VALUES (${heartbeat.runtime}, ${store.name}, ${store.'type}, ${store.size}))
+                       AS source (runtime_id, store_name, store_type, size)
+                ON (target.runtime_id = source.runtime_id AND target.store_name = source.store_name)
+                WHEN MATCHED THEN
+                    UPDATE SET store_type = source.store_type, size = source.size, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, store_name, store_type, size)
+                    VALUES (source.runtime_id, source.store_name, source.store_type, source.size);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_message_stores (
+                    runtime_id, store_name, store_type, size
+                ) VALUES (
+                    ${heartbeat.runtime}, ${store.name}, ${store.'type}, ${store.size}
+                )
+                ON DUPLICATE KEY UPDATE
+                    store_type = VALUES(store_type),
+                    size = VALUES(size),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:MessageProcessor processor in <types:MessageProcessor[]>heartbeat.artifacts.messageProcessors {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_message_processors (
-                runtime_id, processor_name, processor_type, processor_class, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${processor.name}, ${processor.'type},
-                ${processor.'class}, ${processor.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                processor_type = VALUES(processor_type),
-                processor_class = VALUES(processor_class),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_message_processors AS target
+                USING (VALUES (${heartbeat.runtime}, ${processor.name}, ${processor.'type}, ${processor.'class}, ${processor.state}))
+                       AS source (runtime_id, processor_name, processor_type, processor_class, state)
+                ON (target.runtime_id = source.runtime_id AND target.processor_name = source.processor_name)
+                WHEN MATCHED THEN
+                    UPDATE SET processor_type = source.processor_type, processor_class = source.processor_class, state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, processor_name, processor_type, processor_class, state)
+                    VALUES (source.runtime_id, source.processor_name, source.processor_type, source.processor_class, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_message_processors (
+                    runtime_id, processor_name, processor_type, processor_class, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${processor.name}, ${processor.'type},
+                    ${processor.'class}, ${processor.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    processor_type = VALUES(processor_type),
+                    processor_class = VALUES(processor_class),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:LocalEntry entry in <types:LocalEntry[]>heartbeat.artifacts.localEntries {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_local_entries (
-                runtime_id, entry_name, entry_type, entry_value, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${entry.name}, ${entry.'type},
-                ${entry.value}, ${entry.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                entry_type = VALUES(entry_type),
-                entry_value = VALUES(entry_value),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_local_entries AS target
+                USING (VALUES (${heartbeat.runtime}, ${entry.name}, ${entry.'type}, ${entry.value}, ${entry.state}))
+                       AS source (runtime_id, entry_name, entry_type, entry_value, state)
+                ON (target.runtime_id = source.runtime_id AND target.entry_name = source.entry_name)
+                WHEN MATCHED THEN
+                    UPDATE SET entry_type = source.entry_type, entry_value = source.entry_value, state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, entry_name, entry_type, entry_value, state)
+                    VALUES (source.runtime_id, source.entry_name, source.entry_type, source.entry_value, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_local_entries (
+                    runtime_id, entry_name, entry_type, entry_value, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${entry.name}, ${entry.'type},
+                    ${entry.value}, ${entry.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    entry_type = VALUES(entry_type),
+                    entry_value = VALUES(entry_value),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:DataService dataService in <types:DataService[]>heartbeat.artifacts.dataServices {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_data_services (
-                runtime_id, service_name, description, wsdl, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${dataService.name}, ${dataService.description},
-                ${dataService.wsdl}, ${dataService.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                description = VALUES(description),
-                wsdl = VALUES(wsdl),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_data_services AS target
+                USING (VALUES (${heartbeat.runtime}, ${dataService.name}, ${dataService.description}, ${dataService.wsdl}, ${dataService.state}))
+                       AS source (runtime_id, service_name, description, wsdl, state)
+                ON (target.runtime_id = source.runtime_id AND target.service_name = source.service_name)
+                WHEN MATCHED THEN
+                    UPDATE SET description = source.description, wsdl = source.wsdl, state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, service_name, description, wsdl, state)
+                    VALUES (source.runtime_id, source.service_name, source.description, source.wsdl, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_data_services (
+                    runtime_id, service_name, description, wsdl, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${dataService.name}, ${dataService.description},
+                    ${dataService.wsdl}, ${dataService.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    description = VALUES(description),
+                    wsdl = VALUES(wsdl),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:CarbonApp app in <types:CarbonApp[]>heartbeat.artifacts.carbonApps {
         string? artifactsJson = app.artifacts is types:CarbonAppArtifact[]
             ? (<types:CarbonAppArtifact[]>app.artifacts).toJsonString()
             : ();
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_carbon_apps (
-                runtime_id, app_name, version, state, artifacts
-            ) VALUES (
-                ${heartbeat.runtime}, ${app.name}, ${app.version}, ${app.state}, ${artifactsJson}
-            )
-            ON DUPLICATE KEY UPDATE
-                version = VALUES(version),
-                state = VALUES(state),
-                artifacts = VALUES(artifacts),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_carbon_apps AS target
+                USING (VALUES (${heartbeat.runtime}, ${app.name}, ${app.version}, ${app.state}, ${artifactsJson}))
+                       AS source (runtime_id, app_name, version, state, artifacts)
+                ON (target.runtime_id = source.runtime_id AND target.app_name = source.app_name)
+                WHEN MATCHED THEN
+                    UPDATE SET version = source.version, state = source.state, artifacts = source.artifacts, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, app_name, version, state, artifacts)
+                    VALUES (source.runtime_id, source.app_name, source.version, source.state, source.artifacts);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_carbon_apps (
+                    runtime_id, app_name, version, state, artifacts
+                ) VALUES (
+                    ${heartbeat.runtime}, ${app.name}, ${app.version}, ${app.state}, ${artifactsJson}
+                )
+                ON DUPLICATE KEY UPDATE
+                    version = VALUES(version),
+                    state = VALUES(state),
+                    artifacts = VALUES(artifacts),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:DataSource dataSource in <types:DataSource[]>heartbeat.artifacts.dataSources {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_data_sources (
-                runtime_id, datasource_name, datasource_type, driver, url, username, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${dataSource.name}, ${dataSource.'type}, ${dataSource.driver},
-                ${dataSource.url}, ${dataSource.username}, ${dataSource.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                datasource_type = VALUES(datasource_type),
-                driver = VALUES(driver),
-                url = VALUES(url),
-                username = VALUES(username),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_data_sources AS target
+                USING (VALUES (${heartbeat.runtime}, ${dataSource.name}, ${dataSource.'type}, ${dataSource.driver}, ${dataSource.url}, ${dataSource.username}, ${dataSource.state}))
+                       AS source (runtime_id, datasource_name, datasource_type, driver, url, username, state)
+                ON (target.runtime_id = source.runtime_id AND target.datasource_name = source.datasource_name)
+                WHEN MATCHED THEN
+                    UPDATE SET datasource_type = source.datasource_type, driver = source.driver, url = source.url, username = source.username, state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, datasource_name, datasource_type, driver, url, username, state)
+                    VALUES (source.runtime_id, source.datasource_name, source.datasource_type, source.driver, source.url, source.username, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_data_sources (
+                    runtime_id, datasource_name, datasource_type, driver, url, username, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${dataSource.name}, ${dataSource.'type}, ${dataSource.driver},
+                    ${dataSource.url}, ${dataSource.username}, ${dataSource.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    datasource_type = VALUES(datasource_type),
+                    driver = VALUES(driver),
+                    url = VALUES(url),
+                    username = VALUES(username),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:Connector connector in <types:Connector[]>heartbeat.artifacts.connectors {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_connectors (
-                runtime_id, connector_name, package, version, state
-            ) VALUES (
-                ${heartbeat.runtime}, ${connector.name}, ${connector.package},
-                ${connector.version}, ${connector.state}
-            )
-            ON DUPLICATE KEY UPDATE
-                version = VALUES(version),
-                state = VALUES(state),
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_connectors AS target
+                USING (VALUES (${heartbeat.runtime}, ${connector.name}, ${connector.package}, ${connector.version}, ${connector.state}))
+                       AS source (runtime_id, connector_name, package, version, state)
+                ON (target.runtime_id = source.runtime_id AND target.connector_name = source.connector_name)
+                WHEN MATCHED THEN
+                    UPDATE SET version = source.version, state = source.state, updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, connector_name, package, version, state)
+                    VALUES (source.runtime_id, source.connector_name, source.package, source.version, source.state);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_connectors (
+                    runtime_id, connector_name, package, version, state
+                ) VALUES (
+                    ${heartbeat.runtime}, ${connector.name}, ${connector.package},
+                    ${connector.version}, ${connector.state}
+                )
+                ON DUPLICATE KEY UPDATE
+                    version = VALUES(version),
+                    state = VALUES(state),
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 
     foreach types:RegistryResource registryResource in <types:RegistryResource[]>heartbeat.artifacts.registryResources {
-        _ = check dbClient->execute(`
-            INSERT INTO runtime_registry_resources (
-                runtime_id, resource_name, resource_type
-            ) VALUES (
-                ${heartbeat.runtime}, ${registryResource.name}, ${registryResource.'type}
-            )
-            ON DUPLICATE KEY UPDATE
-                updated_at = CURRENT_TIMESTAMP
-        `);
+        if isMSSQL() {
+            _ = check dbClient->execute(`
+                MERGE INTO runtime_registry_resources AS target
+                USING (VALUES (${heartbeat.runtime}, ${registryResource.name}, ${registryResource.'type}))
+                       AS source (runtime_id, resource_name, resource_type)
+                ON (target.runtime_id = source.runtime_id AND target.resource_name = source.resource_name)
+                WHEN MATCHED THEN
+                    UPDATE SET updated_at = CURRENT_TIMESTAMP
+                WHEN NOT MATCHED THEN
+                    INSERT (runtime_id, resource_name, resource_type)
+                    VALUES (source.runtime_id, source.resource_name, source.resource_type);
+            `);
+        } else {
+            _ = check dbClient->execute(`
+                INSERT INTO runtime_registry_resources (
+                    runtime_id, resource_name, resource_type
+                ) VALUES (
+                    ${heartbeat.runtime}, ${registryResource.name}, ${registryResource.'type}
+                )
+                ON DUPLICATE KEY UPDATE
+                    updated_at = CURRENT_TIMESTAMP
+            `);
+        }
     }
 }

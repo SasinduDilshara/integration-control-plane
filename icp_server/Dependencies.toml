@@ -276,7 +276,7 @@ modules = [
 [[package]]
 org = "ballerina"
 name = "log"
-version = "2.15.0"
+version = "2.16.1"
 dependencies = [
 	{org = "ballerina", name = "io"},
 	{org = "ballerina", name = "jballerina.java"},
@@ -513,6 +513,29 @@ modules = [
 
 [[package]]
 org = "ballerinax"
+name = "mssql"
+version = "1.16.2"
+dependencies = [
+	{org = "ballerina", name = "crypto"},
+	{org = "ballerina", name = "jballerina.java"},
+	{org = "ballerina", name = "sql"},
+	{org = "ballerina", name = "time"},
+	{org = "ballerinax", name = "cdc"}
+]
+modules = [
+	{org = "ballerinax", packageName = "mssql", moduleName = "mssql"}
+]
+
+[[package]]
+org = "ballerinax"
+name = "mssql.driver"
+version = "1.7.0"
+modules = [
+	{org = "ballerinax", packageName = "mssql.driver", moduleName = "mssql.driver"}
+]
+
+[[package]]
+org = "ballerinax"
 name = "mysql"
 version = "1.16.1"
 dependencies = [
@@ -561,6 +584,8 @@ dependencies = [
 	{org = "ballerinai", name = "transaction"},
 	{org = "ballerinax", name = "h2.driver"},
 	{org = "ballerinax", name = "java.jdbc"},
+	{org = "ballerinax", name = "mssql"},
+	{org = "ballerinax", name = "mssql.driver"},
 	{org = "ballerinax", name = "mysql"},
 	{org = "ballerinax", name = "mysql.driver"}
 ]

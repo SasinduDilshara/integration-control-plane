@@ -156,9 +156,9 @@ public isolated function getEnvironmentIdsByTypes(boolean hasProdAccess, boolean
     if hasProdAccess && hasNonProdAccess {
         query = sql:queryConcat(query, `1=1`);
     } else if hasProdAccess {
-        query = sql:queryConcat(query, `critical = true`);
+        query = sql:queryConcat(query, sql:queryConcat(`critical = `, sqlQueryFromString(TRUE_LITERAL)));
     } else if hasNonProdAccess {
-        query = sql:queryConcat(query, `critical = false`);
+        query = sql:queryConcat(query, sql:queryConcat(`critical = `, sqlQueryFromString(FALSE_LITERAL)));
     }
 
     query = sql:queryConcat(query, ` ORDER BY name ASC`);

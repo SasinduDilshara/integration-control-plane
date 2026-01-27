@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/sql;
 import ballerina/time;
 
 // SQL Dialect abstraction for database-specific features
@@ -51,7 +52,66 @@ public isolated function convertUtcToMySQLDateTime(time:Utc utcTime) returns str
 public isolated function convertUtcToDbDateTime(time:Utc utcTime) returns string|error {
     if dbType == H2 {
         return convertUtcToH2DateTime(utcTime);
+    } else if dbType == MSSQL {
+        return convertUtcToMySQLDateTime(utcTime); // MSSQL DATETIME2 supports same format as MySQL
     } else {
         return convertUtcToMySQLDateTime(utcTime);
     }
 }
+
+// Get database-specific TIMESTAMPDIFF function
+// MySQL: TIMESTAMPDIFF(unit, start, end)
+// MSSQL: DATEDIFF(unit, start, end)
+public isolated function getTimestampDiffSeconds(string startColumn, string endTimestamp) returns string {
+    if dbType == MSSQL {
+        return string `DATEDIFF(SECOND, ${startColumn}, ${endTimestamp})`;
+    } else {
+        return string `TIMESTAMPDIFF(SECOND, ${startColumn}, ${endTimestamp})`;
+    }
+}
+
+// Get database-specific boolean literal
+// MySQL/H2: TRUE/FALSE
+// MSSQL: 1/0
+public isolated function getBooleanLiteral(boolean value) returns string {
+    if dbType == MSSQL {
+        return value ? "1" : "0";
+    } else {
+        return value ? "TRUE" : "FALSE";
+    }
+}
+
+// Global constants for boolean literals
+public final string TRUE_LITERAL = getBooleanLiteral(true);
+public final string FALSE_LITERAL = getBooleanLiteral(false);
+
+// Create a ParameterizedQuery from a raw SQL string using string:`` template
+public isolated function sqlQueryFromString(string sqlString) returns sql:ParameterizedQuery => `${sqlString}`;
+
+// Database type helper functions
+public isolated function isMSSQL() returns boolean => dbType == MSSQL;
+
+public isolated function isMySQL() returns boolean => dbType == MYSQL;
+
+public isolated function isH2() returns boolean => dbType == H2;
+
+// Get database-specific LIMIT clause
+// MySQL/H2: LIMIT n
+// MSSQL: OFFSET 0 ROWS FETCH NEXT n ROWS ONLY
+public isolated function getLimitClause(int rowCount) returns string {
+    if dbType == MSSQL {
+        return string `OFFSET 0 ROWS FETCH NEXT ${rowCount} ROWS ONLY`;
+    } else {
+        return string `LIMIT ${rowCount}`;
+    }
+}
+
+// Append database-specific LIMIT clause to a query
+public isolated function appendLimitClause(sql:ParameterizedQuery query, int rowCount) returns sql:ParameterizedQuery {
+    if dbType == MSSQL {
+        return sql:queryConcat(query, ` OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY`);
+    } else {
+        return sql:queryConcat(query, ` LIMIT 1`);
+    }
+}
+

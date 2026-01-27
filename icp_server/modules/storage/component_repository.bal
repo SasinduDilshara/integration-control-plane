@@ -179,10 +179,10 @@ public isolated function getComponentsByIds(string[] componentIds) returns types
 
 // Get project ID for a given component ID (lightweight query for access control)
 public isolated function getProjectIdByComponentId(string componentId) returns string|error {
-    stream<record {|string project_id;|}, sql:Error?> resultStream = 
+    stream<record {|string project_id;|}, sql:Error?> resultStream =
         dbClient->query(`SELECT project_id FROM components WHERE component_id = ${componentId}`);
 
-    record {|string project_id;|}[] results = 
+    record {|string project_id;|}[] results =
         check from record {|string project_id;|} result in resultStream
         select result;
 
@@ -306,15 +306,18 @@ public isolated function updateComponent(string componentId, string? name, strin
 public isolated function getComponentDeployment(string componentId, string environmentId, string versionId) returns types:ComponentDeployment?|error {
     log:printDebug(string `Fetching deployment info for component: ${componentId}, environment: ${environmentId}`);
 
-    stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(`
+    sql:ParameterizedQuery query = `
         SELECT runtime_id, runtime_type, status, environment_id, project_id, component_id, version,
                platform_name, platform_version, platform_home, os_name, os_version,
                registration_time, last_heartbeat
         FROM runtimes
         WHERE component_id = ${componentId} AND environment_id = ${environmentId}
         ORDER BY last_heartbeat DESC
-        LIMIT 1
-    `);
+    `;
+
+    query = appendLimitClause(query, 1);
+
+    stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(query);
 
     types:RuntimeDBRecord[] runtimeRecords = check from types:RuntimeDBRecord runtimeRecord in runtimeStream
         select runtimeRecord;

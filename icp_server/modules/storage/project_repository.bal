@@ -22,17 +22,18 @@ import ballerina/uuid;
 
 // Helper function to get Project Admin role ID
 isolated function getProjectAdminRoleId() returns string|error {
-    sql:ParameterizedQuery query = `SELECT role_id FROM roles_v2 WHERE role_name = 'Project Admin' LIMIT 1`;
-    
+    sql:ParameterizedQuery query = `SELECT role_id FROM roles_v2 WHERE role_name = 'Project Admin'`;
+    query = appendLimitClause(query, 1);
+
     stream<record {|string role_id;|}, sql:Error?> roleStream = dbClient->query(query);
-    
+
     record {|string role_id;|}[] roles = check from record {|string role_id;|} role in roleStream
         select role;
-    
+
     if roles.length() == 0 {
         return error("Project Admin role not found in database");
     }
-    
+
     return roles[0].role_id;
 }
 
@@ -83,7 +84,7 @@ public isolated function createProject(types:ProjectInput project, types:UserCon
         string adminGroupId = uuid:createType1AsString();
         string groupName = string `${project.name} Admins`;
         string groupDescription = string `Admin group for project: ${project.name}`;
-        
+
         sql:ExecutionResult _ = check dbClient->execute(`
             INSERT INTO user_groups (group_id, group_name, org_uuid, description)
             VALUES (${adminGroupId}, ${groupName}, 1, ${groupDescription})
@@ -197,10 +198,10 @@ public isolated function getProjectsByIds(string[] projectIds, int? orgId = ()) 
             });
         };
 
-    log:printInfo("Retrieved projects by IDs", 
-        projectCount = projects.length(), 
-        requestedIds = projectIds.length(),
-        orgIdFilter = orgId);
+    log:printInfo("Retrieved projects by IDs",
+            projectCount = projects.length(),
+            requestedIds = projectIds.length(),
+            orgIdFilter = orgId);
 
     return projects;
 }

@@ -20,12 +20,18 @@ The ICP Server consists of the following core services:
 
 To run the server with all dependencies:
 
+**MySQL:**
 ```sh
 docker-compose -f docker-compose.local.yml up --build
 ```
 
+**MSSQL:**
+```sh
+docker-compose -f docker-compose.mssql.yml up --build
+```
+
 This will start:
-- MySQL database on port 3307
+- Database (MySQL on port 3307 or MSSQL on port 1433)
 - ICP Server on ports:
   - 9445 - Main HTTP/GraphQL API
   - 9446 - GraphQL endpoint
@@ -38,6 +44,24 @@ bal run
 ```
 
 Make sure to configure the database connection in `Config.toml` before running.
+
+## Database Support
+
+The ICP Server supports multiple database backends:
+
+- **MySQL** - Production-ready relational database
+  - Default port: 3306
+  - Config: Set `dbType = "mysql"` in Config.toml
+  - Docker Compose: `docker-compose.mysql.yml`
+
+- **Microsoft SQL Server (MSSQL)** - Enterprise database
+  - Default port: 1433
+  - Config: Set `dbType = "mssql"` in Config.toml
+  - Docker Compose: `docker-compose.mssql.yml`
+
+- **H2** - In-memory database for development/testing
+  - Config: Set `dbType = "h2"` in Config.toml
+  - No external database required
 
 ## Running Tests
 
