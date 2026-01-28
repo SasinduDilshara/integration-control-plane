@@ -635,6 +635,7 @@ CREATE TABLE runtime_listeners (
 CREATE TABLE runtime_apis (
     runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     url VARCHAR(500) NOT NULL,
     context VARCHAR(500) NOT NULL,
     version VARCHAR(50) NULL,
@@ -652,6 +653,7 @@ CREATE TABLE runtime_apis (
     CONSTRAINT fk_runtime_apis_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_api_name (api_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
@@ -674,6 +676,7 @@ CREATE TABLE runtime_api_resources (
 CREATE TABLE runtime_proxy_services (
     runtime_id VARCHAR(100) NOT NULL,
     proxy_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     state ENUM(
         'ENABLED',
         'DISABLED',
@@ -688,6 +691,7 @@ CREATE TABLE runtime_proxy_services (
     CONSTRAINT fk_runtime_proxy_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_proxy_name (proxy_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
@@ -708,6 +712,7 @@ CREATE TABLE runtime_proxy_service_endpoints (
 CREATE TABLE runtime_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     endpoint_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     endpoint_type VARCHAR(100) NOT NULL,
     state ENUM(
         'ENABLED',
@@ -723,6 +728,7 @@ CREATE TABLE runtime_endpoints (
     CONSTRAINT fk_runtime_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_endpoint_name (endpoint_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_endpoint_type (endpoint_type),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
@@ -746,6 +752,7 @@ CREATE TABLE runtime_endpoint_attributes (
 CREATE TABLE runtime_inbound_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     inbound_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     protocol VARCHAR(50) NOT NULL,
     sequence VARCHAR(200) NULL,
     statistics VARCHAR(20) NULL,
@@ -764,6 +771,7 @@ CREATE TABLE runtime_inbound_endpoints (
     CONSTRAINT fk_runtime_inbound_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_inbound_name (inbound_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_protocol (protocol),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
@@ -772,6 +780,7 @@ CREATE TABLE runtime_inbound_endpoints (
 CREATE TABLE runtime_sequences (
     runtime_id VARCHAR(100) NOT NULL,
     sequence_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     sequence_type VARCHAR(100) NULL,
     container VARCHAR(200) NULL,
     state ENUM(
@@ -788,6 +797,7 @@ CREATE TABLE runtime_sequences (
     CONSTRAINT fk_runtime_sequences_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_sequence_name (sequence_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_sequence_type (sequence_type),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
@@ -796,6 +806,7 @@ CREATE TABLE runtime_sequences (
 CREATE TABLE runtime_tasks (
     runtime_id VARCHAR(100) NOT NULL,
     task_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     task_class VARCHAR(500) NULL,
     task_group VARCHAR(200) NULL,
     state ENUM(
@@ -811,6 +822,7 @@ CREATE TABLE runtime_tasks (
     CONSTRAINT fk_runtime_tasks_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_task_name (task_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
@@ -847,6 +859,7 @@ CREATE TABLE runtime_message_stores (
 CREATE TABLE runtime_message_processors (
     runtime_id VARCHAR(100) NOT NULL,
     processor_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     processor_type VARCHAR(100) NOT NULL,
     processor_class VARCHAR(500) NULL,
     state ENUM(
@@ -862,6 +875,7 @@ CREATE TABLE runtime_message_processors (
     CONSTRAINT fk_runtime_message_processors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_processor_name (processor_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_processor_type (processor_type),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
@@ -870,6 +884,7 @@ CREATE TABLE runtime_message_processors (
 CREATE TABLE runtime_local_entries (
     runtime_id VARCHAR(100) NOT NULL,
     entry_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     entry_type VARCHAR(100) NOT NULL,
     entry_value TEXT NULL,
     state ENUM(
@@ -885,6 +900,7 @@ CREATE TABLE runtime_local_entries (
     CONSTRAINT fk_runtime_local_entries_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_entry_name (entry_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_entry_type (entry_type),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
@@ -893,6 +909,7 @@ CREATE TABLE runtime_local_entries (
 CREATE TABLE runtime_data_services (
     runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     description TEXT NULL,
     wsdl TEXT NULL,
     state ENUM(
@@ -908,6 +925,7 @@ CREATE TABLE runtime_data_services (
     CONSTRAINT fk_runtime_data_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_service_name (service_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
@@ -956,6 +974,7 @@ CREATE TABLE runtime_data_sources (
 CREATE TABLE runtime_connectors (
     runtime_id VARCHAR(100) NOT NULL,
     connector_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50) NULL,
     state ENUM(
@@ -971,6 +990,7 @@ CREATE TABLE runtime_connectors (
     CONSTRAINT fk_runtime_connectors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_connector_name (connector_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
@@ -991,12 +1011,11 @@ CREATE TABLE runtime_registry_resources (
 -- CONTROL COMMANDS
 -- ============================================================================
 
-CREATE TABLE control_commands (
+CREATE TABLE bi_runtime_control_commands (
     command_id CHAR(36) NOT NULL PRIMARY KEY, -- UUID
     runtime_id VARCHAR(100) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL, -- start, stop, restart, deploy, undeploy
-    parameters JSON NULL,
     status ENUM(
         'pending',
         'sent',
@@ -1019,6 +1038,74 @@ CREATE TABLE control_commands (
     INDEX idx_status (status),
     INDEX idx_issued_at (issued_at),
     INDEX idx_target_artifact (target_artifact),
+    INDEX idx_action (action),
+    INDEX idx_issued_by (issued_by)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE mi_runtime_control_commands (
+    runtime_id VARCHAR(100) NOT NULL,
+    component_id CHAR(36) NOT NULL,
+    artifact_id CHAR(36) NOT NULL,
+    action VARCHAR(50) NOT NULL, -- enable_artifact, disable_artifact, enable_tracing, disable_tracing
+    status ENUM(
+        'pending',
+        'sent',
+        'acknowledged',
+        'completed',
+        'failed',
+        'timeout'
+    ) NOT NULL DEFAULT 'pending',
+    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    sent_at TIMESTAMP(6) NULL,
+    acknowledged_at TIMESTAMP(6) NULL,
+    completed_at TIMESTAMP(6) NULL,
+    error_message TEXT NULL,
+    issued_by CHAR(36) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (runtime_id, component_id, artifact_id),
+    CONSTRAINT fk_mi_runtime_control_cmd_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_runtime_control_cmd_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_runtime_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_runtime_id (runtime_id),
+    INDEX idx_component_id (component_id),
+    INDEX idx_artifact_id (artifact_id),
+    INDEX idx_status (status),
+    INDEX idx_issued_at (issued_at),
+    INDEX idx_action (action),
+    INDEX idx_issued_by (issued_by)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE bi_artifact_intended_state (
+    component_id CHAR(36) NOT NULL,
+    target_artifact VARCHAR(200) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    issued_by CHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, target_artifact),
+    CONSTRAINT fk_bi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_component_id (component_id),
+    INDEX idx_target_artifact (target_artifact),
+    INDEX idx_action (action),
+    INDEX idx_issued_by (issued_by)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE mi_artifact_intended_state (
+    component_id CHAR(36) NOT NULL,
+    artifact_id CHAR(36) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    issued_by CHAR(36) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, artifact_id),
+    CONSTRAINT fk_mi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_component_id (component_id),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_action (action),
     INDEX idx_issued_by (issued_by)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
@@ -1133,7 +1220,7 @@ CREATE TABLE system_config (
     INDEX idx_updated_at (updated_at)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
--- Active commands view
+-- Active BI commands view
 CREATE OR REPLACE VIEW active_commands AS
 SELECT
     cc.*,
@@ -1141,11 +1228,27 @@ SELECT
     r.status AS runtime_status,
     TIMESTAMPDIFF(SECOND, cc.issued_at, NOW(6)) AS age_seconds
 FROM
-    control_commands cc
+    bi_runtime_control_commands cc
     JOIN runtimes r ON cc.runtime_id = r.runtime_id
 WHERE
     cc.status IN ('pending', 'sent')
 ORDER BY cc.issued_at ASC;
+
+-- Active MI commands view
+CREATE OR REPLACE VIEW active_mi_commands AS
+SELECT
+    micc.*,
+    r.runtime_type,
+    r.status AS runtime_status,
+    c.name AS component_name,
+    TIMESTAMPDIFF(SECOND, micc.issued_at, NOW(6)) AS age_seconds
+FROM
+    mi_runtime_control_commands micc
+    JOIN runtimes r ON micc.runtime_id = r.runtime_id
+    JOIN components c ON micc.component_id = c.component_id
+WHERE
+    micc.status IN ('pending', 'sent')
+ORDER BY micc.issued_at ASC;
 
 -- ============================================================================
 -- SAMPLE DATA FOR TESTING

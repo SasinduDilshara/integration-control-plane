@@ -98,7 +98,7 @@ isolated function issueRuntimeHmacToken() returns string|error {
 }
 
 // Helper: send artifact status change request to a runtime
-isolated function sendArtifactStatusChange(types:Runtime runtime, string artifactType, string artifactName, string status) returns error? {
+public isolated function sendArtifactStatusChange(types:Runtime runtime, string artifactType, string artifactName, string status) returns error? {
     string baseUrl = check buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
     
     http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
@@ -151,7 +151,7 @@ isolated function sendArtifactStatusChange(types:Runtime runtime, string artifac
 }
 
 // Helper function to send artifact tracing change to a runtime
-isolated function sendArtifactTracingChange(types:Runtime runtime, string artifactType, string artifactName, string trace) returns error? {
+public isolated function sendArtifactTracingChange(types:Runtime runtime, string artifactType, string artifactName, string trace) returns error? {
     string baseUrl = check buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
     
     http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
@@ -887,6 +887,23 @@ service /graphql on graphqlListener {
 
             commandIds.push(commandId);
             log:printInfo(string `Created control command ${commandId} for runtime ${runtimeId} to ${input.action} listener ${input.listenerName}`);
+
+            // This ensures all runtimes in the component will sync to the same state
+            if commandIds.length() == 1 {
+                string actionStr = input.action.toString();
+                error? stateResult = storage:upsertBIArtifactIntendedState(
+                    runtime.component.id,
+                    input.listenerName,
+                    actionStr,
+                    userContext.userId
+                );
+                
+                if stateResult is error {
+                    log:printWarn(string `Failed to update intended state for listener ${input.listenerName} in component ${runtime.component.id}`, stateResult);
+                } else {
+                    log:printInfo(string `Updated intended state for listener ${input.listenerName} to ${actionStr} in component ${runtime.component.id}`);
+                }
+            }
         }
 
         if commandIds.length() == 0 {

@@ -16,12 +16,16 @@
 
 import icp_server.types as types;
 
+import ballerina/log;
 import ballerina/sql;
 import ballerina/uuid;
 
 // Shared database connection manager and client
 final DatabaseConnectionManager dbManager = check new (dbType);
 public final sql:Client dbClient = dbManager.getClient();
+
+// Constants for artifact management
+const string ICP_ARTIFACTS_PATH = "/icp/artifacts";
 
 // Helper function to get display name by user ID
 isolated function getDisplayNameById(string? userId) returns string? {
@@ -50,15 +54,34 @@ isolated function getCount(sql:ParameterizedQuery query) returns int|error {
     return 0;
 }
 
-// Retrieve and mark control commands as sent (within transaction)
-isolated function retrieveAndMarkCommandsAsSent(string runtimeId) returns types:ControlCommand[]|error {
+// Get component type for a runtime
+isolated function getComponentTypeByRuntimeId(string runtimeId) returns string?|error {
+    stream<record {|string component_type;|}, sql:Error?> componentStream = dbClient->query(`
+        SELECT c.component_type
+        FROM runtimes r
+        JOIN components c ON r.component_id = c.component_id
+        WHERE r.runtime_id = ${runtimeId}
+    `);
+
+    record {|record {|string component_type;|} value;|}|sql:Error? streamRecord = componentStream.next();
+    check componentStream.close();
+
+    if streamRecord is record {|record {|string component_type;|} value;|} {
+        return streamRecord.value.component_type;
+    }
+
+    return ();
+}
+
+// Retrieve and mark BI control commands as sent (within transaction)
+// Caller must ensure the runtime belongs to a BI component before calling this function
+isolated function sendPendingBIControlCommands(string runtimeId) returns types:ControlCommand[]|error {
     types:ControlCommand[] pendingCommands = [];
 
-    // Retrieve pending control commands for this runtime
-    // Lock pending commands to avoid concurrent modifications
+    // Retrieve pending control commands for this BI runtime
     stream<types:ControlCommandDBRecord, sql:Error?> commandStream = dbClient->query(`
         SELECT command_id, runtime_id, target_artifact, action, issued_at, status
-        FROM control_commands
+        FROM bi_runtime_control_commands
         WHERE runtime_id = ${runtimeId}
         AND status = 'pending'
         ORDER BY issued_at ASC
@@ -81,12 +104,24 @@ isolated function retrieveAndMarkCommandsAsSent(string runtimeId) returns types:
     if pendingCommands.length() > 0 {
         foreach types:ControlCommand command in pendingCommands {
             _ = check dbClient->execute(`
-                UPDATE control_commands
+                UPDATE bi_runtime_control_commands
                 SET status = 'sent'
                 WHERE command_id = ${command.commandId}
             `);
         }
     }
+
+    return pendingCommands;
+}
+
+// Retrieve and mark MI control commands as sent (within transaction)
+// Caller must ensure the runtime belongs to an MI component before calling this function
+isolated function sendPendingMIControlCommands(string runtimeId) returns types:ControlCommand[]|error {
+    types:ControlCommand[] pendingCommands = [];
+
+    // TODO: Implement MI control command retrieval from mi_runtime_control_commands table
+    // This will be implemented when MI control command GraphQL mutations are added
+    log:printDebug(string `MI control command retrieval not yet implemented for runtime ${runtimeId}`);
 
     return pendingCommands;
 }
@@ -167,7 +202,7 @@ public isolated function insertControlCommand(
 
     // Insert control command
     _ = check dbClient->execute(`
-        INSERT INTO control_commands (
+        INSERT INTO bi_runtime_control_commands (
             command_id, runtime_id, target_artifact, action, status, issued_at, issued_by
         ) VALUES (
             ${commandId}, ${runtimeId}, ${targetArtifact}, ${actionStr}, 'pending', CURRENT_TIMESTAMP, ${issuedBy}
@@ -175,4 +210,69 @@ public isolated function insertControlCommand(
     `);
 
     return commandId;
+}
+// Upsert BI artifact intended state for a component
+public isolated function upsertBIArtifactIntendedState(
+        string componentId,
+        string targetArtifact,
+        string action,
+        string? issuedBy = ()
+) returns error? {
+    if dbType == MSSQL {
+        _ = check dbClient->execute(`
+            MERGE INTO bi_artifact_intended_state AS target
+            USING (VALUES (${componentId}, ${targetArtifact}, ${action}, ${issuedBy}))
+                   AS source (component_id, target_artifact, action, issued_by)
+            ON (target.component_id = source.component_id AND target.target_artifact = source.target_artifact)
+            WHEN MATCHED THEN
+                UPDATE SET action = source.action, issued_at = CURRENT_TIMESTAMP, 
+                           issued_by = source.issued_by, updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (component_id, target_artifact, action, issued_by)
+                VALUES (source.component_id, source.target_artifact, source.action, source.issued_by);
+        `);
+    } else {
+        _ = check dbClient->execute(`
+            INSERT INTO bi_artifact_intended_state (
+                component_id, target_artifact, action, issued_by
+            ) VALUES (
+                ${componentId}, ${targetArtifact}, ${action}, ${issuedBy}
+            )
+            ON DUPLICATE KEY UPDATE
+                action = VALUES(action),
+                issued_at = CURRENT_TIMESTAMP,
+                issued_by = VALUES(issued_by),
+                updated_at = CURRENT_TIMESTAMP
+        `);
+    }
+}
+
+// Get BI artifact intended states for a component
+public isolated function getBIIntendedStatesForComponent(string componentId) returns map<string>|error {
+    map<string> intendedStates = {};
+
+    stream<record {|string target_artifact; string action;|}, sql:Error?> stateStream = dbClient->query(`
+        SELECT target_artifact, action
+        FROM bi_artifact_intended_state
+        WHERE component_id = ${componentId}
+    `);
+
+    check from record {|string target_artifact; string action;|} state in stateStream
+        do {
+            intendedStates[state.target_artifact] = state.action;
+        };
+
+    return intendedStates;
+}
+
+// Delete BI artifact intended state
+public isolated function deleteBIArtifactIntendedState(
+        string componentId,
+        string targetArtifact
+) returns error? {
+    _ = check dbClient->execute(`
+        DELETE FROM bi_artifact_intended_state
+        WHERE component_id = ${componentId}
+        AND target_artifact = ${targetArtifact}
+    `);
 }
