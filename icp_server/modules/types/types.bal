@@ -167,6 +167,14 @@ public enum ControlAction {
     STOP
 }
 
+# Description.
+#
+# + commandId - field description  
+# + runtimeId - field description  
+# + targetArtifact - field description  
+# + action - field description  
+# + issuedAt - field description  
+# + status - field description
 public type ControlCommand record {
     string commandId;
     string runtimeId;
@@ -181,6 +189,97 @@ public type HeartbeatResponse record {
     boolean fullHeartbeatRequired?;
     ControlCommand[] commands?;
     string[] errors?;
+};
+
+public enum MIControlAction {
+    ARTIFACT_ENABLE,
+    ARTIFACT_DISABLE,
+    ARTIFACT_ENABLE_TRACING,
+    ARTIFACT_DISABLE_TRACING
+}
+
+# MI Runtime Control Command
+#
+# + runtimeId - Runtime ID where the command should be executed
+# + componentId - Component ID that the artifact belongs to
+# + artifactId - Unique identifier of the artifact
+# + action - Control action to perform
+# + status - Current status of the command
+# + issuedAt - Timestamp when the command was issued
+# + sentAt - Timestamp when the command was sent to runtime
+# + acknowledgedAt - Timestamp when the runtime acknowledged the command
+# + completedAt - Timestamp when the command execution completed
+# + errorMessage - Error message if the command failed
+# + issuedBy - User ID who issued the command
+public type MIRuntimeControlCommand record {
+    string runtimeId;
+    string componentId;
+    string artifactId;
+    MIControlAction action;
+    ControlCommandStatus status;
+    time:Utc issuedAt;
+    time:Utc? sentAt?;
+    time:Utc? acknowledgedAt?;
+    time:Utc? completedAt?;
+    string? errorMessage?;
+    string? issuedBy?;
+};
+
+# MI Artifact Intended State
+#
+# + componentId - Component ID that the artifact belongs to
+# + artifactId - Unique identifier of the artifact
+# + action - Intended action/state for the artifact
+# + issuedAt - Timestamp when the intended state was set
+# + issuedBy - User ID who set the intended state
+public type MIArtifactIntendedState record {
+    string componentId;
+    string artifactId;
+    MIControlAction action;
+    time:Utc issuedAt;
+    string? issuedBy?;
+};
+
+# Database record for MI Runtime Control Command
+#
+# + runtime_id - field description  
+# + component_id - field description  
+# + artifact_id - field description  
+# + action - field description  
+# + status - field description  
+# + issued_at - field description  
+# + sent_at - field description  
+# + acknowledged_at - field description  
+# + completed_at - field description  
+# + error_message - field description  
+# + issued_by - field description
+public type MIRuntimeControlCommandDBRecord record {
+    string runtime_id;
+    string component_id;
+    string artifact_id;
+    string action;
+    string status;
+    time:Utc issued_at;
+    time:Utc? sent_at?;
+    time:Utc? acknowledged_at?;
+    time:Utc? completed_at?;
+    string? error_message?;
+    string? issued_by?;
+};
+
+# Database record for MI Artifact Intended State
+#
+# + component_id - field description  
+# + artifact_id - field description  
+# + action - field description  
+# + issued_at - field description  
+# + issued_by - field description
+public type MIArtifactIntendedStateDBRecord record {
+    string component_id;
+    string artifact_id;
+    string action;
+    time:Utc issued_at;
+    string? issued_by?;
 };
 
 // === Configuration ===

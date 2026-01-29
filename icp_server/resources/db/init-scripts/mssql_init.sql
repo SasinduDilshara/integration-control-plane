@@ -1128,6 +1128,7 @@ GO
 CREATE TABLE runtime_apis (
     runtime_id VARCHAR(100) NOT NULL,
     api_name NVARCHAR (150) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     url NVARCHAR (500) NOT NULL,
     context NVARCHAR (500) NOT NULL,
     version NVARCHAR (50) NULL,
@@ -1147,6 +1148,7 @@ CREATE TABLE runtime_apis (
     CONSTRAINT fk_runtime_apis_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_api_name (api_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 );
 GO
@@ -1203,6 +1205,7 @@ GO
 CREATE TABLE runtime_proxy_services (
     runtime_id VARCHAR(100) NOT NULL,
     proxy_name NVARCHAR (150) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
         state IN (
             'ENABLED',
@@ -1219,6 +1222,7 @@ CREATE TABLE runtime_proxy_services (
     CONSTRAINT fk_runtime_proxy_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_proxy_name (proxy_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 );
 GO
@@ -1274,6 +1278,7 @@ GO
 CREATE TABLE runtime_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     endpoint_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     endpoint_type NVARCHAR (100) NOT NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
         state IN (
@@ -1291,6 +1296,7 @@ CREATE TABLE runtime_endpoints (
     CONSTRAINT fk_runtime_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_endpoint_name (endpoint_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_endpoint_type (endpoint_type),
     INDEX idx_state (state)
 );
@@ -1349,6 +1355,7 @@ GO
 CREATE TABLE runtime_inbound_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     inbound_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     protocol NVARCHAR (50) NOT NULL,
     sequence NVARCHAR (200) NULL,
     [statistics] NVARCHAR (20) NULL,
@@ -1369,6 +1376,7 @@ CREATE TABLE runtime_inbound_endpoints (
     CONSTRAINT fk_runtime_inbound_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_inbound_name (inbound_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_protocol (protocol),
     INDEX idx_state (state)
 );
@@ -1392,6 +1400,7 @@ GO
 CREATE TABLE runtime_sequences (
     runtime_id VARCHAR(100) NOT NULL,
     sequence_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     sequence_type NVARCHAR (100) NULL,
     container NVARCHAR (200) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
@@ -1410,6 +1419,7 @@ CREATE TABLE runtime_sequences (
     CONSTRAINT fk_runtime_sequences_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_sequence_name (sequence_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_sequence_type (sequence_type),
     INDEX idx_state (state)
 );
@@ -1433,6 +1443,7 @@ GO
 CREATE TABLE runtime_tasks (
     runtime_id VARCHAR(100) NOT NULL,
     task_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     task_class NVARCHAR (500) NULL,
     task_group NVARCHAR (200) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
@@ -1450,6 +1461,7 @@ CREATE TABLE runtime_tasks (
     CONSTRAINT fk_runtime_tasks_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_task_name (task_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 );
 GO
@@ -1531,6 +1543,7 @@ GO
 CREATE TABLE runtime_message_processors (
     runtime_id VARCHAR(100) NOT NULL,
     processor_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     processor_type NVARCHAR (100) NOT NULL,
     processor_class NVARCHAR (500) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
@@ -1548,6 +1561,7 @@ CREATE TABLE runtime_message_processors (
     CONSTRAINT fk_runtime_message_processors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_processor_name (processor_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_processor_type (processor_type),
     INDEX idx_state (state)
 );
@@ -1571,6 +1585,7 @@ GO
 CREATE TABLE runtime_local_entries (
     runtime_id VARCHAR(100) NOT NULL,
     entry_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     entry_type NVARCHAR (100) NOT NULL,
     entry_value NVARCHAR (MAX) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
@@ -1588,6 +1603,7 @@ CREATE TABLE runtime_local_entries (
     CONSTRAINT fk_runtime_local_entries_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_entry_name (entry_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_entry_type (entry_type),
     INDEX idx_state (state)
 );
@@ -1611,6 +1627,7 @@ GO
 CREATE TABLE runtime_data_services (
     runtime_id VARCHAR(100) NOT NULL,
     service_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     description NVARCHAR (MAX) NULL,
     wsdl NVARCHAR (MAX) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
@@ -1628,6 +1645,7 @@ CREATE TABLE runtime_data_services (
     CONSTRAINT fk_runtime_data_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_service_name (service_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 );
 GO
@@ -1723,6 +1741,7 @@ GO
 CREATE TABLE runtime_connectors (
     runtime_id VARCHAR(100) NOT NULL,
     connector_name NVARCHAR (200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     package NVARCHAR (200) NOT NULL,
     version NVARCHAR (50) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'ENABLED' CHECK (
@@ -1744,6 +1763,7 @@ CREATE TABLE runtime_connectors (
     CONSTRAINT fk_runtime_connectors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     INDEX idx_runtime_id (runtime_id),
     INDEX idx_connector_name (connector_name),
+    INDEX idx_artifact_id (artifact_id),
     INDEX idx_state (state)
 );
 GO
@@ -1795,12 +1815,11 @@ GO
 -- CONTROL COMMANDS
 -- ============================================================================
 
-CREATE TABLE control_commands (
+CREATE TABLE bi_runtime_control_commands (
     command_id CHAR(36) NOT NULL PRIMARY KEY,
     runtime_id VARCHAR(100) NOT NULL,
     target_artifact NVARCHAR (200) NOT NULL,
     action NVARCHAR (50) NOT NULL, -- start, stop, restart, deploy, undeploy
-    parameters NVARCHAR (MAX) NULL, -- JSON stored as NVARCHAR
     status NVARCHAR (20) NOT NULL DEFAULT 'pending' CHECK (
         status IN (
             'pending',
@@ -1830,15 +1849,114 @@ CREATE TABLE control_commands (
 );
 GO
 
-CREATE TRIGGER trg_control_commands_updated_at
-ON control_commands
+CREATE TABLE mi_runtime_control_commands (
+    runtime_id VARCHAR(100) NOT NULL,
+    component_id CHAR(36) NOT NULL,
+    artifact_id CHAR(36) NOT NULL,
+    action NVARCHAR (50) NOT NULL, -- enable_artifact, disable_artifact, enable_tracing, disable_tracing
+    status NVARCHAR (20) NOT NULL DEFAULT 'pending' CHECK (
+        status IN (
+            'pending',
+            'sent',
+            'acknowledged',
+            'completed',
+            'failed',
+            'timeout'
+        )
+    ),
+    issued_at DATETIME2 (6) NOT NULL DEFAULT SYSDATETIME (),
+    sent_at DATETIME2 (6) NULL,
+    acknowledged_at DATETIME2 (6) NULL,
+    completed_at DATETIME2 (6) NULL,
+    error_message NVARCHAR (MAX) NULL,
+    issued_by CHAR(36) NULL,
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE (),
+    updated_at DATETIME2 NOT NULL DEFAULT GETDATE (),
+    PRIMARY KEY (runtime_id, component_id, artifact_id),
+    CONSTRAINT fk_mi_runtime_control_cmd_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_runtime_control_cmd_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_runtime_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_runtime_id (runtime_id),
+    INDEX idx_component_id (component_id),
+    INDEX idx_artifact_id (artifact_id),
+    INDEX idx_status (status),
+    INDEX idx_issued_at (issued_at),
+    INDEX idx_action (action),
+    INDEX idx_issued_by (issued_by)
+);
+GO
+
+CREATE TABLE bi_artifact_intended_state (
+    component_id CHAR(36) NOT NULL,
+    target_artifact NVARCHAR (200) NOT NULL,
+    action NVARCHAR (50) NOT NULL,
+    issued_at DATETIME2 (6) NOT NULL DEFAULT SYSDATETIME (),
+    issued_by CHAR(36) NULL,
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE (),
+    updated_at DATETIME2 NOT NULL DEFAULT GETDATE (),
+    PRIMARY KEY (component_id, target_artifact),
+    CONSTRAINT fk_bi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_component_id (component_id),
+    INDEX idx_target_artifact (target_artifact),
+    INDEX idx_action (action),
+    INDEX idx_issued_by (issued_by)
+);
+GO
+
+CREATE TRIGGER trg_bi_artifact_intended_state_updated_at
+ON bi_artifact_intended_state
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
-    UPDATE control_commands
+    UPDATE bi_artifact_intended_state
     SET updated_at = GETDATE()
-    FROM control_commands cc
+    FROM bi_artifact_intended_state bas
+    INNER JOIN inserted i ON bas.component_id = i.component_id AND bas.target_artifact = i.target_artifact;
+END;
+GO
+
+CREATE TABLE mi_artifact_intended_state (
+    component_id CHAR(36) NOT NULL,
+    artifact_id CHAR(36) NOT NULL,
+    action NVARCHAR (50) NOT NULL,
+    issued_at DATETIME2 (6) NOT NULL DEFAULT SYSDATETIME (),
+    issued_by CHAR(36) NULL,
+    created_at DATETIME2 NOT NULL DEFAULT GETDATE (),
+    updated_at DATETIME2 NOT NULL DEFAULT GETDATE (),
+    PRIMARY KEY (component_id, artifact_id),
+    CONSTRAINT fk_mi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_component_id (component_id),
+    INDEX idx_artifact_id (artifact_id),
+    INDEX idx_action (action),
+    INDEX idx_issued_by (issued_by)
+);
+GO
+
+CREATE TRIGGER trg_mi_artifact_intended_state_updated_at
+ON mi_artifact_intended_state
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE mi_artifact_intended_state
+    SET updated_at = GETDATE()
+    FROM mi_artifact_intended_state mas
+    INNER JOIN inserted i ON mas.component_id = i.component_id AND mas.artifact_id = i.artifact_id;
+END;
+GO
+
+CREATE TRIGGER trg_bi_runtime_control_commands_updated_at
+ON bi_runtime_control_commands
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE bi_runtime_control_commands
+    SET updated_at = GETDATE()
+    FROM bi_runtime_control_commands cc
     INNER JOIN inserted i ON cc.command_id = i.command_id;
 END;
 GO
@@ -1977,7 +2095,7 @@ BEGIN
 END;
 GO
 
--- Active commands view
+-- Active BI commands view
 CREATE VIEW active_commands AS
 SELECT
     cc.*,
@@ -1989,10 +2107,30 @@ SELECT
         SYSDATETIME ()
     ) AS age_seconds
 FROM
-    control_commands cc
+    bi_runtime_control_commands cc
     JOIN runtimes r ON cc.runtime_id = r.runtime_id
 WHERE
     cc.status IN ('pending', 'sent');
+GO
+
+-- Active MI commands view
+CREATE VIEW active_mi_commands AS
+SELECT
+    micc.*,
+    r.runtime_type,
+    r.status AS runtime_status,
+    c.name AS component_name,
+    DATEDIFF(
+        SECOND,
+        micc.issued_at,
+        SYSDATETIME ()
+    ) AS age_seconds
+FROM
+    mi_runtime_control_commands micc
+    JOIN runtimes r ON micc.runtime_id = r.runtime_id
+    JOIN components c ON micc.component_id = c.component_id
+WHERE
+    micc.status IN ('pending', 'sent');
 GO
 
 -- ============================================================================

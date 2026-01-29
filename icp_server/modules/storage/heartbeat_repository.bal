@@ -51,10 +51,16 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat) returns typ
             if validationResult is error {
                 log:printWarn(string `Component consistency validation failed for runtime ${heartbeat.runtime}`, validationResult);
             }
+
+            // Process intended states and generate control commands if needed (only for new registrations)
+            check processIntendedStates(heartbeat.runtime, heartbeat.component, heartbeat.artifacts, pendingCommands);
         }
 
-        // Retrieve pending control commands
-        pendingCommands = check retrieveAndMarkCommandsAsSent(heartbeat.runtime);
+        // Retrieve any other pending control commands
+        types:ControlCommand[] existingCommands = check sendPendingBIControlCommands(heartbeat.runtime);
+        foreach types:ControlCommand cmd in existingCommands {
+            pendingCommands.push(cmd);
+        }
 
         // Create audit log entry
         string action = isNewRegistration ? "REGISTER" : "HEARTBEAT";
@@ -156,38 +162,16 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
     // Handle control commands and audit logging in a transaction
     // Commands are marked as 'sent' atomically with audit log creation
     transaction {
-        // Retrieve pending control commands for this runtime (no DB-specific locks)
-        stream<types:ControlCommandDBRecord, sql:Error?> commandStream = dbClient->query(`
-            SELECT command_id, runtime_id, target_artifact, action, issued_at, status
-            FROM control_commands
-            WHERE runtime_id = ${deltaHeartbeat.runtime}
-            AND status = 'pending'
-            ORDER BY issued_at ASC
-        `);
+        // Get component type for this runtime
+        string? componentType = check getComponentTypeByRuntimeId(deltaHeartbeat.runtime);
 
-        check from types:ControlCommandDBRecord dbCommand in commandStream
-            do {
-                types:ControlCommand command = {
-                    commandId: dbCommand.command_id,
-                    runtimeId: dbCommand.runtime_id,
-                    targetArtifact: {name: dbCommand.target_artifact},
-                    action: dbCommand.action == "START" ? types:START : types:STOP,
-                    issuedAt: dbCommand.issued_at,
-                    status: convertToControlCommandStatus(dbCommand.status)
-                };
-                pendingCommands.push(command);
-            };
-
-        // Mark retrieved commands as 'sent'
-        if pendingCommands.length() > 0 {
-            foreach types:ControlCommand command in pendingCommands {
-                _ = check dbClient->execute(`
-                    UPDATE control_commands
-                    SET status = 'sent'
-                    WHERE command_id = ${command.commandId}
-                `);
-            }
+        // Retrieve pending control commands based on component type
+        if componentType == "BI" {
+            pendingCommands = check sendPendingBIControlCommands(deltaHeartbeat.runtime);
+        } else if componentType == "MI" {
+            pendingCommands = check sendPendingMIControlCommands(deltaHeartbeat.runtime);
         }
+        // For other component types or if runtime not found, pendingCommands remains empty
 
         // Create audit log entry
         if runtimeExists {
@@ -409,6 +393,133 @@ isolated function validateResourcesConsistency(types:Resource[] referenceResourc
     }
 
     return ();
+}
+
+// Process intended states and add control commands to pending commands
+isolated function processIntendedStates(
+        string runtimeId,
+        string componentId,
+        types:Artifacts artifacts,
+        types:ControlCommand[] pendingCommands
+) returns error? {
+    // Check intended states and generate control commands if needed
+    types:ControlCommand[]|error intendedStateCommands = checkBIIntendedStatesAndGenerateCommands(
+        runtimeId,
+        componentId,
+        artifacts
+    );
+    
+    if intendedStateCommands is types:ControlCommand[] && intendedStateCommands.length() > 0 {
+        log:printInfo(string `Generated ${intendedStateCommands.length()} control commands from intended states for runtime ${runtimeId}`);
+        // Add intended state commands to pending commands
+        foreach types:ControlCommand cmd in intendedStateCommands {
+            pendingCommands.push(cmd);
+        }
+    } else if intendedStateCommands is error {
+        return intendedStateCommands;
+    }
+}
+
+// Check BI artifact intended states and generate control commands if needed
+isolated function checkBIIntendedStatesAndGenerateCommands(
+        string runtimeId,
+        string componentId,
+        types:Artifacts artifacts
+) returns types:ControlCommand[]|error {
+    types:ControlCommand[] commands = [];
+
+    // Get intended states for this component
+    map<string>|error intendedStates = getBIIntendedStatesForComponent(componentId);
+    
+    if intendedStates is error {
+        log:printWarn(string `Failed to retrieve intended states for component ${componentId}`, intendedStates);
+        return commands;
+    }
+
+    if intendedStates.length() == 0 {
+        // No intended states configured, nothing to sync
+        return commands;
+    }
+
+    // Check services against intended states
+    foreach types:Service svc in artifacts.services {
+        string artifactName = svc.name;
+        if intendedStates.hasKey(artifactName) {
+            string intendedAction = intendedStates.get(artifactName);
+            string currentState = svc.state;
+
+            // Determine if command is needed
+            boolean needsCommand = false;
+            types:ControlAction? actionToIssue = ();
+
+            if intendedAction == "STOP" && currentState == "ENABLED" {
+                needsCommand = true;
+                actionToIssue = types:STOP;
+            } else if intendedAction == "START" && currentState == "DISABLED" {
+                needsCommand = true;
+                actionToIssue = types:START;
+            }
+
+            if needsCommand && actionToIssue is types:ControlAction {
+                // Insert control command
+                string|error commandId = insertControlCommand(runtimeId, artifactName, actionToIssue);
+                
+                if commandId is string {
+                    types:ControlCommand cmd = {
+                        commandId: commandId,
+                        runtimeId: runtimeId,
+                        targetArtifact: {name: artifactName},
+                        action: actionToIssue,
+                        issuedAt: time:utcNow(),
+                        status: types:PENDING
+                    };
+                    commands.push(cmd);
+                    log:printInfo(string `Generated BI control command for service ${artifactName}: ${intendedAction} (current: ${currentState})`);
+                }
+            }
+        }
+    }
+
+    // Check listeners against intended states
+    foreach types:Listener 'listener in artifacts.listeners {
+        string artifactName = 'listener.name;
+        if intendedStates.hasKey(artifactName) {
+            string intendedAction = intendedStates.get(artifactName);
+            string currentState = 'listener.state;
+
+            // Determine if command is needed
+            boolean needsCommand = false;
+            types:ControlAction? actionToIssue = ();
+
+            if intendedAction == "STOP" && currentState == "ENABLED" {
+                needsCommand = true;
+                actionToIssue = types:STOP;
+            } else if intendedAction == "START" && currentState == "DISABLED" {
+                needsCommand = true;
+                actionToIssue = types:START;
+            }
+
+            if needsCommand && actionToIssue is types:ControlAction {
+                // Insert control command
+                string|error commandId = insertControlCommand(runtimeId, artifactName, actionToIssue);
+                
+                if commandId is string {
+                    types:ControlCommand cmd = {
+                        commandId: commandId,
+                        runtimeId: runtimeId,
+                        targetArtifact: {name: artifactName},
+                        action: actionToIssue,
+                        issuedAt: time:utcNow(),
+                        status: types:PENDING
+                    };
+                    commands.push(cmd);
+                    log:printInfo(string `Generated BI control command for listener ${artifactName}: ${intendedAction} (current: ${currentState})`);
+                }
+            }
+        }
+    }
+
+    return commands;
 }
 
 // Upsert runtime record

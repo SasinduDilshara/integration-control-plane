@@ -780,6 +780,7 @@ CREATE INDEX idx_runtime_listeners_state ON runtime_listeners (state);
 CREATE TABLE runtime_apis (
     runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     url VARCHAR(500) NOT NULL,
     context VARCHAR(500) NOT NULL,
     version VARCHAR(50),
@@ -794,6 +795,8 @@ CREATE TABLE runtime_apis (
 CREATE INDEX idx_runtime_apis_runtime_id ON runtime_apis (runtime_id);
 
 CREATE INDEX idx_runtime_apis_api_name ON runtime_apis (api_name);
+
+CREATE INDEX idx_runtime_apis_artifact_id ON runtime_apis (artifact_id);
 
 CREATE INDEX idx_runtime_apis_state ON runtime_apis (state);
 
@@ -819,6 +822,7 @@ CREATE INDEX idx_runtime_api_resources_methods ON runtime_api_resources (methods
 CREATE TABLE runtime_proxy_services (
     runtime_id VARCHAR(100) NOT NULL,
     proxy_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -830,6 +834,8 @@ CREATE TABLE runtime_proxy_services (
 CREATE INDEX idx_runtime_proxy_services_runtime_id ON runtime_proxy_services (runtime_id);
 
 CREATE INDEX idx_runtime_proxy_services_proxy_name ON runtime_proxy_services (proxy_name);
+
+CREATE INDEX idx_runtime_proxy_services_artifact_id ON runtime_proxy_services (artifact_id);
 
 CREATE INDEX idx_runtime_proxy_services_state ON runtime_proxy_services (state);
 
@@ -851,6 +857,7 @@ CREATE INDEX idx_runtime_proxy_service_endpoints_proxy_name ON runtime_proxy_ser
 CREATE TABLE runtime_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     endpoint_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     endpoint_type VARCHAR(100) NOT NULL,
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
@@ -880,6 +887,8 @@ CREATE INDEX idx_runtime_endpoints_runtime_id ON runtime_endpoints (runtime_id);
 
 CREATE INDEX idx_runtime_endpoints_endpoint_name ON runtime_endpoints (endpoint_name);
 
+CREATE INDEX idx_runtime_endpoints_artifact_id ON runtime_endpoints (artifact_id);
+
 CREATE INDEX idx_runtime_endpoints_endpoint_type ON runtime_endpoints (endpoint_type);
 
 CREATE INDEX idx_runtime_endpoints_state ON runtime_endpoints (state);
@@ -888,6 +897,7 @@ CREATE INDEX idx_runtime_endpoints_state ON runtime_endpoints (state);
 CREATE TABLE runtime_inbound_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     inbound_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     protocol VARCHAR(50) NOT NULL,
     sequence VARCHAR(200),
     statistics VARCHAR(20),
@@ -904,6 +914,8 @@ CREATE INDEX idx_runtime_inbound_endpoints_runtime_id ON runtime_inbound_endpoin
 
 CREATE INDEX idx_runtime_inbound_endpoints_inbound_name ON runtime_inbound_endpoints (inbound_name);
 
+CREATE INDEX idx_runtime_inbound_endpoints_artifact_id ON runtime_inbound_endpoints (artifact_id);
+
 CREATE INDEX idx_runtime_inbound_endpoints_protocol ON runtime_inbound_endpoints (protocol);
 
 CREATE INDEX idx_runtime_inbound_endpoints_state ON runtime_inbound_endpoints (state);
@@ -912,6 +924,7 @@ CREATE INDEX idx_runtime_inbound_endpoints_state ON runtime_inbound_endpoints (s
 CREATE TABLE runtime_sequences (
     runtime_id VARCHAR(100) NOT NULL,
     sequence_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     sequence_type VARCHAR(100),
     container VARCHAR(200),
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -926,6 +939,8 @@ CREATE INDEX idx_runtime_sequences_runtime_id ON runtime_sequences (runtime_id);
 
 CREATE INDEX idx_runtime_sequences_sequence_name ON runtime_sequences (sequence_name);
 
+CREATE INDEX idx_runtime_sequences_artifact_id ON runtime_sequences (artifact_id);
+
 CREATE INDEX idx_runtime_sequences_sequence_type ON runtime_sequences (sequence_type);
 
 CREATE INDEX idx_runtime_sequences_state ON runtime_sequences (state);
@@ -934,6 +949,7 @@ CREATE INDEX idx_runtime_sequences_state ON runtime_sequences (state);
 CREATE TABLE runtime_tasks (
     runtime_id VARCHAR(100) NOT NULL,
     task_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     task_class VARCHAR(500),
     task_group VARCHAR(200),
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -946,6 +962,8 @@ CREATE TABLE runtime_tasks (
 CREATE INDEX idx_runtime_tasks_runtime_id ON runtime_tasks (runtime_id);
 
 CREATE INDEX idx_runtime_tasks_task_name ON runtime_tasks (task_name);
+
+CREATE INDEX idx_runtime_tasks_artifact_id ON runtime_tasks (artifact_id);
 
 CREATE INDEX idx_runtime_tasks_state ON runtime_tasks (state);
 
@@ -991,6 +1009,7 @@ CREATE INDEX idx_runtime_message_stores_store_type ON runtime_message_stores (st
 CREATE TABLE runtime_message_processors (
     runtime_id VARCHAR(100) NOT NULL,
     processor_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     processor_type VARCHAR(100) NOT NULL,
     processor_class VARCHAR(500),
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -1004,6 +1023,8 @@ CREATE INDEX idx_runtime_message_processors_runtime_id ON runtime_message_proces
 
 CREATE INDEX idx_runtime_message_processors_processor_name ON runtime_message_processors (processor_name);
 
+CREATE INDEX idx_runtime_message_processors_artifact_id ON runtime_message_processors (artifact_id);
+
 CREATE INDEX idx_runtime_message_processors_processor_type ON runtime_message_processors (processor_type);
 
 CREATE INDEX idx_runtime_message_processors_state ON runtime_message_processors (state);
@@ -1012,6 +1033,7 @@ CREATE INDEX idx_runtime_message_processors_state ON runtime_message_processors 
 CREATE TABLE runtime_local_entries (
     runtime_id VARCHAR(100) NOT NULL,
     entry_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     entry_type VARCHAR(100) NOT NULL,
     entry_value TEXT,
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -1025,6 +1047,8 @@ CREATE INDEX idx_runtime_local_entries_runtime_id ON runtime_local_entries (runt
 
 CREATE INDEX idx_runtime_local_entries_entry_name ON runtime_local_entries (entry_name);
 
+CREATE INDEX idx_runtime_local_entries_artifact_id ON runtime_local_entries (artifact_id);
+
 CREATE INDEX idx_runtime_local_entries_entry_type ON runtime_local_entries (entry_type);
 
 CREATE INDEX idx_runtime_local_entries_state ON runtime_local_entries (state);
@@ -1033,6 +1057,7 @@ CREATE INDEX idx_runtime_local_entries_state ON runtime_local_entries (state);
 CREATE TABLE runtime_data_services (
     runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     description TEXT,
     wsdl TEXT,
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -1045,6 +1070,8 @@ CREATE TABLE runtime_data_services (
 CREATE INDEX idx_runtime_data_services_runtime_id ON runtime_data_services (runtime_id);
 
 CREATE INDEX idx_runtime_data_services_service_name ON runtime_data_services (service_name);
+
+CREATE INDEX idx_runtime_data_services_artifact_id ON runtime_data_services (artifact_id);
 
 CREATE INDEX idx_runtime_data_services_state ON runtime_data_services (state);
 
@@ -1094,6 +1121,7 @@ CREATE INDEX idx_runtime_data_sources_state ON runtime_data_sources (state);
 CREATE TABLE runtime_connectors (
     runtime_id VARCHAR(100) NOT NULL,
     connector_name VARCHAR(200) NOT NULL,
+    artifact_id CHAR(36) NOT NULL UNIQUE,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50),
     state VARCHAR(20) NOT NULL DEFAULT 'ENABLED',
@@ -1106,6 +1134,8 @@ CREATE TABLE runtime_connectors (
 CREATE INDEX idx_runtime_connectors_runtime_id ON runtime_connectors (runtime_id);
 
 CREATE INDEX idx_runtime_connectors_connector_name ON runtime_connectors (connector_name);
+
+CREATE INDEX idx_runtime_connectors_artifact_id ON runtime_connectors (artifact_id);
 
 CREATE INDEX idx_runtime_connectors_state ON runtime_connectors (state);
 
@@ -1128,12 +1158,11 @@ CREATE INDEX idx_runtime_registry_resources_resource_name ON runtime_registry_re
 -- CONTROL COMMANDS
 -- ============================================================================
 
-CREATE TABLE control_commands (
+CREATE TABLE bi_runtime_control_commands (
     command_id CHAR(36) NOT NULL PRIMARY KEY,
     runtime_id VARCHAR(100) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL,
-    parameters CLOB,
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     sent_at TIMESTAMP,
@@ -1147,17 +1176,93 @@ CREATE TABLE control_commands (
     CONSTRAINT fk_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
 );
 
-CREATE INDEX idx_control_commands_runtime_id ON control_commands (runtime_id);
+CREATE INDEX idx_bi_runtime_control_commands_runtime_id ON bi_runtime_control_commands (runtime_id);
 
-CREATE INDEX idx_control_commands_status ON control_commands (status);
+CREATE INDEX idx_bi_runtime_control_commands_status ON bi_runtime_control_commands (status);
 
-CREATE INDEX idx_control_commands_issued_at ON control_commands (issued_at);
+CREATE INDEX idx_bi_runtime_control_commands_issued_at ON bi_runtime_control_commands (issued_at);
 
-CREATE INDEX idx_control_commands_target_artifact ON control_commands (target_artifact);
+CREATE INDEX idx_bi_runtime_control_commands_target_artifact ON bi_runtime_control_commands (target_artifact);
 
-CREATE INDEX idx_control_commands_action ON control_commands (action);
+CREATE INDEX idx_bi_runtime_control_commands_action ON bi_runtime_control_commands (action);
 
-CREATE INDEX idx_control_commands_issued_by ON control_commands (issued_by);
+CREATE INDEX idx_bi_runtime_control_commands_issued_by ON bi_runtime_control_commands (issued_by);
+
+CREATE TABLE mi_runtime_control_commands (
+    runtime_id VARCHAR(100) NOT NULL,
+    component_id CHAR(36) NOT NULL,
+    artifact_id CHAR(36) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP,
+    acknowledged_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    error_message TEXT,
+    issued_by CHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (runtime_id, component_id, artifact_id),
+    CONSTRAINT fk_mi_runtime_control_cmd_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_runtime_control_cmd_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_runtime_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_mi_runtime_control_commands_runtime_id ON mi_runtime_control_commands (runtime_id);
+
+CREATE INDEX idx_mi_runtime_control_commands_component_id ON mi_runtime_control_commands (component_id);
+
+CREATE INDEX idx_mi_runtime_control_commands_artifact_id ON mi_runtime_control_commands (artifact_id);
+
+CREATE INDEX idx_mi_runtime_control_commands_status ON mi_runtime_control_commands (status);
+
+CREATE INDEX idx_mi_runtime_control_commands_issued_at ON mi_runtime_control_commands (issued_at);
+
+CREATE INDEX idx_mi_runtime_control_commands_action ON mi_runtime_control_commands (action);
+
+CREATE INDEX idx_mi_runtime_control_commands_issued_by ON mi_runtime_control_commands (issued_by);
+
+CREATE TABLE bi_artifact_intended_state (
+    component_id CHAR(36) NOT NULL,
+    target_artifact VARCHAR(200) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    issued_by CHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, target_artifact),
+    CONSTRAINT fk_bi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_bi_artifact_intended_state_component_id ON bi_artifact_intended_state (component_id);
+
+CREATE INDEX idx_bi_artifact_intended_state_target_artifact ON bi_artifact_intended_state (target_artifact);
+
+CREATE INDEX idx_bi_artifact_intended_state_action ON bi_artifact_intended_state (action);
+
+CREATE INDEX idx_bi_artifact_intended_state_issued_by ON bi_artifact_intended_state (issued_by);
+
+CREATE TABLE mi_artifact_intended_state (
+    component_id CHAR(36) NOT NULL,
+    artifact_id CHAR(36) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    issued_by CHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, artifact_id),
+    CONSTRAINT fk_mi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_mi_artifact_intended_state_component_id ON mi_artifact_intended_state (component_id);
+
+CREATE INDEX idx_mi_artifact_intended_state_artifact_id ON mi_artifact_intended_state (artifact_id);
+
+CREATE INDEX idx_mi_artifact_intended_state_action ON mi_artifact_intended_state (action);
+
+CREATE INDEX idx_mi_artifact_intended_state_issued_by ON mi_artifact_intended_state (issued_by);
 
 -- ============================================================================
 -- AUDIT & EVENTS
@@ -1273,6 +1378,23 @@ CREATE TABLE system_config (
 CREATE INDEX idx_system_config_config_type ON system_config (config_type);
 
 CREATE INDEX idx_system_config_updated_at ON system_config (updated_at);
+
+-- ============================================================================
+-- VIEWS
+-- ============================================================================
+
+-- Active MI commands view
+CREATE OR REPLACE VIEW active_mi_commands AS
+SELECT 
+    micc.*,
+    r.runtime_type,
+    r.status AS runtime_status,
+    c.name AS component_name,
+    DATEDIFF('SECOND', micc.issued_at, CURRENT_TIMESTAMP(6)) AS age_seconds
+FROM mi_runtime_control_commands micc
+JOIN runtimes r ON micc.runtime_id = r.runtime_id
+JOIN components c ON micc.component_id = c.component_id
+WHERE micc.status IN ('pending', 'sent');
 
 -- ============================================================================
 -- SAMPLE DATA FOR TESTING
