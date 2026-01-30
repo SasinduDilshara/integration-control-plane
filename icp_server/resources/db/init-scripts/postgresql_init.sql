@@ -1,26 +1,37 @@
 -- ============================================================================
--- ICP Server MySQL Database Schema (Full Rewrite, MySQL 8.0+)
+-- ICP Server PostgreSQL Database Schema (Full Rewrite, PostgreSQL 12+)
 -- ============================================================================
 
-DROP DATABASE IF EXISTS icp_database;
-
-CREATE DATABASE icp_database CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-
-USE icp_database;
+-- Database is already created by Docker environment variable POSTGRES_DB
+-- No need to drop/create or connect - we're already in icp_database
 
 -- ============================================================================
 -- ORGANIZATIONS
 -- ============================================================================
 
 CREATE TABLE organizations (
-    org_id INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    org_id SERIAL PRIMARY KEY,
     org_name VARCHAR(255) NOT NULL UNIQUE,
     org_handle VARCHAR(100) NOT NULL UNIQUE,
     description TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_org_handle (org_handle)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_org_handle ON organizations(org_handle);
+
+-- Trigger function to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Apply trigger to organizations
+CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- USER MANAGEMENT & AUTHZ
@@ -33,11 +44,15 @@ CREATE TABLE users (
     is_super_admin BOOLEAN NOT NULL DEFAULT FALSE,
     is_project_author BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_username (username),
-    INDEX idx_super_admin (is_super_admin),
-    INDEX idx_project_author (is_project_author)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_username ON users(username);
+CREATE INDEX idx_super_admin ON users(is_super_admin);
+CREATE INDEX idx_project_author ON users(is_project_author);
+
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- REFRESH TOKENS (for authentication session management)
@@ -49,17 +64,23 @@ CREATE TABLE refresh_tokens (
     token_hash VARCHAR(255) NOT NULL UNIQUE, -- SHA256 hash of token
     expires_at TIMESTAMP NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     revoked BOOLEAN NOT NULL DEFAULT FALSE,
     revoked_at TIMESTAMP NULL,
     user_agent VARCHAR(500) NULL,
     ip_address VARCHAR(50) NULL,
-    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE,
-    INDEX idx_user_id (user_id),
-    INDEX idx_token_hash (token_hash),
-    INDEX idx_expires_at (expires_at),
-    INDEX idx_revoked (revoked)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_refresh_tokens_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rt_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_rt_token_hash ON refresh_tokens(token_hash);
+CREATE INDEX idx_rt_expires_at ON refresh_tokens(expires_at);
+CREATE INDEX idx_rt_revoked ON refresh_tokens(revoked);
+
+CREATE TRIGGER update_refresh_tokens_last_used_at BEFORE UPDATE ON refresh_tokens
+    FOR EACH ROW 
+    WHEN (OLD.* IS DISTINCT FROM NEW.*)
+    EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- PROJECTS / COMPONENTS / ENVIRONMENTS
@@ -75,7 +96,7 @@ CREATE TABLE projects (
     region VARCHAR(100) NULL,
     description TEXT,
     default_deployment_pipeline_id CHAR(36) NULL,
-    deployment_pipeline_ids JSON NULL,
+    deployment_pipeline_ids JSONB NULL,
     type VARCHAR(50) NULL,
     git_provider VARCHAR(50) NULL,
     git_organization VARCHAR(200) NULL,
@@ -85,16 +106,18 @@ CREATE TABLE projects (
     owner_id CHAR(36) NULL, -- User ID of the project owner
     created_by VARCHAR(200) NULL, -- Display name of who created the project
     updated_by VARCHAR(200) NULL, -- Display name of who last updated the project
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_projects_owner FOREIGN KEY (owner_id) REFERENCES users (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_projects_org FOREIGN KEY (org_id) REFERENCES organizations (org_id) ON DELETE RESTRICT,
-    UNIQUE KEY uk_project_name_org (org_id, name), -- Allow same name in different orgs
-    INDEX idx_owner_id (owner_id),
-    INDEX idx_org_id (org_id),
-    INDEX idx_handler (
-        handler
-    )
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT uk_project_name_org UNIQUE (org_id, name) -- Allow same name in different orgs
+);
+
+CREATE INDEX idx_proj_owner_id ON projects(owner_id);
+CREATE INDEX idx_proj_org_id ON projects(org_id);
+CREATE INDEX idx_proj_handler ON projects(handler);
+
+CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Components belong to projects; users create components.
 CREATE TABLE components (
@@ -103,18 +126,22 @@ CREATE TABLE components (
     name VARCHAR(150) NOT NULL,
     display_name VARCHAR(200) NOT NULL,
     description TEXT NULL,
-    component_type ENUM('MI', 'BI') NOT NULL DEFAULT 'BI',
+    component_type VARCHAR(10) NOT NULL DEFAULT 'BI' CHECK (component_type IN ('MI', 'BI')),
     created_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by CHAR(36) NULL,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_components_project FOREIGN KEY (project_id) REFERENCES projects (project_id) ON DELETE CASCADE,
     CONSTRAINT fk_components_created_by FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_components_updated_by FOREIGN KEY (updated_by) REFERENCES users (user_id) ON DELETE SET NULL,
     -- Prevent duplicate component names within the same project
-    UNIQUE KEY uk_component_project_name (project_id, name),
-    INDEX idx_project_id (project_id)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT uk_component_project_name UNIQUE (project_id, name)
+);
+
+CREATE INDEX idx_comp_project_id ON components(project_id);
+
+CREATE TRIGGER update_components_updated_at BEFORE UPDATE ON components
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TABLE environments (
     environment_id CHAR(36) PRIMARY KEY,
@@ -131,10 +158,13 @@ CREATE TABLE environments (
     created_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by CHAR(36) NULL,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_environments_created_by FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_environments_updated_by FOREIGN KEY (updated_by) REFERENCES users (user_id) ON DELETE SET NULL
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+);
+
+CREATE TRIGGER update_environments_updated_at BEFORE UPDATE ON environments
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- ============================================================================
@@ -148,11 +178,15 @@ CREATE TABLE user_groups (
     org_uuid INT NOT NULL DEFAULT 1,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_user_groups_org FOREIGN KEY (org_uuid) REFERENCES organizations(org_id) ON DELETE CASCADE,
-    INDEX idx_org_uuid (org_uuid),
-    INDEX idx_group_name (group_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_groups_org FOREIGN KEY (org_uuid) REFERENCES organizations(org_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_ug_org_uuid ON user_groups(org_uuid);
+CREATE INDEX idx_ug_group_name ON user_groups(group_name);
+
+CREATE TRIGGER update_user_groups_updated_at BEFORE UPDATE ON user_groups
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Roles v2 table (new structure for permission-based RBAC)
 CREATE TABLE roles_v2 (
@@ -161,50 +195,59 @@ CREATE TABLE roles_v2 (
     org_id INT NOT NULL DEFAULT 1,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_roles_v2_org FOREIGN KEY (org_id) REFERENCES organizations(org_id) ON DELETE CASCADE,
-    UNIQUE KEY unique_role_name_org (role_name, org_id),
-    INDEX idx_role_name (role_name),
-    INDEX idx_org_id (org_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    CONSTRAINT unique_role_name_org UNIQUE (role_name, org_id)
+);
+
+CREATE INDEX idx_rv2_role_name ON roles_v2(role_name);
+CREATE INDEX idx_rv2_org_id ON roles_v2(org_id);
+
+CREATE TRIGGER update_roles_v2_updated_at BEFORE UPDATE ON roles_v2
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Permissions table with domain grouping
 CREATE TABLE permissions (
     permission_id VARCHAR(36) PRIMARY KEY,
     permission_name VARCHAR(255) NOT NULL UNIQUE,
-    permission_domain ENUM(
+    permission_domain VARCHAR(50) NOT NULL CHECK (permission_domain IN (
         'Integration-Management',
         'Environment-Management', 
         'Observability-Management',
         'Project-Management',
         'User-Management'
-    ) NOT NULL,
+    )),
     resource_type VARCHAR(100) NOT NULL,
     action VARCHAR(100) NOT NULL,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_permission_domain (permission_domain),
-    INDEX idx_resource_type (resource_type),
-    INDEX idx_permission_name (permission_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_perm_permission_domain ON permissions(permission_domain);
+CREATE INDEX idx_perm_resource_type ON permissions(resource_type);
+CREATE INDEX idx_perm_permission_name ON permissions(permission_name);
+
+CREATE TRIGGER update_permissions_updated_at BEFORE UPDATE ON permissions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Group-User mapping (Many-to-Many)
 CREATE TABLE group_user_mapping (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     group_id VARCHAR(36) NOT NULL,
     user_uuid VARCHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_group_user_group FOREIGN KEY (group_id) REFERENCES user_groups(group_id) ON DELETE CASCADE,
     CONSTRAINT fk_group_user_user FOREIGN KEY (user_uuid) REFERENCES users(user_id) ON DELETE CASCADE,
-    UNIQUE KEY unique_group_user (group_id, user_uuid),
-    INDEX idx_user_uuid (user_uuid),
-    INDEX idx_group_id (group_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    CONSTRAINT unique_group_user UNIQUE (group_id, user_uuid)
+);
+
+CREATE INDEX idx_gum_user_uuid ON group_user_mapping(user_uuid);
+CREATE INDEX idx_gum_group_id ON group_user_mapping(group_id);
 
 -- Group-Role mapping with context (Many-to-Many with hierarchical scoping)
 CREATE TABLE group_role_mapping (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     group_id VARCHAR(36) NOT NULL,
     role_id VARCHAR(36) NOT NULL,
     org_uuid INT NULL,
@@ -221,29 +264,31 @@ CREATE TABLE group_role_mapping (
     -- Integration access requires project for navigation
     CONSTRAINT chk_integration_requires_project
         CHECK (integration_uuid IS NULL OR project_uuid IS NOT NULL),
-    UNIQUE KEY unique_group_role_context (group_id, role_id, org_uuid, project_uuid, env_uuid, integration_uuid),
-    INDEX idx_group_id (group_id),
-    INDEX idx_role_id (role_id),
-    INDEX idx_org_uuid (org_uuid),
-    INDEX idx_project_uuid (project_uuid),
-    INDEX idx_env_uuid (env_uuid),
-    INDEX idx_integration_uuid (integration_uuid),
-    INDEX idx_group_project (group_id, project_uuid),
-    INDEX idx_group_env (group_id, env_uuid)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    CONSTRAINT unique_group_role_context UNIQUE (group_id, role_id, org_uuid, project_uuid, env_uuid, integration_uuid)
+);
+
+CREATE INDEX idx_grm_group_id ON group_role_mapping(group_id);
+CREATE INDEX idx_grm_role_id ON group_role_mapping(role_id);
+CREATE INDEX idx_grm_org_uuid ON group_role_mapping(org_uuid);
+CREATE INDEX idx_grm_project_uuid ON group_role_mapping(project_uuid);
+CREATE INDEX idx_grm_env_uuid ON group_role_mapping(env_uuid);
+CREATE INDEX idx_grm_integration_uuid ON group_role_mapping(integration_uuid);
+CREATE INDEX idx_grm_group_project ON group_role_mapping(group_id, project_uuid);
+CREATE INDEX idx_grm_group_env ON group_role_mapping(group_id, env_uuid);
 
 -- Role-Permission mapping (Many-to-Many)
 CREATE TABLE role_permission_mapping (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     role_id VARCHAR(36) NOT NULL,
     permission_id VARCHAR(36) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_role_perm_role FOREIGN KEY (role_id) REFERENCES roles_v2(role_id) ON DELETE CASCADE,
     CONSTRAINT fk_role_perm_permission FOREIGN KEY (permission_id) REFERENCES permissions(permission_id) ON DELETE CASCADE,
-    UNIQUE KEY unique_role_permission (role_id, permission_id),
-    INDEX idx_role_id (role_id),
-    INDEX idx_permission_id (permission_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    CONSTRAINT unique_role_permission UNIQUE (role_id, permission_id)
+);
+
+CREATE INDEX idx_rpm_role_id ON role_permission_mapping(role_id);
+CREATE INDEX idx_rpm_permission_id ON role_permission_mapping(permission_id);
 
 -- ============================================================================
 -- RBAC V2 VIEWS
@@ -378,40 +423,40 @@ VALUES (
         'default'
     );
 
--- Insert pre-defined roles
+-- Insert pre-defined roles (using gen_random_uuid() for PostgreSQL)
 INSERT INTO roles_v2 (role_id, role_name, org_id, description) VALUES
-(UUID(), 'Super Admin', 1, 'Full access to all resources and permissions'),
-(UUID(), 'Admin', 1, 'Administrative access to projects and integrations'),
-(UUID(), 'Developer', 1, 'Development access with limited permissions'),
-(UUID(), 'Project Admin', 1, 'Administrative access to a specific project'),
-(UUID(), 'Viewer', 1, 'Read-only access with view permissions only');
+(gen_random_uuid()::text, 'Super Admin', 1, 'Full access to all resources and permissions'),
+(gen_random_uuid()::text, 'Admin', 1, 'Administrative access to projects and integrations'),
+(gen_random_uuid()::text, 'Developer', 1, 'Development access with limited permissions'),
+(gen_random_uuid()::text, 'Project Admin', 1, 'Administrative access to a specific project'),
+(gen_random_uuid()::text, 'Viewer', 1, 'Read-only access with view permissions only');
 
 -- Insert permissions for all domains
 INSERT INTO permissions (permission_id, permission_name, permission_domain, resource_type, action, description) VALUES
 -- Integration Management
-(UUID(), 'integration_mgt:view', 'Integration-Management', 'integration', 'view', 'View integrations'),
-(UUID(), 'integration_mgt:edit', 'Integration-Management', 'integration', 'edit', 'Edit integrations'),
-(UUID(), 'integration_mgt:manage', 'Integration-Management', 'integration', 'manage', 'Create, edit, and delete integrations'),
+(gen_random_uuid()::text, 'integration_mgt:view', 'Integration-Management', 'integration', 'view', 'View integrations'),
+(gen_random_uuid()::text, 'integration_mgt:edit', 'Integration-Management', 'integration', 'edit', 'Edit integrations'),
+(gen_random_uuid()::text, 'integration_mgt:manage', 'Integration-Management', 'integration', 'manage', 'Create, edit, and delete integrations'),
 
 -- Environment Management
-(UUID(), 'environment_mgt:manage', 'Environment-Management', 'environment', 'manage', 'Create and delete environments'),
-(UUID(), 'environment_mgt:manage_nonprod', 'Environment-Management', 'environment', 'manage', 'Create and delete non-production environments'),
+(gen_random_uuid()::text, 'environment_mgt:manage', 'Environment-Management', 'environment', 'manage', 'Create and delete environments'),
+(gen_random_uuid()::text, 'environment_mgt:manage_nonprod', 'Environment-Management', 'environment', 'manage', 'Create and delete non-production environments'),
 
 -- Project Management
-(UUID(), 'project_mgt:view', 'Project-Management', 'project', 'view', 'View projects'),
-(UUID(), 'project_mgt:edit', 'Project-Management', 'project', 'edit', 'Edit projects'),
-(UUID(), 'project_mgt:manage', 'Project-Management', 'project', 'manage', 'Create, edit, and delete projects'),
+(gen_random_uuid()::text, 'project_mgt:view', 'Project-Management', 'project', 'view', 'View projects'),
+(gen_random_uuid()::text, 'project_mgt:edit', 'Project-Management', 'project', 'edit', 'Edit projects'),
+(gen_random_uuid()::text, 'project_mgt:manage', 'Project-Management', 'project', 'manage', 'Create, edit, and delete projects'),
 
 -- Observability Management
-(UUID(), 'observability_mgt:view_logs', 'Observability-Management', 'logs', 'view', 'View logs'),
-(UUID(), 'observability_mgt:view_insights', 'Observability-Management', 'insights', 'view', 'View insights'),
+(gen_random_uuid()::text, 'observability_mgt:view_logs', 'Observability-Management', 'logs', 'view', 'View logs'),
+(gen_random_uuid()::text, 'observability_mgt:view_insights', 'Observability-Management', 'insights', 'view', 'View insights'),
 
 -- User Management
-(UUID(), 'user_mgt:manage_users', 'User-Management', 'user', 'manage', 'Create, update, and delete users'),
-(UUID(), 'user_mgt:update_users', 'User-Management', 'user', 'update', 'Assign user groups'),
-(UUID(), 'user_mgt:manage_groups', 'User-Management', 'group', 'manage', 'Create, update, and delete groups'),
-(UUID(), 'user_mgt:manage_roles', 'User-Management', 'role', 'manage', 'Create, update, and delete roles'),
-(UUID(), 'user_mgt:update_group_roles', 'User-Management', 'group-role', 'update', 'Map roles to groups');
+(gen_random_uuid()::text, 'user_mgt:manage_users', 'User-Management', 'user', 'manage', 'Create, update, and delete users'),
+(gen_random_uuid()::text, 'user_mgt:update_users', 'User-Management', 'user', 'update', 'Assign user groups'),
+(gen_random_uuid()::text, 'user_mgt:manage_groups', 'User-Management', 'group', 'manage', 'Create, update, and delete groups'),
+(gen_random_uuid()::text, 'user_mgt:manage_roles', 'User-Management', 'role', 'manage', 'Create, update, and delete roles'),
+(gen_random_uuid()::text, 'user_mgt:update_group_roles', 'User-Management', 'group-role', 'update', 'Map roles to groups');
 
 -- Map Super Admin to ALL permissions
 INSERT INTO role_permission_mapping (role_id, permission_id)
@@ -486,9 +531,9 @@ VALUES (
 
 -- Create default groups
 INSERT INTO user_groups (group_id, group_name, org_uuid, description) VALUES
-(UUID(), 'Super Admins', 1, 'Group for super administrators with full access'),
-(UUID(), 'Administrators', 1, 'Group for administrators'),
-(UUID(), 'Developers', 1, 'Group for developers');
+(gen_random_uuid()::text, 'Super Admins', 1, 'Group for super administrators with full access'),
+(gen_random_uuid()::text, 'Administrators', 1, 'Group for administrators'),
+(gen_random_uuid()::text, 'Developers', 1, 'Group for developers');
 
 -- Assign super admin user to Super Admins group
 INSERT INTO group_user_mapping (group_id, user_uuid)
@@ -515,13 +560,8 @@ CREATE TABLE runtimes (
     project_id CHAR(36) NOT NULL,
     component_id CHAR(36) NOT NULL,
     environment_id CHAR(36) NOT NULL,
-    runtime_type ENUM('MI', 'BI') NOT NULL,
-    status ENUM(
-        'RUNNING',
-        'FAILED',
-        'DISABLED',
-        'OFFLINE'
-    ) NOT NULL DEFAULT 'OFFLINE',
+    runtime_type VARCHAR(10) NOT NULL CHECK (runtime_type IN ('MI', 'BI')),
+    status VARCHAR(20) NOT NULL DEFAULT 'OFFLINE' CHECK (status IN ('RUNNING', 'FAILED', 'DISABLED', 'OFFLINE')),
     version VARCHAR(50) NULL,
     runtime_hostname VARCHAR(255) NULL,
     runtime_port VARCHAR(10) NULL,
@@ -539,21 +579,25 @@ CREATE TABLE runtimes (
     used_memory BIGINT NULL,
     os_arch VARCHAR(50) NULL,
     server_name VARCHAR(200) NULL,
-    registration_time TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    last_heartbeat TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    registration_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_heartbeat TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_runtime_project FOREIGN KEY (project_id) REFERENCES projects (project_id) ON DELETE CASCADE,
     CONSTRAINT fk_runtime_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
-    CONSTRAINT fk_runtime_env FOREIGN KEY (environment_id) REFERENCES environments (environment_id) ON DELETE CASCADE,
-    INDEX idx_runtime_type (runtime_type),
-    INDEX idx_status (status),
-    INDEX idx_env (environment_id),
-    INDEX idx_component (component_id),
-    INDEX idx_project (project_id),
-    INDEX idx_last_heartbeat (last_heartbeat),
-    INDEX idx_registration_time (registration_time)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_env FOREIGN KEY (environment_id) REFERENCES environments (environment_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rt_runtime_type ON runtimes(runtime_type);
+CREATE INDEX idx_rt_status ON runtimes(status);
+CREATE INDEX idx_rt_env ON runtimes(environment_id);
+CREATE INDEX idx_rt_component ON runtimes(component_id);
+CREATE INDEX idx_rt_project ON runtimes(project_id);
+CREATE INDEX idx_rt_last_heartbeat ON runtimes(last_heartbeat);
+CREATE INDEX idx_rt_registration_time ON runtimes(registration_time);
+
+CREATE TRIGGER update_runtimes_updated_at BEFORE UPDATE ON runtimes
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Services deployed on a runtime
 CREATE TABLE runtime_services (
@@ -561,43 +605,40 @@ CREATE TABLE runtime_services (
     service_name VARCHAR(100) NOT NULL,
     service_package VARCHAR(200) NOT NULL,
     base_path VARCHAR(500) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, service_name, service_package),
-    CONSTRAINT fk_runtime_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_service_name (service_name),
-    INDEX idx_service_package (service_package),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rs_runtime_id ON runtime_services(runtime_id);
+CREATE INDEX idx_rs_service_name ON runtime_services(service_name);
+CREATE INDEX idx_rs_service_package ON runtime_services(service_package);
+CREATE INDEX idx_rs_state ON runtime_services(state);
+
+CREATE TRIGGER update_runtime_services_updated_at BEFORE UPDATE ON runtime_services
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Resources inside a service (HTTP resources etc.)
 CREATE TABLE service_resources (
-  runtime_id    VARCHAR(100) NOT NULL,
-  service_name  VARCHAR(100) NOT NULL,
-  resource_url  VARCHAR(1000) NOT NULL,
-  methods       JSON NOT NULL,  -- Array of HTTP methods
+    runtime_id VARCHAR(100) NOT NULL,
+    service_name VARCHAR(100) NOT NULL,
+    resource_url VARCHAR(1000) NOT NULL,
+    methods JSONB NOT NULL,  -- Array of HTTP methods
+    method_first VARCHAR(20) GENERATED ALWAYS AS (methods->0->>0) STORED,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (runtime_id, service_name, resource_url),
+    CONSTRAINT fk_service_resources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes(runtime_id) ON DELETE CASCADE
+);
 
--- Generated column for indexing first method (example pattern)
+CREATE INDEX idx_sr_runtime_service ON service_resources(runtime_id, service_name);
+CREATE INDEX idx_sr_resource_url ON service_resources(resource_url);
+CREATE INDEX idx_sr_method_first ON service_resources(method_first);
 
-
-method_first  VARCHAR(20)
-    GENERATED ALWAYS AS (JSON_UNQUOTE(JSON_EXTRACT(methods, '$[0]'))) STORED,
-
-  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (runtime_id, service_name, resource_url(255)),
-  CONSTRAINT fk_service_resources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes(runtime_id) ON DELETE CASCADE,
-
-  INDEX idx_runtime_service (runtime_id, service_name),
-  INDEX idx_resource_url (resource_url(255)),
-  INDEX idx_method_first (method_first)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TRIGGER update_service_resources_updated_at BEFORE UPDATE ON service_resources
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Listeners bound to a runtime (e.g., HTTP/HTTPS)
 CREATE TABLE runtime_listeners (
@@ -607,19 +648,20 @@ CREATE TABLE runtime_listeners (
     protocol VARCHAR(20) NULL DEFAULT 'HTTP',
     listener_host VARCHAR(100),
     listener_port INT,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, listener_name),
-    CONSTRAINT fk_runtime_listeners_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_listener_name (listener_name),
-    INDEX idx_protocol (protocol),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_listeners_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rl_runtime_id ON runtime_listeners(runtime_id);
+CREATE INDEX idx_rl_listener_name ON runtime_listeners(listener_name);
+CREATE INDEX idx_rl_protocol ON runtime_listeners(protocol);
+CREATE INDEX idx_rl_state ON runtime_listeners(state);
+
+CREATE TRIGGER update_runtime_listeners_updated_at BEFORE UPDATE ON runtime_listeners
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- MI-SPECIFIC ARTIFACT TABLES
@@ -629,24 +671,23 @@ CREATE TABLE runtime_listeners (
 CREATE TABLE runtime_apis (
     runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     url VARCHAR(500) NOT NULL,
     context VARCHAR(500) NOT NULL,
     version VARCHAR(50) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, api_name),
-    CONSTRAINT fk_runtime_apis_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_api_name (api_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_apis_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_ra_runtime_id ON runtime_apis(runtime_id);
+CREATE INDEX idx_ra_api_name ON runtime_apis(api_name);
+CREATE INDEX idx_ra_state ON runtime_apis(state);
+
+CREATE TRIGGER update_runtime_apis_updated_at BEFORE UPDATE ON runtime_apis
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- API Resources (MI) - Resources inside an API
 CREATE TABLE runtime_api_resources (
@@ -655,33 +696,38 @@ CREATE TABLE runtime_api_resources (
     resource_path VARCHAR(1000) NOT NULL,
     methods VARCHAR(20) NOT NULL, -- Single HTTP method as string (e.g., "POST", "GET")
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (runtime_id, api_name, resource_path(255)),
-    CONSTRAINT fk_runtime_api_resources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_api (runtime_id, api_name),
-    INDEX idx_resource_path (resource_path (255)),
-    INDEX idx_methods (methods)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (runtime_id, api_name, resource_path),
+    CONSTRAINT fk_runtime_api_resources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rar_runtime_api ON runtime_api_resources(runtime_id, api_name);
+CREATE INDEX idx_rar_resource_path ON runtime_api_resources(resource_path);
+CREATE INDEX idx_rar_methods ON runtime_api_resources(methods);
+
+CREATE TRIGGER update_runtime_api_resources_updated_at BEFORE UPDATE ON runtime_api_resources
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Proxy Services (MI)
 CREATE TABLE runtime_proxy_services (
     runtime_id VARCHAR(100) NOT NULL,
     proxy_name VARCHAR(200) NOT NULL,
     artifact_id CHAR(36) NOT NULL UNIQUE,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, proxy_name),
-    CONSTRAINT fk_runtime_proxy_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_proxy_name (proxy_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_proxy_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rps_runtime_id ON runtime_proxy_services(runtime_id);
+CREATE INDEX idx_rps_proxy_name ON runtime_proxy_services(proxy_name);
+CREATE INDEX idx_rps_artifact_id ON runtime_proxy_services(artifact_id);
+CREATE INDEX idx_rps_state ON runtime_proxy_services(state);
+
+CREATE TRIGGER update_runtime_proxy_services_updated_at BEFORE UPDATE ON runtime_proxy_services
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Proxy Service Endpoints (MI)
 CREATE TABLE runtime_proxy_service_endpoints (
@@ -689,12 +735,16 @@ CREATE TABLE runtime_proxy_service_endpoints (
     proxy_name VARCHAR(200) NOT NULL,
     endpoint_url VARCHAR(500) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (runtime_id, proxy_name, endpoint_url(255)),
-    CONSTRAINT fk_runtime_proxy_service_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_proxy_service_endpoints_runtime_id (runtime_id),
-    INDEX idx_runtime_proxy_service_endpoints_proxy_name (proxy_name)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (runtime_id, proxy_name, endpoint_url),
+    CONSTRAINT fk_runtime_proxy_service_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rpse_runtime_id ON runtime_proxy_service_endpoints(runtime_id);
+CREATE INDEX idx_rpse_proxy_name ON runtime_proxy_service_endpoints(proxy_name);
+
+CREATE TRIGGER update_runtime_proxy_service_endpoints_updated_at BEFORE UPDATE ON runtime_proxy_service_endpoints
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Endpoints (MI)
 CREATE TABLE runtime_endpoints (
@@ -702,21 +752,22 @@ CREATE TABLE runtime_endpoints (
     endpoint_name VARCHAR(200) NOT NULL,
     artifact_id CHAR(36) NOT NULL UNIQUE,
     endpoint_type VARCHAR(100) NOT NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, endpoint_name),
-    CONSTRAINT fk_runtime_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_endpoint_name (endpoint_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_endpoint_type (endpoint_type),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_re_runtime_id ON runtime_endpoints(runtime_id);
+CREATE INDEX idx_re_endpoint_name ON runtime_endpoints(endpoint_name);
+CREATE INDEX idx_re_artifact_id ON runtime_endpoints(artifact_id);
+CREATE INDEX idx_re_endpoint_type ON runtime_endpoints(endpoint_type);
+CREATE INDEX idx_re_state ON runtime_endpoints(state);
+
+CREATE TRIGGER update_runtime_endpoints_updated_at BEFORE UPDATE ON runtime_endpoints
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Endpoint Attributes (MI)
 CREATE TABLE runtime_endpoint_attributes (
@@ -725,82 +776,83 @@ CREATE TABLE runtime_endpoint_attributes (
     attribute_name VARCHAR(200) NOT NULL,
     attribute_value TEXT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, endpoint_name, attribute_name),
-    CONSTRAINT fk_runtime_endpoint_attributes_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_endpoint_attributes_runtime_id (runtime_id),
-    INDEX idx_runtime_endpoint_attributes_endpoint_name (endpoint_name),
-    INDEX idx_runtime_endpoint_attributes_attribute_name (attribute_name)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_endpoint_attributes_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rea_runtime_id ON runtime_endpoint_attributes(runtime_id);
+CREATE INDEX idx_rea_endpoint_name ON runtime_endpoint_attributes(endpoint_name);
+CREATE INDEX idx_rea_attribute_name ON runtime_endpoint_attributes(attribute_name);
+
+CREATE TRIGGER update_runtime_endpoint_attributes_updated_at BEFORE UPDATE ON runtime_endpoint_attributes
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Inbound Endpoints (MI)
 CREATE TABLE runtime_inbound_endpoints (
     runtime_id VARCHAR(100) NOT NULL,
     inbound_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     protocol VARCHAR(50) NOT NULL,
     sequence VARCHAR(200) NULL,
     statistics VARCHAR(20) NULL,
     on_error VARCHAR(200) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, inbound_name),
-    CONSTRAINT fk_runtime_inbound_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_inbound_name (inbound_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_protocol (protocol),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_inbound_endpoints_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rie_runtime_id ON runtime_inbound_endpoints(runtime_id);
+CREATE INDEX idx_rie_inbound_name ON runtime_inbound_endpoints(inbound_name);
+CREATE INDEX idx_rie_protocol ON runtime_inbound_endpoints(protocol);
+CREATE INDEX idx_rie_state ON runtime_inbound_endpoints(state);
+
+CREATE TRIGGER update_runtime_inbound_endpoints_updated_at BEFORE UPDATE ON runtime_inbound_endpoints
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Sequences (MI)
 CREATE TABLE runtime_sequences (
     runtime_id VARCHAR(100) NOT NULL,
     sequence_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     sequence_type VARCHAR(100) NULL,
     container VARCHAR(200) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, sequence_name),
-    CONSTRAINT fk_runtime_sequences_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_sequence_name (sequence_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_sequence_type (sequence_type),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_sequences_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rseq_runtime_id ON runtime_sequences(runtime_id);
+CREATE INDEX idx_rseq_sequence_name ON runtime_sequences(sequence_name);
+CREATE INDEX idx_rseq_sequence_type ON runtime_sequences(sequence_type);
+CREATE INDEX idx_rseq_state ON runtime_sequences(state);
+
+CREATE TRIGGER update_runtime_sequences_updated_at BEFORE UPDATE ON runtime_sequences
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Tasks (MI)
 CREATE TABLE runtime_tasks (
     runtime_id VARCHAR(100) NOT NULL,
     task_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     task_class VARCHAR(500) NULL,
     task_group VARCHAR(200) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, task_name),
-    CONSTRAINT fk_runtime_tasks_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_task_name (task_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_tasks_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rtask_runtime_id ON runtime_tasks(runtime_id);
+CREATE INDEX idx_rtask_task_name ON runtime_tasks(task_name);
+CREATE INDEX idx_rtask_state ON runtime_tasks(state);
+
+CREATE TRIGGER update_runtime_tasks_updated_at BEFORE UPDATE ON runtime_tasks
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Templates (MI)
 CREATE TABLE runtime_templates (
@@ -808,13 +860,17 @@ CREATE TABLE runtime_templates (
     template_name VARCHAR(200) NOT NULL,
     template_type VARCHAR(100) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, template_name),
-    CONSTRAINT fk_runtime_templates_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_template_name (template_name),
-    INDEX idx_template_type (template_type)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_templates_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rtemp_runtime_id ON runtime_templates(runtime_id);
+CREATE INDEX idx_rtemp_template_name ON runtime_templates(template_name);
+CREATE INDEX idx_rtemp_template_type ON runtime_templates(template_type);
+
+CREATE TRIGGER update_runtime_templates_updated_at BEFORE UPDATE ON runtime_templates
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Message Stores (MI)
 CREATE TABLE runtime_message_stores (
@@ -823,94 +879,99 @@ CREATE TABLE runtime_message_stores (
     store_type VARCHAR(100) NOT NULL,
     size BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, store_name),
-    CONSTRAINT fk_runtime_message_stores_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_store_name (store_name),
-    INDEX idx_store_type (store_type)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_message_stores_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rms_runtime_id ON runtime_message_stores(runtime_id);
+CREATE INDEX idx_rms_store_name ON runtime_message_stores(store_name);
+CREATE INDEX idx_rms_store_type ON runtime_message_stores(store_type);
+
+CREATE TRIGGER update_runtime_message_stores_updated_at BEFORE UPDATE ON runtime_message_stores
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Message Processors (MI)
 CREATE TABLE runtime_message_processors (
     runtime_id VARCHAR(100) NOT NULL,
     processor_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     processor_type VARCHAR(100) NOT NULL,
     processor_class VARCHAR(500) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, processor_name),
-    CONSTRAINT fk_runtime_message_processors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_processor_name (processor_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_processor_type (processor_type),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_message_processors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rmp_runtime_id ON runtime_message_processors(runtime_id);
+CREATE INDEX idx_rmp_processor_name ON runtime_message_processors(processor_name);
+CREATE INDEX idx_rmp_processor_type ON runtime_message_processors(processor_type);
+CREATE INDEX idx_rmp_state ON runtime_message_processors(state);
+
+CREATE TRIGGER update_runtime_message_processors_updated_at BEFORE UPDATE ON runtime_message_processors
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Local Entries (MI)
 CREATE TABLE runtime_local_entries (
     runtime_id VARCHAR(100) NOT NULL,
     entry_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     entry_type VARCHAR(100) NOT NULL,
     entry_value TEXT NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, entry_name),
-    CONSTRAINT fk_runtime_local_entries_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_entry_name (entry_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_entry_type (entry_type),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_local_entries_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rle_runtime_id ON runtime_local_entries(runtime_id);
+CREATE INDEX idx_rle_entry_name ON runtime_local_entries(entry_name);
+CREATE INDEX idx_rle_entry_type ON runtime_local_entries(entry_type);
+CREATE INDEX idx_rle_state ON runtime_local_entries(state);
+
+CREATE TRIGGER update_runtime_local_entries_updated_at BEFORE UPDATE ON runtime_local_entries
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Data Services (MI)
 CREATE TABLE runtime_data_services (
     runtime_id VARCHAR(100) NOT NULL,
     service_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     description TEXT NULL,
     wsdl TEXT NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, service_name),
-    CONSTRAINT fk_runtime_data_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_service_name (service_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_data_services_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rds_runtime_id ON runtime_data_services(runtime_id);
+CREATE INDEX idx_rds_service_name ON runtime_data_services(service_name);
+CREATE INDEX idx_rds_state ON runtime_data_services(state);
+
+CREATE TRIGGER update_runtime_data_services_updated_at BEFORE UPDATE ON runtime_data_services
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Carbon Apps (MI)
 CREATE TABLE runtime_carbon_apps (
     runtime_id VARCHAR(100) NOT NULL,
     app_name VARCHAR(200) NOT NULL,
     version VARCHAR(50) NULL,
-    state ENUM('Active', 'Faulty') NOT NULL DEFAULT 'Active',
+    state VARCHAR(20) NOT NULL DEFAULT 'Active' CHECK (state IN ('Active', 'Faulty')),
     artifacts VARCHAR(4000) NULL, -- JSON array serialized as string (convert to JSON in app code when needed)
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, app_name),
-    CONSTRAINT fk_runtime_carbon_apps_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_app_name (app_name),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_carbon_apps_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rca_runtime_id ON runtime_carbon_apps(runtime_id);
+CREATE INDEX idx_rca_app_name ON runtime_carbon_apps(app_name);
+CREATE INDEX idx_rca_state ON runtime_carbon_apps(state);
+
+CREATE TRIGGER update_runtime_carbon_apps_updated_at BEFORE UPDATE ON runtime_carbon_apps
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Data Sources (MI)
 CREATE TABLE runtime_data_sources (
@@ -920,40 +981,40 @@ CREATE TABLE runtime_data_sources (
     driver VARCHAR(500) NULL,
     url VARCHAR(1000) NULL,
     username VARCHAR(255) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, datasource_name),
-    CONSTRAINT fk_runtime_data_sources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_datasource_name (datasource_name),
-    INDEX idx_datasource_type (datasource_type),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_data_sources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rdatasrc_runtime_id ON runtime_data_sources(runtime_id);
+CREATE INDEX idx_rdatasrc_datasource_name ON runtime_data_sources(datasource_name);
+CREATE INDEX idx_rdatasrc_datasource_type ON runtime_data_sources(datasource_type);
+CREATE INDEX idx_rdatasrc_state ON runtime_data_sources(state);
+
+CREATE TRIGGER update_runtime_data_sources_updated_at BEFORE UPDATE ON runtime_data_sources
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Connectors (MI)
 CREATE TABLE runtime_connectors (
     runtime_id VARCHAR(100) NOT NULL,
     connector_name VARCHAR(200) NOT NULL,
-    artifact_id CHAR(36) NOT NULL UNIQUE,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50) NULL,
-    state ENUM(
-        'enabled',
-        'disabled'
-    ) NOT NULL DEFAULT 'enabled',
+    state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, connector_name, package),
-    CONSTRAINT fk_runtime_connectors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_connector_name (connector_name),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_state (state)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_connectors_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rconn_runtime_id ON runtime_connectors(runtime_id);
+CREATE INDEX idx_rconn_connector_name ON runtime_connectors(connector_name);
+CREATE INDEX idx_rconn_state ON runtime_connectors(state);
+
+CREATE TRIGGER update_runtime_connectors_updated_at BEFORE UPDATE ON runtime_connectors
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Registry Resources (MI)
 CREATE TABLE runtime_registry_resources (
@@ -961,12 +1022,16 @@ CREATE TABLE runtime_registry_resources (
     resource_name VARCHAR(200) NOT NULL,
     resource_type VARCHAR(100) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, resource_name),
-    CONSTRAINT fk_runtime_registry_resources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_resource_name (resource_name)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_runtime_registry_resources_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rrr_runtime_id ON runtime_registry_resources(runtime_id);
+CREATE INDEX idx_rrr_resource_name ON runtime_registry_resources(resource_name);
+
+CREATE TRIGGER update_runtime_registry_resources_updated_at BEFORE UPDATE ON runtime_registry_resources
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- CONTROL COMMANDS
@@ -977,106 +1042,108 @@ CREATE TABLE bi_runtime_control_commands (
     runtime_id VARCHAR(100) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL, -- start, stop, restart, deploy, undeploy
-    status ENUM(
-        'pending',
-        'sent',
-        'acknowledged',
-        'completed',
-        'failed',
-        'timeout'
-    ) NOT NULL DEFAULT 'pending',
-    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    sent_at TIMESTAMP(6) NULL,
-    acknowledged_at TIMESTAMP(6) NULL,
-    completed_at TIMESTAMP(6) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'acknowledged', 'completed', 'failed', 'timeout')),
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP NULL,
+    acknowledged_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
     error_message TEXT NULL,
     issued_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_control_cmd_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    CONSTRAINT fk_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_status (status),
-    INDEX idx_issued_at (issued_at),
-    INDEX idx_target_artifact (target_artifact),
-    INDEX idx_action (action),
-    INDEX idx_issued_by (issued_by)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_bi_runtime_id ON bi_runtime_control_commands(runtime_id);
+CREATE INDEX idx_bi_status ON bi_runtime_control_commands(status);
+CREATE INDEX idx_bi_issued_at ON bi_runtime_control_commands(issued_at);
+CREATE INDEX idx_bi_target_artifact ON bi_runtime_control_commands(target_artifact);
+CREATE INDEX idx_bi_action ON bi_runtime_control_commands(action);
+CREATE INDEX idx_bi_issued_by ON bi_runtime_control_commands(issued_by);
+
+CREATE TRIGGER update_bi_runtime_control_commands_updated_at BEFORE UPDATE ON bi_runtime_control_commands
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TABLE mi_runtime_control_commands (
     runtime_id VARCHAR(100) NOT NULL,
     component_id CHAR(36) NOT NULL,
     artifact_id CHAR(36) NOT NULL,
     action VARCHAR(50) NOT NULL, -- enable_artifact, disable_artifact, enable_tracing, disable_tracing
-    status ENUM(
-        'pending',
-        'sent',
-        'acknowledged',
-        'completed',
-        'failed',
-        'timeout'
-    ) NOT NULL DEFAULT 'pending',
-    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    sent_at TIMESTAMP(6) NULL,
-    acknowledged_at TIMESTAMP(6) NULL,
-    completed_at TIMESTAMP(6) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'acknowledged', 'completed', 'failed', 'timeout')),
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    sent_at TIMESTAMP NULL,
+    acknowledged_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
     error_message TEXT NULL,
     issued_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (runtime_id, component_id, artifact_id),
     CONSTRAINT fk_mi_runtime_control_cmd_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
     CONSTRAINT fk_mi_runtime_control_cmd_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
-    CONSTRAINT fk_mi_runtime_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_component_id (component_id),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_status (status),
-    INDEX idx_issued_at (issued_at),
-    INDEX idx_action (action),
-    INDEX idx_issued_by (issued_by)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_mi_runtime_control_cmd_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_mi_runtime_id ON mi_runtime_control_commands(runtime_id);
+CREATE INDEX idx_mi_component_id ON mi_runtime_control_commands(component_id);
+CREATE INDEX idx_mi_artifact_id ON mi_runtime_control_commands(artifact_id);
+CREATE INDEX idx_mi_status ON mi_runtime_control_commands(status);
+CREATE INDEX idx_mi_issued_at ON mi_runtime_control_commands(issued_at);
+CREATE INDEX idx_mi_action ON mi_runtime_control_commands(action);
+CREATE INDEX idx_mi_issued_by ON mi_runtime_control_commands(issued_by);
+
+CREATE TRIGGER update_mi_runtime_control_commands_updated_at BEFORE UPDATE ON mi_runtime_control_commands
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TABLE bi_artifact_intended_state (
     component_id CHAR(36) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL,
-    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     issued_by CHAR(36),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (component_id, target_artifact),
     CONSTRAINT fk_bi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
-    CONSTRAINT fk_bi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
-    INDEX idx_component_id (component_id),
-    INDEX idx_target_artifact (target_artifact),
-    INDEX idx_action (action),
-    INDEX idx_issued_by (issued_by)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_bi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_bi_state_component_id ON bi_artifact_intended_state(component_id);
+CREATE INDEX idx_bi_state_target_artifact ON bi_artifact_intended_state(target_artifact);
+CREATE INDEX idx_bi_state_action ON bi_artifact_intended_state(action);
+CREATE INDEX idx_bi_state_issued_by ON bi_artifact_intended_state(issued_by);
+
+CREATE TRIGGER update_bi_artifact_intended_state_updated_at BEFORE UPDATE ON bi_artifact_intended_state
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TABLE mi_artifact_intended_state (
     component_id CHAR(36) NOT NULL,
     artifact_id CHAR(36) NOT NULL,
     action VARCHAR(50) NOT NULL,
-    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     issued_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (component_id, artifact_id),
     CONSTRAINT fk_mi_artifact_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
-    CONSTRAINT fk_mi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
-    INDEX idx_component_id (component_id),
-    INDEX idx_artifact_id (artifact_id),
-    INDEX idx_action (action),
-    INDEX idx_issued_by (issued_by)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_mi_artifact_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_mi_state_component_id ON mi_artifact_intended_state(component_id);
+CREATE INDEX idx_mi_state_artifact_id ON mi_artifact_intended_state(artifact_id);
+CREATE INDEX idx_mi_state_action ON mi_artifact_intended_state(action);
+CREATE INDEX idx_mi_state_issued_by ON mi_artifact_intended_state(issued_by);
+
+CREATE TRIGGER update_mi_artifact_intended_state_updated_at BEFORE UPDATE ON mi_artifact_intended_state
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
 -- AUDIT & EVENTS
 -- ============================================================================
 
 CREATE TABLE audit_logs (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     runtime_id VARCHAR(100) NULL,
     user_id CHAR(36) NULL,
     action VARCHAR(100) NOT NULL,
@@ -1085,78 +1152,73 @@ CREATE TABLE audit_logs (
     details TEXT NULL,
     client_ip VARCHAR(45) NULL, -- IPv6 compatible
     user_agent VARCHAR(500) NULL,
-    timestamp TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_audit_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE SET NULL,
-    INDEX idx_runtime_id (runtime_id),
-    INDEX idx_user_id (user_id),
-    INDEX idx_action (action),
-    INDEX idx_resource_type (resource_type),
-    INDEX idx_timestamp (timestamp),
-    INDEX idx_client_ip (client_ip)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_audit_user FOREIGN KEY (user_id) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_al_runtime_id ON audit_logs(runtime_id);
+CREATE INDEX idx_al_user_id ON audit_logs(user_id);
+CREATE INDEX idx_al_action ON audit_logs(action);
+CREATE INDEX idx_al_resource_type ON audit_logs(resource_type);
+CREATE INDEX idx_al_timestamp ON audit_logs(timestamp);
+CREATE INDEX idx_al_client_ip ON audit_logs(client_ip);
 
 CREATE TABLE system_events (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     event_type VARCHAR(50) NOT NULL, -- heartbeat_timeout, runtime_offline, system_error
-    severity ENUM(
-        'INFO',
-        'WARN',
-        'ERROR',
-        'CRITICAL'
-    ) NOT NULL DEFAULT 'INFO',
+    severity VARCHAR(20) NOT NULL DEFAULT 'INFO' CHECK (severity IN ('INFO', 'WARN', 'ERROR', 'CRITICAL')),
     source VARCHAR(100) NULL, -- runtime_id or system component
     message TEXT NOT NULL,
-    metadata JSON NULL,
+    metadata JSONB NULL,
     resolved BOOLEAN NOT NULL DEFAULT FALSE,
     resolved_at TIMESTAMP NULL,
     resolved_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_sys_events_resolved_by FOREIGN KEY (resolved_by) REFERENCES users (user_id) ON DELETE SET NULL,
-    INDEX idx_event_type (event_type),
-    INDEX idx_severity (severity),
-    INDEX idx_source (source),
-    INDEX idx_resolved (resolved),
-    INDEX idx_created_at (created_at)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    CONSTRAINT fk_sys_events_resolved_by FOREIGN KEY (resolved_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_se_event_type ON system_events(event_type);
+CREATE INDEX idx_se_severity ON system_events(severity);
+CREATE INDEX idx_se_source ON system_events(source);
+CREATE INDEX idx_se_resolved ON system_events(resolved);
+CREATE INDEX idx_se_created_at ON system_events(created_at);
 
 -- ============================================================================
 -- MONITORING & HEALTH
 -- ============================================================================
 
 CREATE TABLE runtime_metrics (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     runtime_id VARCHAR(100) NOT NULL,
     metric_name VARCHAR(100) NOT NULL,
     metric_value DECIMAL(15, 4) NOT NULL,
     metric_unit VARCHAR(20) NULL,
-    tags JSON NULL,
-    timestamp TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_metrics_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_metric (runtime_id, metric_name),
-    INDEX idx_timestamp (timestamp),
-    INDEX idx_metric_name (metric_name)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    tags JSONB NULL,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_metrics_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_rm_runtime_metric ON runtime_metrics(runtime_id, metric_name);
+CREATE INDEX idx_rm_timestamp ON runtime_metrics(timestamp);
+CREATE INDEX idx_rm_metric_name ON runtime_metrics(metric_name);
 
 CREATE TABLE health_checks (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     runtime_id VARCHAR(100) NOT NULL,
     check_type VARCHAR(50) NOT NULL, -- heartbeat, connectivity, resource
-    status ENUM(
-        'HEALTHY',
-        'DEGRADED',
-        'UNHEALTHY'
-    ) NOT NULL,
+    status VARCHAR(20) NOT NULL CHECK (status IN ('HEALTHY', 'DEGRADED', 'UNHEALTHY')),
     response_time_ms INT NULL,
     error_message TEXT NULL,
-    details JSON NULL,
-    timestamp TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
-    CONSTRAINT fk_health_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE,
-    INDEX idx_runtime_check (runtime_id, check_type),
-    INDEX idx_status (status),
-    INDEX idx_timestamp (timestamp)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    details JSONB NULL,
+    timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_health_runtime FOREIGN KEY (runtime_id) REFERENCES runtimes (runtime_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_hc_runtime_check ON health_checks(runtime_id, check_type);
+CREATE INDEX idx_hc_status ON health_checks(status);
+CREATE INDEX idx_hc_timestamp ON health_checks(timestamp);
 
 -- ============================================================================
 -- SYSTEM CONFIG
@@ -1165,21 +1227,20 @@ CREATE TABLE health_checks (
 CREATE TABLE system_config (
     config_key VARCHAR(100) NOT NULL PRIMARY KEY,
     config_value TEXT NOT NULL,
-    config_type ENUM(
-        'STRING',
-        'INTEGER',
-        'BOOLEAN',
-        'JSON'
-    ) NOT NULL DEFAULT 'STRING',
+    config_type VARCHAR(20) NOT NULL DEFAULT 'STRING' CHECK (config_type IN ('STRING', 'INTEGER', 'BOOLEAN', 'JSON')),
     description TEXT NULL,
     is_encrypted BOOLEAN NOT NULL DEFAULT FALSE,
     updated_by CHAR(36) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_syscfg_updated_by FOREIGN KEY (updated_by) REFERENCES users (user_id) ON DELETE SET NULL,
-    INDEX idx_config_type (config_type),
-    INDEX idx_updated_at (updated_at)
-) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_syscfg_updated_by FOREIGN KEY (updated_by) REFERENCES users (user_id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_sc_config_type ON system_config(config_type);
+CREATE INDEX idx_sc_updated_at ON system_config(updated_at);
+
+CREATE TRIGGER update_system_config_updated_at BEFORE UPDATE ON system_config
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Active BI commands view
 CREATE OR REPLACE VIEW active_commands AS
@@ -1187,7 +1248,7 @@ SELECT
     cc.*,
     r.runtime_type,
     r.status AS runtime_status,
-    TIMESTAMPDIFF(SECOND, cc.issued_at, NOW(6)) AS age_seconds
+    EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - cc.issued_at))::INT AS age_seconds
 FROM
     bi_runtime_control_commands cc
     JOIN runtimes r ON cc.runtime_id = r.runtime_id
@@ -1202,7 +1263,7 @@ SELECT
     r.runtime_type,
     r.status AS runtime_status,
     c.name AS component_name,
-    TIMESTAMPDIFF(SECOND, micc.issued_at, NOW(6)) AS age_seconds
+    EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - micc.issued_at))::INT AS age_seconds
 FROM
     mi_runtime_control_commands micc
     JOIN runtimes r ON micc.runtime_id = r.runtime_id
@@ -1373,23 +1434,7 @@ VALUES (
         '950e8400-e29b-41d4-a716-446655440001',
         '550e8400-e29b-41d4-a716-446655440000',
         'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-        DATE_ADD(NOW(), INTERVAL 7 DAY),
+        CURRENT_TIMESTAMP + INTERVAL '7 days',
         'Mozilla/5.0 (Test Browser)',
         '127.0.0.1'
     );
-
--- ============================================================================
--- SCHEDULED EVENTS
--- ============================================================================
-
--- Enable event scheduler (required for scheduled events to run)
-SET GLOBAL event_scheduler = ON;
-
--- Create scheduled event to clean up expired and revoked refresh tokens
--- Runs daily at 2:00 AM
-CREATE EVENT IF NOT EXISTS cleanup_expired_refresh_tokens
-ON SCHEDULE EVERY 1 DAY
-STARTS (TIMESTAMP(CURRENT_DATE) + INTERVAL 1 DAY + INTERVAL 2 HOUR)
-DO
-  DELETE FROM refresh_tokens 
-  WHERE expires_at < NOW() OR revoked = TRUE;

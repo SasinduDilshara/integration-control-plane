@@ -1,4 +1,4 @@
-# Copyright (c) 2025, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+# Copyright (c) 2026, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
 #
 # WSO2 Inc. licenses this file to you under the Apache License,
 # Version 2.0 (the "License"); you may not use this file except
@@ -15,28 +15,19 @@
 # under the License.
 
 services:
-  mysql-db:
+  postgresql-db:
     build:
       context: ./resources/db
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.postgresql
     ports:
-      - "3306:3306"
-    container_name: icp-mysql-local
+      - "5432:5432"
+    container_name: icp-postgresql-local
     environment:
-      MYSQL_ROOT_PASSWORD: my-secret-pw
-      MYSQL_DATABASE: icp_database
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: my-secret-pw
+      POSTGRES_DB: icp_database
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-p$$MYSQL_ROOT_PASSWORD",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d icp_database"]
       interval: 5s
       timeout: 5s
       retries: 30
