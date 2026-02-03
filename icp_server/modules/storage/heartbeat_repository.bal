@@ -571,19 +571,18 @@ isolated function checkMIIntendedStatesAndInsertCommands(
         }
 
         // Get the intended action
-        
 
         // Process the control command
         log:printInfo(string `Found artifact '${artifactName}' (type=${artifactType}, state=${artifactDetails.state}, tracing=${artifactDetails.tracing ?: "N/A"})`);
         commandCount = check processMIControlCommand(
-            runtimeId,
-            componentId,
-            artifactName,
-            artifactType,
-            artifactDetails.state,
-            artifactDetails.tracing,
-            intendedAction,
-            commandCount
+                runtimeId,
+                componentId,
+                artifactName,
+                artifactType,
+                artifactDetails.state,
+                artifactDetails.tracing,
+                intendedAction,
+                commandCount
         );
     }
 
@@ -613,10 +612,10 @@ isolated function getArtifactDetailsByTypeAndName(string runtimeId, string artif
         : string `SELECT artifact_id, ${metadata.stateColumn} AS state FROM ${metadata.tableName}`;
 
     sql:ParameterizedQuery query = sql:queryConcat(
-        sqlQueryFromString(selectClause),
-        ` WHERE runtime_id = ${runtimeId} AND `,
-        sqlQueryFromString(metadata.nameColumn),
-        ` = ${artifactName} LIMIT 1`
+            sqlQueryFromString(selectClause),
+            ` WHERE runtime_id = ${runtimeId} AND `,
+            sqlQueryFromString(metadata.nameColumn),
+            ` = ${artifactName} LIMIT 1`
     );
 
     stream<types:ArtifactQueryResult, sql:Error?> resultStream = dbClient->query(query);
@@ -806,16 +805,23 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
             `);
         }
 
-        // Delete all existing resources for this service before inserting new ones
-        _ = check dbClient->execute(`
-            DELETE FROM service_resources 
-            WHERE runtime_id = ${heartbeat.runtime} AND service_name = ${serviceDetail.name}
-        `);
-
-        // Insert new resources
+        // Upsert resources for this service
         foreach types:Resource resourceDetail in serviceDetail.resources {
             string methodsJson = resourceDetail.methods.toJsonString();
-            if dbType == POSTGRESQL {
+            if dbType == MSSQL {
+                _ = check dbClient->execute(`
+                    MERGE INTO service_resources AS target
+                    USING (VALUES (${heartbeat.runtime}, ${serviceDetail.name}, ${resourceDetail.url}, ${methodsJson}))
+                           AS source (runtime_id, service_name, resource_url, methods)
+                    ON (target.runtime_id = source.runtime_id AND target.service_name = source.service_name 
+                        AND target.resource_url = source.resource_url)
+                    WHEN MATCHED THEN
+                        UPDATE SET methods = source.methods, updated_at = CURRENT_TIMESTAMP
+                    WHEN NOT MATCHED THEN
+                        INSERT (runtime_id, service_name, resource_url, methods)
+                        VALUES (source.runtime_id, source.service_name, source.resource_url, source.methods);
+                `);
+            } else if dbType == POSTGRESQL {
                 _ = check dbClient->execute(`
                     INSERT INTO service_resources (
                         runtime_id, service_name, resource_url, methods
@@ -823,6 +829,9 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
                         ${heartbeat.runtime}, ${serviceDetail.name},
                         ${resourceDetail.url}, ${methodsJson}::jsonb
                     )
+                    ON CONFLICT (runtime_id, service_name, resource_url) DO UPDATE SET
+                        methods = EXCLUDED.methods,
+                        updated_at = CURRENT_TIMESTAMP
                 `);
             } else {
                 _ = check dbClient->execute(`
@@ -832,6 +841,9 @@ isolated function insertRuntimeArtifacts(types:Heartbeat heartbeat) returns erro
                         ${heartbeat.runtime}, ${serviceDetail.name},
                         ${resourceDetail.url}, ${methodsJson}
                     )
+                    ON DUPLICATE KEY UPDATE
+                        methods = VALUES(methods),
+                        updated_at = CURRENT_TIMESTAMP
                 `);
             }
         }
