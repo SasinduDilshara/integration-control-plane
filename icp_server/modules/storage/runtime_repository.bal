@@ -143,6 +143,24 @@ public isolated function getRuntimeById(string runtimeId) returns types:Runtime?
     return check mapToRuntime(runtimeRecords[0]);
 }
 
+// Get the type of a runtime by ID
+public isolated function getRuntimeTypeById(string runtimeId) returns types:RuntimeTypeRecord?|error {
+    stream<types:RuntimeTypeRecord, sql:Error?> runtimeTypeStream = dbClient->query(`
+        SELECT runtime_id, runtime_type, environment_id, component_id 
+        FROM runtimes
+        WHERE runtime_id = ${runtimeId}
+    `);
+
+    types:RuntimeTypeRecord[] runtimeTypeRecords = check from types:RuntimeTypeRecord runtimeTypeRecord in runtimeTypeStream
+        select runtimeTypeRecord;
+
+    if runtimeTypeRecords.length() == 0 {
+        return;
+    }
+
+    return runtimeTypeRecords[0];
+}
+
 // Delete a runtime by ID
 public isolated function deleteRuntime(string runtimeId) returns error? {
     sql:ParameterizedQuery deleteQuery = `DELETE FROM runtimes WHERE runtime_id = ${runtimeId}`;

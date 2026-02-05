@@ -119,7 +119,7 @@ service /observability on openSerachObservabilityListener {
         log:printInfo("Opensearch adapter service started at " + serverHost + ":" + observabilityServerPort.toString());
     }
 
-    resource function post logs(@http:Header {name: "X-API-Key"} string? apiKeyHeader, http:Request request, types:LogEntryRequest logRequest) returns types:LogEntriesResponse|error {
+    resource function post logs/[string componentType](@http:Header {name: "X-API-Key"} string? apiKeyHeader, http:Request request, types:LogEntryRequest logRequest) returns types:LogEntriesResponse|error {
         log:printInfo("Received log request for component: " + logRequest.toString());
 
         // Build OpenSearch query
@@ -138,8 +138,25 @@ service /observability on openSerachObservabilityListener {
         log:printDebug("OpenSearch query: " + searchRequest.toJsonString());
 
         // Call OpenSearch
+        OpenSearchResponse[] searchResponses = [];
+        if componentType == "BI" {
         OpenSearchResponse searchResponse = check opensearchClient->post("/ballerina-application-logs-*/_search", searchRequest);
+        searchResponses.push(searchResponse);
         log:printDebug("Search returned " + searchResponse.hits.total.value.toString() + " results");
+        } else if componentType == "MI" {
+        OpenSearchResponse searchResponse = check opensearchClient->post("/mi-application-logs-*/_search", searchRequest);
+        searchResponses.push(searchResponse);
+        log:printDebug("Search returned " + searchResponse.hits.total.value.toString() + " results");
+        } else if componentType == "ALL" {
+            OpenSearchResponse BiSearchResponse = check opensearchClient->post("/ballerina-application-logs-*/_search", searchRequest);
+            searchResponses.push(BiSearchResponse);
+            OpenSearchResponse MiSearchResponse = check opensearchClient->post("/mi-application-logs-*/_search", searchRequest);
+            searchResponses.push(MiSearchResponse);
+            log:printDebug("Search returned " + BiSearchResponse.hits.total.value.toString() + " results for BI runtimes");
+            log:printDebug("Search returned " + MiSearchResponse.hits.total.value.toString() + " results for MI runtimes");
+
+        }
+        
 
         // Build response columns
         types:LogColumn[] columns = [
@@ -153,26 +170,28 @@ service /observability on openSerachObservabilityListener {
 
         // Build response rows
         json[][] rows = [];
-        foreach OpenSearchHit hit in searchResponse.hits.hits {
-            LogSource sourceData = hit._source;
+        foreach OpenSearchResponse searchResponse in searchResponses {
+            foreach OpenSearchHit hit in searchResponse.hits.hits {
+                LogSource sourceData = hit._source;
 
-            // Extract fields from the log entry
-            anydata timestampData = sourceData["@timestamp"];
-            string timestamp = timestampData is string ? timestampData : timestampData.toString();
-            string level = sourceData?.level ?: "INFO";
+                // Extract fields from the log entry
+                anydata timestampData = sourceData["@timestamp"];
+                string timestamp = timestampData is string ? timestampData : timestampData.toString();
+                string level = sourceData?.level ?: "INFO";
 
-            // Construct the full log entry string
-            string logEntry = constructLogEntry(sourceData);
+                // Construct the full log entry string
+                string logEntry = constructLogEntry(sourceData);
 
-            json[] row = [
-                timestamp,
-                level,
-                logEntry,
-                (), // LogContext - null for now
-                "",
-                ""
-            ];
-            rows.push(row);
+                json[] row = [
+                    timestamp,
+                    level,
+                    logEntry,
+                    (), // LogContext - null for now
+                    "",
+                    ""
+                ];
+                rows.push(row);
+            }
         }
 
         log:printInfo("Returning " + rows.length().toString() + " log entries");

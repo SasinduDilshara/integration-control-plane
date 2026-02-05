@@ -85,6 +85,9 @@ service /icp/observability on observabilityListener {
             };
         }
 
+        // Resolve runtime types to request
+        types:LogIndexRuntimeType componentType = check resolveComponentTypes(runtimeIdList);       
+
         // Construct LogEntryRequest with resolved runtime IDs and copy other filter fields
         types:LogEntryRequest adaptorRequest = {
             runtimeIdList: runtimeIdList,
@@ -101,7 +104,7 @@ service /icp/observability on observabilityListener {
         log:printInfo("Invoking observability adapter with " + runtimeIdList.length().toString() + " runtime IDs");
 
         // Invoke observability adapter service
-        return check observabilityClient->post("/observability/logs/", adaptorRequest);
+        return check observabilityClient->post(string `/observability/logs/${componentType.toString()}`, adaptorRequest);
     }
 }
 
@@ -162,4 +165,29 @@ isolated function resolveRuntimeIds(types:ICPLogEntryRequest logRequest) returns
 
     log:printInfo("Resolved " + runtimeIds.length().toString() + " runtime IDs from component/environment filters");
     return runtimeIds;
+}
+
+isolated function resolveComponentTypes(string[] runtimeIdList) returns types:LogIndexRuntimeType|error {
+    boolean hasMIRuntime = false;
+    boolean hasBIRuntime = false;
+    foreach string runtimeId in runtimeIdList {
+        types:RuntimeTypeRecord? runtimeType = check storage:getRuntimeTypeById(runtimeId);
+        if !(runtimeType is ()) && runtimeType.runtimeType == "MI" {
+            hasMIRuntime = true;
+        } else if !(runtimeType is ()) && runtimeType.runtimeType == "BI" {
+            hasBIRuntime = true;
+        }
+        if hasMIRuntime && hasBIRuntime {
+            return "ALL";
+        }
+    }
+    if hasBIRuntime {
+        return "BI";
+    }else if hasMIRuntime {
+        return "MI";
+    } else {
+        string errorMsg = "Could not resolve component types for filtering logs";
+        log:printError(errorMsg);
+        return error(errorMsg);
+    }
 }
