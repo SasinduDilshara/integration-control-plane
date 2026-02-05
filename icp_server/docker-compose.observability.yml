@@ -101,6 +101,8 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+      opensearch-setup:
+        condition: service_completed_successfully
 
   envsubst-service:
     image: nginx:alpine
