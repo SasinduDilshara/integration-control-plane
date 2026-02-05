@@ -1304,7 +1304,7 @@ service /graphql on graphqlListener {
     }
 
     // Change artifact status (active/inactive) for all MI runtimes of a component
-    isolated remote function changeArtifactStatus(graphql:Context context, types:ArtifactStatusChangeInput input) returns types:ArtifactStatusChangeResponse|error {
+    isolated remote function updateArtifactStatus(graphql:Context context, types:ArtifactStatusChangeInput input) returns types:ArtifactStatusChangeResponse|error {
         types:UserContextV2 userContext = check extractUserContext(context);
 
         types:Component? component = check storage:getComponentById(input.componentId);
@@ -1441,7 +1441,7 @@ service /graphql on graphqlListener {
     }
 
     // Mutation to change artifact tracing (enable/disable)
-    isolated remote function changeArtifactTracing(graphql:Context context, types:ArtifactTracingChangeInput input) returns types:ArtifactTracingChangeResponse|error {
+    isolated remote function updateArtifactTracingStatus(graphql:Context context, types:ArtifactTracingChangeInput input) returns types:ArtifactTracingChangeResponse|error {
         types:UserContextV2 userContext = check extractUserContext(context);
 
         types:Component? component = check storage:getComponentById(input.componentId);
@@ -1565,6 +1565,117 @@ service /graphql on graphqlListener {
         log:printInfo("Artifact tracing change commands sent",
                 componentId = input.componentId,
                 artifactName = input.artifactName,
+                successCount = successCount,
+                failedCount = failedCount);
+
+        return {
+            status: overallStatus,
+            message: message,
+            successCount: successCount,
+            failedCount: failedCount,
+            details: details
+        };
+    }
+
+    // Mutation to trigger a task
+    isolated remote function triggerArtifact(graphql:Context context, types:ArtifactTriggerInput input) returns types:ArtifactTriggerResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        types:Component? component = check storage:getComponentById(input.componentId);
+        if component is () {
+            return error("Integration not found");
+        }
+
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = input.componentId);
+
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to trigger task without permission",
+                    userId = userContext.userId, componentId = input.componentId, taskName = input.taskName);
+            return error("Insufficient permissions to trigger task");
+        }
+
+        // Get all MI runtimes for this component
+        types:Runtime[] runtimes = check storage:getRuntimes((), "MI", (), component.projectId, input.componentId);
+
+        if runtimes.length() == 0 {
+            log:printWarn("No MI runtimes found for component", componentId = input.componentId);
+            return {
+                status: "failed",
+                message: "No MI runtimes found for this component",
+                successCount: 0,
+                failedCount: 0,
+                details: []
+            };
+        }
+
+        log:printInfo("Creating MI control commands for task trigger",
+                componentId = input.componentId,
+                taskName = input.taskName,
+                runtimeCount = runtimes.length());
+
+        types:MIControlAction action = types:ARTIFACT_TRIGGER;
+
+        int successCount = 0;
+        int failedCount = 0;
+        string[] details = [];
+
+        // Insert MI control command for each runtime
+        foreach types:Runtime runtime in runtimes {
+            boolean isRunning = runtime.status == types:RUNNING;
+            string commandStatus = isRunning ? "sent" : "pending";
+
+            error? result = storage:insertMIControlCommand(
+                    runtime.runtimeId,
+                    input.componentId,
+                    input.taskName,
+                    types:TASK,
+                    action,
+                    commandStatus,
+                    userContext.userId
+            );
+
+            if result is error {
+                failedCount += 1;
+                string detail = string `Runtime ${runtime.runtimeId}: FAILED - ${result.message()}`;
+                details.push(detail);
+                log:printError("Failed to insert MI control command for runtime",
+                        runtimeId = runtime.runtimeId,
+                        taskName = input.taskName,
+                        errorMessage = result.message());
+            } else if isRunning {
+                // Runtime is online, fire the async HTTP request immediately (fire-and-forget)
+                string actionStr = action;
+                storage:sendMIControlCommandAsync(
+                        runtime.runtimeId,
+                        types:TASK,
+                        input.taskName,
+                        actionStr
+                );
+
+                successCount += 1;
+                string detail = string `Runtime ${runtime.runtimeId}: Command sent`;
+                details.push(detail);
+                log:printDebug("MI control command sent for runtime",
+                        runtimeId = runtime.runtimeId,
+                        taskName = input.taskName);
+            } else {
+                // Runtime is offline, command queued as pending for delivery on next heartbeat
+                successCount += 1;
+                string detail = string `Runtime ${runtime.runtimeId}: Command queued (runtime offline)`;
+                details.push(detail);
+                log:printDebug("MI control command queued for offline runtime",
+                        runtimeId = runtime.runtimeId,
+                        taskName = input.taskName);
+            }
+        }
+
+        string overallStatus = successCount > 0 ? "success" : "failed";
+        string message = string `Task trigger sent to ${successCount} out of ${runtimes.length()} runtime(s)`;
+
+        log:printInfo("Task trigger commands sent",
+                componentId = input.componentId,
+                taskName = input.taskName,
                 successCount = successCount,
                 failedCount = failedCount);
 

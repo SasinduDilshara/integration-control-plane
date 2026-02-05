@@ -191,7 +191,8 @@ public enum MIControlAction {
     ARTIFACT_ENABLE,
     ARTIFACT_DISABLE,
     ARTIFACT_ENABLE_TRACING,
-    ARTIFACT_DISABLE_TRACING
+    ARTIFACT_DISABLE_TRACING,
+    ARTIFACT_TRIGGER
 }
 
 public enum ComponentType {
@@ -1911,6 +1912,21 @@ public type ArtifactTracingChangeResponse record {|
     string status; // "success" or "failed"
     string message;
     int successCount; // Number of runtimes successfully updated
+    int failedCount; // Number of runtimes that failed
+    string[] details; // Detailed status per runtime
+|};
+
+// Input type for triggering task
+public type ArtifactTriggerInput record {|
+    string componentId;
+    string taskName; // Name of the task to trigger
+|};
+
+// Response for artifact trigger
+public type ArtifactTriggerResponse record {|
+    string status; // "success" or "failed"
+    string message;
+    int successCount; // Number of runtimes successfully triggered
     int failedCount; // Number of runtimes that failed
     string[] details; // Detailed status per runtime
 |};

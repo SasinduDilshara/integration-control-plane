@@ -63,9 +63,16 @@ public isolated function sendMIControlCommandAsync(string runtimeId, string arti
         json payload;
 
         // Determine API endpoint and payload based on action type
-        if action == types:ARTIFACT_ENABLE || action == types:ARTIFACT_DISABLE {
-            // Status change: active/inactive
-            string status = action == types:ARTIFACT_ENABLE ? "active" : "inactive";
+        if action == types:ARTIFACT_ENABLE || action == types:ARTIFACT_DISABLE || action == types:ARTIFACT_TRIGGER {
+            // Status change: active/inactive/trigger
+            string status;
+            if action == types:ARTIFACT_ENABLE {
+                status = "active";
+            } else if action == types:ARTIFACT_DISABLE {
+                status = "inactive";
+            } else {
+                status = "trigger";
+            }
             payload = {
                 "type": artifactType,
                 "name": artifactName,

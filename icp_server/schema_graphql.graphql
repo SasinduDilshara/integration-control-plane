@@ -51,8 +51,8 @@ type Mutation {
   updateComponent(component: ComponentUpdateInput!): Component!
 
   # Artifact Control Mutations
-  changeArtifactStatus(input: ArtifactStatusChangeInput!): ArtifactStatusChangeResponse!
-  changeArtifactTracing(input: ArtifactTracingChangeInput!): ArtifactTracingChangeResponse!
+  updateArtifactStatus(input: ArtifactStatusChangeInput!): ArtifactStatusChangeResponse!
+  updateArtifactTracingStatus(input: ArtifactTracingChangeInput!): ArtifactTracingChangeResponse!
 
   # Listener Control Mutations
   updateListenerState(input: ListenerControlInput!): ListenerControlResponse!
@@ -89,6 +89,7 @@ type Artifacts {
   endpoints: [MIEndpoint!]!
   inboundEndpoints: [InboundEndpoint!]!
   sequences: [Sequence!]!
+  tasks: [Task!]!
 }
 
 # ============================================
@@ -192,6 +193,15 @@ type Sequence {
   container: String
   state: ArtifactState!
   tracing: String!
+}
+
+# ============================================
+# Task Type - MI Scheduled Task Artifacts
+# ============================================
+type Task {
+  name: String!
+  group: String
+  state: ArtifactState!
 }
 
 # ============================================

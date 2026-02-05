@@ -92,7 +92,7 @@ Mutation (OFFLINE):        pending  -->  sent  (queued; delivered on next heartb
 
 ### Flow 1: User changes artifact status (mutation)
 
-Trigger: `changeArtifactStatus` GraphQL mutation (`graphql_api.bal`).
+Trigger: `updateArtifactStatus` GraphQL mutation (`graphql_api.bal`).
 
 ```
 1. Validate input and check PERMISSION_INTEGRATION_EDIT or PERMISSION_INTEGRATION_MANAGE.
@@ -115,7 +115,7 @@ Trigger: `changeArtifactStatus` GraphQL mutation (`graphql_api.bal`).
 
 ### Flow 2: User changes artifact tracing (mutation)
 
-Trigger: `changeArtifactTracing` GraphQL mutation (`graphql_api.bal`).
+Trigger: `updateArtifactTracingStatus` GraphQL mutation (`graphql_api.bal`).
 
 Identical to Flow 1 except:
 - Action: `ARTIFACT_ENABLE_TRACING` or `ARTIFACT_DISABLE_TRACING`.
@@ -168,8 +168,8 @@ Intended states ensure that newly registered or reconnecting runtimes converge t
 
 **When an intended state is recorded:**
 - `updateListenerState` mutation (BI) -- calls `upsertBIArtifactIntendedState`.
-- `changeArtifactStatus` mutation (MI) -- calls `upsertMIArtifactIntendedStatus`.
-- `changeArtifactTracing` mutation (MI) -- calls `upsertMIArtifactIntendedTracing`.
+- `updateArtifactStatus` mutation (MI) -- calls `upsertMIArtifactIntendedStatus`.
+- `updateArtifactTracingStatus` mutation (MI) -- calls `upsertMIArtifactIntendedTracing`.
 
 **When an intended state is checked:**
 - Every heartbeat (full or delta) triggers `processIntendedStates`, which calls the appropriate BI/MI function to compare current vs intended and insert commands for mismatches.
@@ -183,7 +183,7 @@ Intended states ensure that newly registered or reconnecting runtimes converge t
 
 | File | Responsibility |
 |---|---|
-| `graphql_api.bal` | Mutation entry points: `updateListenerState`, `changeArtifactStatus`, `changeArtifactTracing` |
+| `graphql_api.bal` | Mutation entry points: `updateListenerState`, `updateArtifactStatus`, `updateArtifactTracingStatus` |
 | `modules/storage/heartbeat_repository.bal` | Heartbeat processing, intended state comparison, command insertion during sync |
 | `modules/storage/repository_common.bal` | CRUD operations: insert/send/mark commands, UPSERT intended states, async HTTP delivery |
 | `modules/types/types.bal` | Type definitions: `ControlCommand`, `MIRuntimeControlCommand`, enums, DB record types |
@@ -229,13 +229,13 @@ Intended states ensure that newly registered or reconnecting runtimes converge t
 ### MI Control Commands
 
 7. **Artifact status change via mutation (RUNNING runtime)**
-   - Call `changeArtifactStatus` with status="active" for a component with a RUNNING MI runtime.
+   - Call `updateArtifactStatus` with status="active" for a component with a RUNNING MI runtime.
    - Verify a command is inserted with status=`sent` and `sent_at` is set.
    - Verify the intended state is recorded in `mi_artifact_intended_status`.
    - Verify an HTTP POST is fired to `/icp/artifacts/status`.
 
 8. **Artifact status change via mutation (OFFLINE runtime)**
-   - Call `changeArtifactStatus` with status="active" for a component with an OFFLINE MI runtime.
+   - Call `updateArtifactStatus` with status="active" for a component with an OFFLINE MI runtime.
    - Verify a command is inserted with status=`pending` and `sent_at` is NULL.
    - Verify no HTTP POST is fired.
    - Verify the intended state is still recorded in `mi_artifact_intended_status`.
@@ -244,13 +244,13 @@ Intended states ensure that newly registered or reconnecting runtimes converge t
    - Verify the command status changes from `pending` to `sent`.
 
 9. **Artifact tracing change via mutation (RUNNING runtime)**
-   - Call `changeArtifactTracing` with trace="enable" for a RUNNING MI runtime.
+   - Call `updateArtifactTracingStatus` with trace="enable" for a RUNNING MI runtime.
    - Verify a command is inserted with status=`sent` and `sent_at` is set.
    - Verify the intended state is recorded in `mi_artifact_intended_tracing`.
    - Verify an HTTP POST is fired to `/icp/artifacts/tracing`.
 
 10. **Artifact tracing change via mutation (OFFLINE runtime)**
-    - Call `changeArtifactTracing` with trace="enable" for an OFFLINE MI runtime.
+    - Call `updateArtifactTracingStatus` with trace="enable" for an OFFLINE MI runtime.
     - Verify a command is inserted with status=`pending` and `sent_at` is NULL.
     - Verify no HTTP POST is fired.
     - Verify the command is delivered on the next heartbeat.
@@ -279,7 +279,7 @@ Intended states ensure that newly registered or reconnecting runtimes converge t
 
 15. **Mixed RUNNING and OFFLINE runtimes in a component**
     - Register two MI runtimes under the same component: one RUNNING, one OFFLINE.
-    - Call `changeArtifactStatus`.
+    - Call `updateArtifactStatus`.
     - Verify the RUNNING runtime gets a command with status=`sent` and HTTP is fired.
     - Verify the OFFLINE runtime gets a command with status=`pending` and no HTTP is fired.
     - Verify success counts include both runtimes.
@@ -288,7 +288,7 @@ Intended states ensure that newly registered or reconnecting runtimes converge t
 
 16. **MI command HTTP failure does not block the flow**
     - Simulate an unreachable RUNNING MI runtime (management API down).
-    - Call `changeArtifactStatus`.
+    - Call `updateArtifactStatus`.
     - Verify the command is still inserted with status=`sent`.
     - Verify the mutation returns success (fire-and-forget semantics).
 
@@ -300,5 +300,5 @@ Intended states ensure that newly registered or reconnecting runtimes converge t
 
 18. **Authorization**
     - Verify `updateListenerState` requires `PERMISSION_INTEGRATION_MANAGE`.
-    - Verify `changeArtifactStatus` and `changeArtifactTracing` require `PERMISSION_INTEGRATION_EDIT` or `PERMISSION_INTEGRATION_MANAGE`.
+    - Verify `updateArtifactStatus` and `updateArtifactTracingStatus` require `PERMISSION_INTEGRATION_EDIT` or `PERMISSION_INTEGRATION_MANAGE`.
     - Verify unauthorized requests are rejected.
