@@ -5,6 +5,7 @@ import { useState, type JSX } from 'react';
 import { useProject, useComponents, type GqlComponent } from '../api/queries';
 import NotFound from '../components/NotFound';
 import { formatDistanceToNow } from '../utils/time';
+import { componentOverviewUrl, orgHomeUrl } from '../paths';
 
 function IntegrationsTable({ components, isLoading, onSelect }: { components: GqlComponent[]; isLoading: boolean; onSelect: (handler: string) => void }) {
   const [query, setQuery] = useState('');
@@ -69,7 +70,9 @@ function IntegrationsTable({ components, isLoading, onSelect }: { components: Gq
                   </ListingTable.Cell>
                   <ListingTable.Cell>{c.componentType}</ListingTable.Cell>
                   <ListingTable.Cell>
-                    <Typography variant="body2" color="text.secondary">{formatDistanceToNow(c.lastBuildDate)}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {formatDistanceToNow(c.lastBuildDate)}
+                    </Typography>
                   </ListingTable.Cell>
                 </ListingTable.Row>
               ))}
@@ -121,33 +124,45 @@ export default function Project(): JSX.Element {
   const { data: components = [], isLoading: loadingComponents } = useComponents(orgHandler, projectId);
 
   if (loadingProject) {
-    return <PageContent sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}><CircularProgress /></PageContent>;
+    return (
+      <PageContent sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+        <CircularProgress />
+      </PageContent>
+    );
   }
   if (!project) {
-    return <NotFound message="Project not found" backTo={`/organizations/${orgHandler}/home`} backLabel="Back to Projects" />;
+    return <NotFound message="Project not found" backTo={orgHomeUrl(orgHandler)} backLabel="Back to Projects" />;
   }
 
   return (
     <PageContent>
-        <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 4 }}>
+      <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 4 }}>
         <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{project?.name?.[0]?.toUpperCase() ?? 'P'}</Avatar>
         <div>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>{project.name}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>{project.description}</Typography>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            {project.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {project.description}
+          </Typography>
         </div>
       </Stack>
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 8 }}>
-          <IntegrationsTable components={components} isLoading={loadingComponents} onSelect={(handler) => navigate(`/organizations/${orgHandler}/projects/${projectId}/components/${handler}/overview`)} />
+          <IntegrationsTable components={components} isLoading={loadingComponents} onSelect={(handler) => navigate(componentOverviewUrl(orgHandler, projectId!, handler))} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <Stack gap={3}>
             <Card variant="outlined">
               <CardContent>
                 <Stack direction="row" alignItems="center" gap={1} sx={{ mb: 2 }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>Architecture</Typography>
-                  <IconButton size="small"><RefreshCw size={16} /></IconButton>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Architecture
+                  </Typography>
+                  <IconButton size="small">
+                    <RefreshCw size={16} />
+                  </IconButton>
                 </Stack>
                 <Typography
                   variant="body2"

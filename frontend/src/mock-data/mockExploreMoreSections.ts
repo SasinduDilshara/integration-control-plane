@@ -17,6 +17,7 @@
  */
 
 import { BookOpen, Book, Headphones } from '@wso2/oxygen-ui-icons-react';
+import { docs, support } from '../paths';
 import type { ExploreMoreSection } from './types';
 
 export const mockExploreMoreSections: ExploreMoreSection[] = [
@@ -28,17 +29,17 @@ export const mockExploreMoreSections: ExploreMoreSection[] = [
       {
         id: 't-1',
         label: 'Create your first project',
-        href: '/docs/tutorials/create-project',
+        href: docs.tutorials.createProject,
       },
       {
         id: 't-2',
         label: 'Invite team members',
-        href: '/docs/tutorials/invite-team',
+        href: docs.tutorials.inviteTeam,
       },
       {
         id: 't-3',
         label: 'Configure basic settings',
-        href: '/docs/tutorials/configure-settings',
+        href: docs.tutorials.configureSettings,
       },
     ],
   },
@@ -50,12 +51,12 @@ export const mockExploreMoreSections: ExploreMoreSection[] = [
       {
         id: 'r-1',
         label: 'Application concepts',
-        href: '/docs/references/concepts',
+        href: docs.references.concepts,
       },
       {
         id: 'r-2',
         label: 'Configuration reference',
-        href: '/docs/references/configuration',
+        href: docs.references.configuration,
       },
     ],
   },
@@ -67,12 +68,12 @@ export const mockExploreMoreSections: ExploreMoreSection[] = [
       {
         id: 's-1',
         label: 'Help center',
-        href: '/support/help-center',
+        href: support.helpCenter,
       },
       {
         id: 's-2',
         label: 'Contact support',
-        href: '/support/contact',
+        href: support.contact,
       },
     ],
   },

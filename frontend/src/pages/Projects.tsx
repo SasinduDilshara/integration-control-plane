@@ -5,6 +5,7 @@ import { useState, type JSX } from 'react';
 import { useProjects, type GqlProject } from '../api/queries';
 import EmptyListing from '../components/EmptyListing';
 import { formatDistanceToNow } from '../utils/time';
+import { newProjectUrl, projectUrl } from '../paths';
 
 function ProjectCard({ project, onClick }: { project: GqlProject; onClick: () => void }) {
   return (
@@ -46,7 +47,7 @@ export default function Projects(): JSX.Element {
         <PageTitle.Header>Projects</PageTitle.Header>
         <PageTitle.SubHeader>Manage your projects and workflows</PageTitle.SubHeader>
         <PageTitle.Actions>
-          <Button variant="contained" startIcon={<Plus size={20} />} onClick={() => navigate(`/organizations/${orgHandler}/projects/new`)}>
+          <Button variant="contained" startIcon={<Plus size={20} />} onClick={() => navigate(newProjectUrl(orgHandler))}>
             New Project
           </Button>
         </PageTitle.Actions>
@@ -79,13 +80,13 @@ export default function Projects(): JSX.Element {
           description={query ? 'Try adjusting your search' : 'Create your first project to get started'}
           showAction={!query}
           actionLabel="Create Project"
-          onAction={() => navigate(`/organizations/${orgHandler}/projects/new`)}
+          onAction={() => navigate(newProjectUrl(orgHandler))}
         />
       ) : (
         <Grid container spacing={2}>
           {filtered.map((p) => (
             <Grid key={p.id} size={{ xs: 12, sm: 6, md: 4 }}>
-              <ProjectCard project={p} onClick={() => navigate(`/organizations/${orgHandler}/projects/${p.id}/home`)} />
+              <ProjectCard project={p} onClick={() => navigate(projectUrl(orgHandler, p.id))} />
             </Grid>
           ))}
         </Grid>

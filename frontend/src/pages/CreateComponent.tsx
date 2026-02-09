@@ -19,6 +19,7 @@
 import { Button, Divider, Form, PageTitle, PageContent, Stack } from '@wso2/oxygen-ui';
 import { useState, type JSX } from 'react';
 import { Link as NavigateLink, useParams } from 'react-router';
+import { projectUrl } from '../paths';
 import { ExternalLinkIcon, Import, Network, WSO2 } from '@wso2/oxygen-ui-icons-react';
 import IntegrationTypeCard from '../components/ComponentCreate/IntegrationTypeCard';
 import IntegrationWizard from '../components/ComponentCreate/IntegrationWizard';
@@ -54,7 +55,7 @@ export default function CreateComponent(): JSX.Element {
   return (
     <PageContent>
       <PageTitle>
-        <PageTitle.BackButton component={step === 'select' ? <NavigateLink to={`/o/${orgId}/projects/${id}`} /> : undefined} onClick={step === 'config' ? () => setStep('select') : undefined} />
+        <PageTitle.BackButton component={step === 'select' && orgId && id ? <NavigateLink to={projectUrl(orgId, id)} /> : undefined} onClick={step === 'config' ? () => setStep('select') : undefined} />
         <PageTitle.Header>{step === 'select' ? 'Get started with your Integration' : 'Import your Integration'}</PageTitle.Header>
         <PageTitle.SubHeader>Follow the steps below to {step === 'select' ? 'create a new' : 'import your'} integration</PageTitle.SubHeader>
       </PageTitle>

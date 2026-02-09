@@ -21,6 +21,7 @@ import type { JSX } from 'react';
 import { Alert, Box, Button, Checkbox, Divider, FormControlLabel, IconButton, InputAdornment, InputLabel, Link, OutlinedInput, Typography } from '@wso2/oxygen-ui';
 import { Eye, EyeOff, GitHub, Google } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate } from 'react-router';
+import { orgHomeUrl } from '../paths';
 
 export default function LoginForm(): JSX.Element {
   const [error] = useState(false);
@@ -42,7 +43,7 @@ export default function LoginForm(): JSX.Element {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    navigate('/organizations/default/home');
+    navigate(orgHomeUrl('default'));
   };
 
   return (

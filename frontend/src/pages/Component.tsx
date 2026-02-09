@@ -4,6 +4,7 @@ import { useParams } from 'react-router';
 import { useState, type JSX } from 'react';
 import { useComponentByHandler, useEnvironments, useRuntimes, useArtifactTypes, useArtifacts, type GqlEnvironment, type GqlRuntime, type GqlArtifact, ARTIFACT_QUERY_MAP } from '../api/queries';
 import NotFound from '../components/NotFound';
+import { projectUrl } from '../paths';
 
 function RuntimesTable({ envId, projectId, componentId }: { envId: string; projectId: string; componentId: string }) {
   const { data: runtimes = [], isLoading } = useRuntimes(envId, projectId, componentId);
@@ -11,8 +12,7 @@ function RuntimesTable({ envId, projectId, componentId }: { envId: string; proje
 
   const filtered = runtimes.filter((r) => !query || r.runtimeId.toLowerCase().includes(query.toLowerCase()) || r.runtimeType.toLowerCase().includes(query.toLowerCase()) || r.status.toLowerCase().includes(query.toLowerCase()));
 
-  if (isLoading)
-    return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
+  if (isLoading) return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
   if (runtimes.length === 0)
     return (
       <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
@@ -128,8 +128,7 @@ function ArtifactsPanel({ envId, componentId }: { envId: string; componentId: st
   const activeType = selectedType ?? types[0]?.artifactType ?? '';
   const { data: artifacts = [], isLoading: loadingArtifacts } = useArtifacts(activeType, envId, componentId);
 
-  if (isLoading)
-    return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
+  if (isLoading) return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
   if (types.length === 0)
     return (
       <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
@@ -177,11 +176,7 @@ function ArtifactsPanel({ envId, componentId }: { envId: string; componentId: st
             },
           }}
         />
-        {loadingArtifacts ? (
-          <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />
-        ) : (
-          <ArtifactDetail artifacts={artifacts} artifactType={activeType} query={query} />
-        )}
+        {loadingArtifacts ? <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} /> : <ArtifactDetail artifacts={artifacts} artifactType={activeType} query={query} />}
       </Grid>
     </Grid>
   );
@@ -213,17 +208,23 @@ export default function Component(): JSX.Element {
   const { data: environments = [] } = useEnvironments(projectId);
 
   if (isLoading) {
-    return <PageContent sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}><CircularProgress /></PageContent>;
+    return (
+      <PageContent sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
+        <CircularProgress />
+      </PageContent>
+    );
   }
   if (!component) {
-    return <NotFound message="Component not found" backTo={`/organizations/${orgHandler}/projects/${projectId}/home`} backLabel="Back to Project" />;
+    return <NotFound message="Component not found" backTo={projectUrl(orgHandler, projectId)} backLabel="Back to Project" />;
   }
 
   return (
     <PageContent>
       <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 1 }}>
         <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{component?.displayName?.[0]?.toUpperCase() ?? 'C'}</Avatar>
-        <Typography variant="h4" sx={{ fontWeight: 700 }}>{component?.displayName ?? componentHandler}</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          {component?.displayName ?? componentHandler}
+        </Typography>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 4, ml: 9 }}>
         {component?.description || '+ Add Description'}

@@ -21,6 +21,7 @@ import { Box, Button, Card, CardContent, Chip, IconButton, ListingTable, Menu, M
 import { Plus, MoreVertical, Filter, Download, FileText, Key, Shield, RefreshCw, Lock, Inbox } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate, useParams, Link as NavigateLink } from 'react-router';
 import { mockComponents } from '../mock-data/mockComponents';
+import { projectUrl, newComponentUrl, componentOverviewUrl, editComponentUrl } from '../paths';
 import { getStatusColor } from '../config/statusColors';
 
 const ICONS: Record<string, any> = {
@@ -106,14 +107,14 @@ export default function Components(): JSX.Element {
   return (
     <PageContent>
       <PageTitle>
-        <PageTitle.BackButton component={<NavigateLink to={`/o/${orgId}/projects/${id}`} />} />
+        <PageTitle.BackButton component={<NavigateLink to={orgId && id ? projectUrl(orgId, id) : '#'} />} />
         <PageTitle.Header>Components</PageTitle.Header>
         <PageTitle.SubHeader>Manage authentication components</PageTitle.SubHeader>
         <PageTitle.Actions>
           <Button variant="outlined" startIcon={<Download size={18} />}>
             Export
           </Button>
-          <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => navigate(`/projects/${id}/components/new`)}>
+          <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => orgId && id && navigate(newComponentUrl(orgId, id))}>
             New Component
           </Button>
         </PageTitle.Actions>
@@ -145,7 +146,7 @@ export default function Components(): JSX.Element {
                       description="Try adjusting your filters"
                       action={
                         !filters.query && filters.type === 'all' ? (
-                          <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => navigate(`/projects/${id}/components/new`)}>
+                          <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => orgId && id && navigate(newComponentUrl(orgId, id))}>
                             Create Component
                           </Button>
                         ) : undefined
@@ -157,7 +158,7 @@ export default function Components(): JSX.Element {
                 paginated.map((c) => {
                   const TI = Icon(c.type);
                   return (
-                    <ListingTable.Row key={c.id} variant="card" hover clickable onClick={() => navigate(`/projects/${id}/components/${c.id}`)}>
+                    <ListingTable.Row key={c.id} variant="card" hover clickable onClick={() => orgId && id && navigate(componentOverviewUrl(orgId, id, c.id))}>
                       <ListingTable.Cell>
                         <ListingTable.CellIcon icon={<TI size={20} />} primary={c.name} secondary={c.description} />
                       </ListingTable.Cell>
@@ -206,11 +207,11 @@ export default function Components(): JSX.Element {
         anchor={menu.el}
         onClose={() => setMenu({ el: null, id: null })}
         onView={() => {
-          navigate(`/projects/${id}/components/${menu.id}`);
+          orgId && id && menu.id && navigate(componentOverviewUrl(orgId, id, menu.id));
           setMenu({ el: null, id: null });
         }}
         onEdit={() => {
-          navigate(`/projects/${id}/components/${menu.id}/edit`);
+          orgId && id && menu.id && navigate(editComponentUrl(orgId, id, menu.id));
           setMenu({ el: null, id: null });
         }}
       />

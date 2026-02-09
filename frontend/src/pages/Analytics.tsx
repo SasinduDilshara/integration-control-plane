@@ -20,6 +20,7 @@ import { Box, Button, Card, CardContent, Typography, Tabs, Tab, Chip, Divider, L
 import { LineChart, BarChart, PieChart } from '@wso2/oxygen-ui-charts-react';
 import { Activity, FileText, Users, Clock, Logs } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate, useParams } from 'react-router';
+import { orgAnalyticsLogsUrl } from '../paths';
 import { useState, type JSX, type ReactNode } from 'react';
 
 type ChartData<T> = T[];
@@ -128,7 +129,7 @@ export default function AnalyticsOverview(): JSX.Element {
         </PageTitle.Header>
         <PageTitle.SubHeader>Overview of activities</PageTitle.SubHeader>
         <PageTitle.Actions>
-          <Button variant="outlined" startIcon={<Logs size={18} />} onClick={() => navigate(`/o/${orgId}/analytics/logs`)}>
+          <Button variant="outlined" startIcon={<Logs size={18} />} onClick={() => navigate(orgAnalyticsLogsUrl(orgId))}>
             View logs
           </Button>
         </PageTitle.Actions>

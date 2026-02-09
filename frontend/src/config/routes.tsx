@@ -1,4 +1,5 @@
 import { type RouteProps, Navigate } from 'react-router';
+import { rootUrl, loginUrl, orgHomeUrl, projectUrl, componentOverviewUrl } from '../paths';
 import PublicLayout from '../layouts/PublicLayout';
 import Login from '../pages/Login';
 import AppLayout from '../layouts/AppLayout';
@@ -11,17 +12,17 @@ export interface AppRoute extends Omit<RouteProps, 'children'> {
 }
 
 const routes: AppRoute[] = [
-  { path: '/', element: <Navigate to="/login" replace /> },
+  { path: rootUrl(), element: <Navigate to={loginUrl()} replace /> },
   {
     element: <PublicLayout />,
-    children: [{ path: '/login', element: <Login /> }],
+    children: [{ path: loginUrl(), element: <Login /> }],
   },
   {
     element: <AppLayout />,
     children: [
-      { path: '/organizations/:orgHandler/home', element: <Projects /> },
-      { path: '/organizations/:orgHandler/projects/:projectId/home', element: <Project /> },
-      { path: '/organizations/:orgHandler/projects/:projectId/components/:componentHandler/overview', element: <Component /> },
+      { path: orgHomeUrl(':orgHandler'), element: <Projects /> },
+      { path: projectUrl(':orgHandler', ':projectId'), element: <Project /> },
+      { path: componentOverviewUrl(':orgHandler', ':projectId', ':componentHandler'), element: <Component /> },
     ],
   },
 ];

@@ -19,6 +19,7 @@
 import { Box, Button, Typography, Card, CardContent } from '@wso2/oxygen-ui';
 import { Home, RefreshCw, ArrowLeft, AlertCircle } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate, useSearchParams } from 'react-router';
+import { rootUrl } from '../paths';
 import type { JSX } from 'react';
 
 interface ErrorType {
@@ -80,7 +81,7 @@ export default function ErrorPage(): JSX.Element {
   const error = errorTypes[errorType] || errorTypes['404'];
 
   const handleGoHome = () => {
-    navigate('/');
+    navigate(rootUrl());
   };
 
   const handleGoBack = () => {

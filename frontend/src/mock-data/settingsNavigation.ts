@@ -17,6 +17,7 @@
  */
 
 import { Settings, Bell, HelpCircle } from '@wso2/oxygen-ui-icons-react';
+import { settings, help } from '../paths';
 import type { NavigationCategory } from './types';
 
 /**
@@ -29,19 +30,19 @@ export const settingsNavigation: NavigationCategory = {
       id: 'settings',
       label: 'Settings',
       icon: Settings,
-      href: '/settings',
+      href: settings.base,
     },
     {
       id: 'notifications-settings',
       label: 'Notifications',
       icon: Bell,
-      href: '/settings/notifications',
+      href: settings.notifications,
     },
     {
       id: 'help',
       label: 'Help & Support',
       icon: HelpCircle,
-      href: '/help',
+      href: help,
     },
   ],
 };

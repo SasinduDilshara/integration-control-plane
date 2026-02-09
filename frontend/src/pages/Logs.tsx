@@ -19,6 +19,7 @@
 import { Box, Button, Card, CardContent, Typography, TextField, InputAdornment, Chip, Select, MenuItem, FormControl, FormLabel, Switch, FormControlLabel, Divider, PageContent, PageTitle } from '@wso2/oxygen-ui';
 import { Search, Download, RefreshCw, Filter, AlertCircle, CheckCircle, AlertTriangle, Info } from '@wso2/oxygen-ui-icons-react';
 import { Link as NavigateLink, useParams } from 'react-router';
+import { orgAnalyticsUrl } from '../paths';
 import { useState, type JSX, type ReactNode } from 'react';
 
 interface LogEntry {
@@ -129,7 +130,7 @@ export default function Logs(): JSX.Element {
   return (
     <PageContent>
       <PageTitle>
-        <PageTitle.BackButton component={<NavigateLink to={`/o/${orgId}/analytics`} />} />
+        <PageTitle.BackButton component={<NavigateLink to={orgAnalyticsUrl(orgId ?? 'default')} />} />
         <PageTitle.Header>Activity Logs</PageTitle.Header>
         <PageTitle.SubHeader>View and monitor authentication events and system activities</PageTitle.SubHeader>
         <PageTitle.Actions>

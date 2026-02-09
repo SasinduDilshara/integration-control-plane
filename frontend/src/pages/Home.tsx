@@ -23,6 +23,7 @@ import reactLogo from '/react.svg';
 import viteLogo from '/vite.svg';
 import { Lightbulb, WSO2 } from '@wso2/oxygen-ui-icons-react';
 import routes from '../config/routes';
+import { external } from '../paths';
 
 export default function Home(): JSX.Element {
   const [count, setCount] = useState(0);
@@ -30,10 +31,10 @@ export default function Home(): JSX.Element {
   return (
     <Box sx={{ textAlign: 'center', mx: 'auto', maxWidth: '1280px', p: 2 }}>
       <div>
-        <a href="https://vite.dev" target="_blank">
+        <a href={external.vite} target="_blank">
           <img src={viteLogo} className="logo" alt="Vite logo" />
         </a>
-        <a href="https://react.dev" target="_blank">
+        <a href={external.react} target="_blank">
           <img src={reactLogo} className="logo react" alt="React logo" />
         </a>
       </div>
@@ -76,7 +77,7 @@ export default function Home(): JSX.Element {
       <Box sx={{ mt: 12 }} className="footer">
         <Typography variant="body2">
           Powered by&nbsp;
-          <Link href="https://github.com/wso2/oxygen-ui/tree/next" target="_blank" rel="noopener noreferrer">
+          <Link href={external.oxygenUi} target="_blank" rel="noopener noreferrer">
             WSO2 <WSO2 size={22} style={{ verticalAlign: 'bottom' }} /> Oxygen UI
           </Link>
         </Typography>

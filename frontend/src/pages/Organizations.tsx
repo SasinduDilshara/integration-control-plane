@@ -20,6 +20,7 @@ import { Box, Button, PageContent, PageTitle, Typography, Chip, IconButton, Sear
 import { Plus, Folder, ExternalLink, Info, Edit, Trash2, SlidersHorizontal, Building2, ArrowRight } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate } from 'react-router';
 import { useMemo, useState, type JSX } from 'react';
+import { newOrgUrl, editOrgUrl, orgProjectsUrl, external } from '../paths';
 import { mockOrganizations } from '../mock-data/mockOrganizations';
 import { mockExploreMoreSections } from '../mock-data/mockExploreMoreSections';
 import type { Organization, ExploreMoreSection } from '../mock-data/types';
@@ -61,12 +62,12 @@ export default function Organizations(): JSX.Element {
         <PageTitle.Header>Organizations</PageTitle.Header>
         <PageTitle.SubHeader>
           Create and manage organizations
-          <Link href="https://www.wso2.com" target="_blank" rel="noopener noreferrer" sx={{ ml: 1 }}>
+          <Link href={external.wso2} target="_blank" rel="noopener noreferrer" sx={{ ml: 1 }}>
             <ExternalLink size={16} /> Learn More
           </Link>
         </PageTitle.SubHeader>
         <PageTitle.Actions>
-          <Button variant="contained" startIcon={<Plus size={20} />} onClick={() => navigate('/organizations/new')}>
+          <Button variant="contained" startIcon={<Plus size={20} />} onClick={() => navigate(newOrgUrl())}>
             New Organization
           </Button>
         </PageTitle.Actions>
@@ -83,14 +84,14 @@ export default function Organizations(): JSX.Element {
           description={query ? 'Try adjusting your search' : 'Create your first organization to get started'}
           showAction={!query}
           actionLabel="Create Organization"
-          onAction={() => navigate('/organizations/new')}
+          onAction={() => navigate(newOrgUrl())}
         />
       ) : (
         <ListingTable.Container sx={{ width: '100%' }} disablePaper>
           <ListingTable variant="card" density="standard">
             <ListingTable.Body>
               {organizations.map((org: Organization) => (
-                <ListingTable.Row key={org.id} variant="card" hover clickable onClick={() => navigate(`/o/${org.orgId}/projects`)}>
+                <ListingTable.Row key={org.id} variant="card" hover clickable onClick={() => navigate(orgProjectsUrl(org.orgId))}>
                   <ListingTable.Cell>
                     <Box display="flex" alignItems="center" justifyContent="space-between" gap={2}>
                       <Box display="flex" alignItems="center" gap={2} minWidth={0}>
@@ -147,7 +148,7 @@ export default function Organizations(): JSX.Element {
                           {
                             title: 'Edit',
                             icon: <Edit size={18} />,
-                            action: () => navigate(`/organizations/${org.id}/edit`),
+                            action: () => navigate(editOrgUrl(org.id)),
                           },
                           {
                             title: 'Delete',

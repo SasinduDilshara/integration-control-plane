@@ -17,6 +17,7 @@
  */
 
 import { Home, BarChart3, Users, FolderOpen, Layers, Shield, Database, Globe, Activity, PieChart, TrendingUp, UserCog, Lock, Key, FileText } from '@wso2/oxygen-ui-icons-react';
+import { dashboard, analytics, users, projects, integrations, security, databases, domains } from '../paths';
 import type { NavigationCategory } from './types';
 
 /**
@@ -31,7 +32,7 @@ export const navigationCategories: NavigationCategory[] = [
         id: 'dashboard',
         label: 'Dashboard',
         icon: Home,
-        href: '/dashboard',
+        href: dashboard,
       },
       {
         id: 'analytics',
@@ -42,25 +43,25 @@ export const navigationCategories: NavigationCategory[] = [
             id: 'analytics-overview',
             label: 'Overview',
             icon: PieChart,
-            href: '/analytics/overview',
+            href: analytics.overview,
           },
           {
             id: 'analytics-reports',
             label: 'Reports',
             icon: FileText,
-            href: '/analytics/reports',
+            href: analytics.reports,
           },
           {
             id: 'analytics-realtime',
             label: 'Real-time',
             icon: Activity,
-            href: '/analytics/realtime',
+            href: analytics.realtime,
           },
           {
             id: 'analytics-trends',
             label: 'Trends',
             icon: TrendingUp,
-            href: '/analytics/trends',
+            href: analytics.trends,
           },
         ],
       },
@@ -80,19 +81,19 @@ export const navigationCategories: NavigationCategory[] = [
             id: 'users-list',
             label: 'All Users',
             icon: Users,
-            href: '/users',
+            href: users.list,
           },
           {
             id: 'users-roles',
             label: 'Roles',
             icon: UserCog,
-            href: '/users/roles',
+            href: users.roles,
           },
           {
             id: 'users-permissions',
             label: 'Permissions',
             icon: Lock,
-            href: '/users/permissions',
+            href: users.permissions,
           },
         ],
       },
@@ -100,13 +101,13 @@ export const navigationCategories: NavigationCategory[] = [
         id: 'projects',
         label: 'Projects',
         icon: FolderOpen,
-        href: '/projects',
+        href: projects,
       },
       {
         id: 'integrations',
         label: 'Integrations',
         icon: Layers,
-        href: '/integrations',
+        href: integrations,
       },
     ],
   },
@@ -123,13 +124,13 @@ export const navigationCategories: NavigationCategory[] = [
             id: 'security-overview',
             label: 'Overview',
             icon: Shield,
-            href: '/security',
+            href: security.overview,
           },
           {
             id: 'security-api-keys',
             label: 'API Keys',
             icon: Key,
-            href: '/security/api-keys',
+            href: security.apiKeys,
           },
         ],
       },
@@ -137,13 +138,13 @@ export const navigationCategories: NavigationCategory[] = [
         id: 'databases',
         label: 'Databases',
         icon: Database,
-        href: '/databases',
+        href: databases,
       },
       {
         id: 'domains',
         label: 'Domains',
         icon: Globe,
-        href: '/domains',
+        href: domains,
       },
     ],
   },

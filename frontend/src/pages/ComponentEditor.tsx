@@ -19,6 +19,7 @@
 import { Box, Button, Card, CardContent, Typography, TextField, IconButton, Tabs, Tab, Divider, FormControl, FormLabel, Switch, PageContent, FormControlLabel, Select, MenuItem, Chip, Grid } from '@wso2/oxygen-ui';
 import { ArrowLeft, Save, Eye, Code, Settings, Play, Undo, Redo } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate, useParams } from 'react-router';
+import { projectUrl } from '../paths';
 import { useState, type JSX } from 'react';
 
 const DEFAULT_CONFIG = {
@@ -186,7 +187,7 @@ export default function ComponentEditor(): JSX.Element {
   return (
     <PageContent fullWidth noPadding>
       <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
-        <Toolbar onBack={() => navigate(`/o/${orgId}/projects/${id}`)} onTest={() => {}} onPreview={() => setPreview(!preview)} isPreview={preview} onSave={() => {}} />
+        <Toolbar onBack={() => navigate(projectUrl(orgId!, id!))} onTest={() => {}} onPreview={() => setPreview(!preview)} isPreview={preview} onSave={() => {}} />
         <Box sx={{ flexGrow: 1, display: 'flex', overflow: 'hidden' }}>
           <Box
             sx={{
