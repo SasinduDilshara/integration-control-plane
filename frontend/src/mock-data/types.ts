@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 
 /**
  * Navigation item for sidebar menus.
@@ -120,102 +120,6 @@ export interface User {
   avatar?: string;
   /** User's role or plan */
   role?: string;
-}
-
-/**
- * App Shell context value for state management.
- * Demonstrates proper context pattern for shell state.
- */
-export interface AppShellContextValue {
-  /** Whether the sidebar is collapsed */
-  sidebarCollapsed: boolean;
-  /** Toggle sidebar collapsed state */
-  toggleSidebar: () => void;
-  /** Set sidebar collapsed state directly */
-  setSidebarCollapsed: (collapsed: boolean) => void;
-
-  /** Whether the notification panel is open */
-  notificationPanelOpen: boolean;
-  /** Toggle notification panel */
-  toggleNotificationPanel: () => void;
-  /** Set notification panel state directly */
-  setNotificationPanelOpen: (open: boolean) => void;
-
-  /** Current notifications */
-  notifications: NotificationItem[];
-  /** Mark a notification as read */
-  markNotificationRead: (id: string) => void;
-  /** Dismiss/remove a notification */
-  dismissNotification: (id: string) => void;
-  /** Clear all notifications */
-  clearAllNotifications: () => void;
-
-  /** Currently selected organization */
-  selectedOrg: Organization | null;
-  /** Set selected organization */
-  setSelectedOrg: (org: Organization) => void;
-
-  /** Currently selected project */
-  selectedProject: Project | null;
-  /** Set selected project */
-  setSelectedProject: (project: Project) => void;
-
-  /** Currently active menu item */
-  activeMenuItem: string;
-  /** Set active menu item */
-  setActiveMenuItem: (id: string) => void;
-
-  /** Expanded sub-menu IDs */
-  expandedMenus: Record<string, boolean>;
-  /** Toggle a sub-menu expansion */
-  toggleMenu: (id: string) => void;
-
-  /** Current user */
-  user: User;
-}
-
-/**
- * Props for the notification banner component.
- */
-export interface NotificationBannerProps {
-  /** Whether the banner is visible */
-  visible?: boolean;
-  /** Banner severity/type */
-  severity?: 'info' | 'warning' | 'error' | 'success';
-  /** Banner title */
-  title?: string;
-  /** Banner message */
-  message: string;
-  /** Optional action button label */
-  actionLabel?: string;
-  /** Action button callback */
-  onAction?: () => void;
-  /** Dismiss callback */
-  onDismiss?: () => void;
-}
-
-/**
- * Props for the confirm dialog component.
- */
-export interface ConfirmDialogProps {
-  /** Whether the dialog is open */
-  open: boolean;
-  /** Dialog title */
-  title: string;
-  /** Dialog message/content */
-  message: string | ReactNode;
-  /** Confirm button label */
-  confirmLabel?: string;
-  /** Cancel button label */
-  cancelLabel?: string;
-  /** Whether this is a destructive action (styles confirm button red) */
-  destructive?: boolean;
-  /** Whether confirm action is in progress */
-  loading?: boolean;
-  /** Confirm callback */
-  onConfirm: () => void;
-  /** Cancel/close callback */
-  onCancel: () => void;
 }
 
 export interface Component {
