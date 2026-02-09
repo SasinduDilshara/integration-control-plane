@@ -48,7 +48,7 @@ import Logo from '../components/Logo';
 import { BarChart3, Bell, Building, ChevronRight, LayoutDashboard, LogOut, ScrollText, Settings, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
 import { useProject, useProjects, useComponents } from '../api/queries';
 import { mockNotifications } from '../mock-data/mockNotifications';
-import { orgUrl, projectUrl, componentUrl, loginUrl } from '../paths';
+import { orgUrl, projectUrl, componentUrl, projectLogsUrl, componentLogsUrl, loginUrl } from '../paths';
 
 export default function AppLayout(): JSX.Element {
   const navigate = useNavigate();
@@ -194,12 +194,14 @@ export default function AppLayout(): JSX.Element {
               <>
                 <Sidebar.Category>
                   <Sidebar.CategoryLabel>Observability</Sidebar.CategoryLabel>
-                  <Sidebar.Item id="logs">
-                    <Sidebar.ItemIcon>
-                      <ScrollText size={20} />
-                    </Sidebar.ItemIcon>
-                    <Sidebar.ItemLabel>Logs</Sidebar.ItemLabel>
-                  </Sidebar.Item>
+                  <Link component={NavLink} to={inComponent ? componentLogsUrl(orgHandler, projectId!, componentHandler!) : projectLogsUrl(orgHandler, projectId!)}>
+                    <Sidebar.Item id="logs">
+                      <Sidebar.ItemIcon>
+                        <ScrollText size={20} />
+                      </Sidebar.ItemIcon>
+                      <Sidebar.ItemLabel>Logs</Sidebar.ItemLabel>
+                    </Sidebar.Item>
+                  </Link>
                   <Sidebar.Item id="metrics">
                     <Sidebar.ItemIcon>
                       <BarChart3 size={20} />

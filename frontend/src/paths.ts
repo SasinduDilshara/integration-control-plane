@@ -51,6 +51,14 @@ export function editComponentUrl(orgHandler: string, projectId: string, componen
   return `/organizations/${orgHandler}/projects/${projectId}/components/${componentId}/edit`;
 }
 
+export function projectLogsUrl(orgHandler: string, projectId: string): string {
+  return `/organizations/${orgHandler}/projects/${projectId}/observe/runtimelogs`;
+}
+
+export function componentLogsUrl(orgHandler: string, projectId: string, componentHandler: string): string {
+  return `/organizations/${orgHandler}/projects/${projectId}/components/${componentHandler}/observe/runtimelogs`;
+}
+
 export function orgAnalyticsUrl(orgHandler: string): string {
   return `/organizations/${orgHandler}/analytics`;
 }
@@ -96,3 +104,5 @@ export const support = {
   helpCenter: '/support/help-center',
   contact: '/support/contact',
 } as const;
+
+export const observabilityLogsApiUrl = 'https://localhost:9448/icp/observability/logs?live=true';

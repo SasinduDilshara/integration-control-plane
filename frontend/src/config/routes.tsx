@@ -1,5 +1,5 @@
 import { type RouteProps, Navigate } from 'react-router';
-import { rootUrl, loginUrl, orgUrl, newProjectUrl, projectUrl, componentUrl } from '../paths';
+import { rootUrl, loginUrl, orgUrl, newProjectUrl, projectUrl, componentUrl, projectLogsUrl, componentLogsUrl } from '../paths';
 import PublicLayout from '../layouts/PublicLayout';
 import Login from '../pages/Login';
 import AppLayout from '../layouts/AppLayout';
@@ -7,6 +7,7 @@ import Projects from '../pages/Projects';
 import CreateProject from '../pages/CreateProject';
 import Project from '../pages/Project';
 import Component from '../pages/Component';
+import RuntimeLogs from '../pages/RuntimeLogs';
 
 export interface AppRoute extends Omit<RouteProps, 'children'> {
   children?: AppRoute[];
@@ -25,6 +26,8 @@ const routes: AppRoute[] = [
       { path: newProjectUrl(':orgHandler'), element: <CreateProject /> },
       { path: projectUrl(':orgHandler', ':projectId'), element: <Project /> },
       { path: componentUrl(':orgHandler', ':projectId', ':componentHandler'), element: <Component /> },
+      { path: projectLogsUrl(':orgHandler', ':projectId'), element: <RuntimeLogs /> },
+      { path: componentLogsUrl(':orgHandler', ':projectId', ':componentHandler'), element: <RuntimeLogs /> },
     ],
   },
 ];
