@@ -38,14 +38,7 @@ import { Clock, Plus, RefreshCw, Info, Link as LinkIcon } from '@wso2/oxygen-ui-
 import type { JSX } from 'react'
 import { Link as NavigateLink, useNavigate, useParams } from 'react-router'
 import { mockProjects } from '../mock-data/mockProjects'
-
-interface Component {
-  id: string
-  name: string
-  type: string
-  status: 'active' | 'inactive'
-  lastModified: string
-}
+import type { Component } from '../mock-data/types'
 
 type McpServer = {
   id: string

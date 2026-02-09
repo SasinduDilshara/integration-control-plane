@@ -48,13 +48,7 @@ import { useMemo, useState } from 'react'
 import type { JSX } from 'react'
 import { mockOrganizations } from '../mock-data/mockOrganizations'
 import { mockExploreMoreSections } from '../mock-data/mockExploreMoreSections'
-
-interface Organization {
-  id: string
-  name: string
-  orgId: string
-  status: 'active' | 'inactive'
-}
+import type { Organization } from '../mock-data/types'
 
 export default function Organizations(): JSX.Element {
   const navigate = useNavigate()

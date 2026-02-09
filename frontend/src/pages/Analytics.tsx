@@ -39,14 +39,7 @@ import { Activity, FileText, Users, Clock, Logs } from '@wso2/oxygen-ui-icons-re
 import { useNavigate, useParams } from 'react-router'
 import { useState } from 'react'
 import type { JSX } from 'react'
-
-interface Component {
-  id: string
-  name: string
-  type: string
-  status: 'active' | 'inactive'
-  lastModified: string
-}
+import type { Component } from '../mock-data/types'
 
 const mockComponents: Component[] = [
   {

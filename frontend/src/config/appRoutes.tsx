@@ -24,7 +24,7 @@ import GateLayout from '../layouts/GateLayout'
 import ProjectOverview from '../pages/ProjectOverview'
 import ComponentCreate from '../pages/ComponentCreate'
 import ComponentList from '../pages/ComponentList'
-import EmptyComponentList from '../pages/EmptyComponentList'
+
 import LogView from '../pages/LogView'
 import LoginEditorView from '../pages/LoginEditorView'
 import SettingsPage from '../pages/SettingsPage'
@@ -121,12 +121,7 @@ const appRoutes: AppRoute[] = [
         label: 'Components',
         showInNav: false,
       },
-      {
-        path: '/o/:orgId/projects/:id/components/empty',
-        element: <EmptyComponentList />,
-        label: 'Empty Component List',
-        showInNav: false,
-      },
+
       {
         path: '/o/:orgId/projects/:id/components/new',
         element: <ComponentCreate />,

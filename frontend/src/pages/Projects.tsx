@@ -36,15 +36,7 @@ import { useNavigate, useParams } from 'react-router'
 import { useState } from 'react'
 import type { JSX } from 'react'
 import { mockProjects } from '../mock-data/mockProjects'
-
-interface Project {
-  id: string
-  name: string
-  description: string
-  status: 'active' | 'archived' | 'draft'
-  componentsCount: number
-  lastUpdated: string
-}
+import type { Project } from '../mock-data/types'
 
 export default function Projects(): JSX.Element {
   const navigate = useNavigate()
