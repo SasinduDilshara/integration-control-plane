@@ -18,60 +18,27 @@
 
 import { type RouteProps, Navigate } from 'react-router'
 import DefaultLayout from '../layouts/DefaultLayout'
-import HomePage from '../pages/HomePage'
-import LoginPage from '../pages/LoginPage'
+import Home from '../pages/Home'
+import Login from '../pages/Login'
 import GateLayout from '../layouts/GateLayout'
-import ProjectOverview from '../pages/ProjectOverview'
-import ComponentCreate from '../pages/ComponentCreate'
-import ComponentList from '../pages/ComponentList'
-
-import LogView from '../pages/LogView'
-import LoginEditorView from '../pages/LoginEditorView'
-import SettingsPage from '../pages/SettingsPage'
-import ErrorPage from '../pages/ErrorPage'
+import Project from '../pages/Project'
+import CreateComponent from '../pages/CreateComponent'
+import Components from '../pages/Components'
+import Logs from '../pages/Logs'
+import ComponentEditor from '../pages/ComponentEditor'
+import Settings from '../pages/Settings'
+import Error from '../pages/Error'
 import AppLayout from '../layouts/AppLayout'
-import AnalyticsOverview from '../pages/Analytics'
+import Analytics from '../pages/Analytics'
 import Projects from '../pages/Projects'
 import Organizations from '../pages/Organizations'
 
-/**
- * Interface representing an application route configuration.
- * Extends React Router's RouteProps but allows nested children of the same type.
- */
 export interface AppRoute extends Omit<RouteProps, 'children'> {
-  /**
-   * Child routes nested under this route.
-   */
   children?: AppRoute[]
-  /**
-   * Label to display in navigation links.
-   */
   label?: string
-  /**
-   * Whether to show this route in navigation.
-   */
   showInNav?: boolean
 }
 
-/**
- * Application routes configuration.
- * Defines the routing structure for the Thunder Gate application.
- *
- * @constant
- * @type {AppRoute[]}
- *
- * @example
- * ```tsx
- * import appRoutes from './config/appRoutes';
- *
- * // Use in React Router
- * <Routes>
- *   {appRoutes.map((route) => (
- *     <Route key={route.path} {...route} />
- *   ))}
- * </Routes>
- * ```
- */
 const appRoutes: AppRoute[] = [
   {
     path: '/',
@@ -82,7 +49,7 @@ const appRoutes: AppRoute[] = [
     children: [
       {
         path: '/login',
-        element: <LoginPage />,
+        element: <Login />,
         label: 'Login Page',
         showInNav: true,
       },
@@ -105,50 +72,49 @@ const appRoutes: AppRoute[] = [
       },
       {
         path: '/o/:orgId/projects/:id',
-        element: <ProjectOverview />,
+        element: <Project />,
         label: 'Project Overview',
         showInNav: false,
       },
       {
         path: '/o/:orgId/analytics',
-        element: <AnalyticsOverview />,
+        element: <Analytics />,
         label: 'Analytics Overview',
         showInNav: false,
       },
       {
         path: '/o/:orgId/projects/:id/components',
-        element: <ComponentList />,
+        element: <Components />,
         label: 'Components',
         showInNav: false,
       },
-
       {
         path: '/o/:orgId/projects/:id/components/new',
-        element: <ComponentCreate />,
+        element: <CreateComponent />,
         label: 'Create Component',
         showInNav: false,
       },
       {
         path: '/o/:orgId/projects/:id/components/:componentId',
-        element: <LoginEditorView />,
+        element: <ComponentEditor />,
         label: 'Component Editor',
         showInNav: false,
       },
       {
         path: '/o/:orgId/projects/:id/components/:componentId/edit',
-        element: <LoginEditorView />,
+        element: <ComponentEditor />,
         label: 'Edit Component',
         showInNav: false,
       },
       {
         path: '/o/:orgId/analytics/logs',
-        element: <LogView />,
+        element: <Logs />,
         label: 'Activity Logs',
         showInNav: false,
       },
       {
         path: '/settings',
-        element: <SettingsPage />,
+        element: <Settings />,
         label: 'Organization Settings',
         showInNav: false,
       },
@@ -159,13 +125,13 @@ const appRoutes: AppRoute[] = [
     children: [
       {
         path: '/Home',
-        element: <HomePage />,
+        element: <Home />,
         label: 'Home',
         showInNav: false,
       },
       {
         path: '/error',
-        element: <ErrorPage />,
+        element: <Error />,
         label: '404 Error Page',
         showInNav: true,
       },

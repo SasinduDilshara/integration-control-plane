@@ -72,7 +72,7 @@ const Footer = () => (
   </Box>
 )
 
-export default function LoginPage(): JSX.Element {
+export default function Login(): JSX.Element {
   const content = useThemeContent({
     default: THEME_CONFIG.default,
     acrylicPurple: THEME_CONFIG.acrylicPurple,

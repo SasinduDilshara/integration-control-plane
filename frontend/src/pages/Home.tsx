@@ -24,7 +24,7 @@ import viteLogo from '/vite.svg'
 import { Lightbulb, WSO2 } from '@wso2/oxygen-ui-icons-react'
 import appRoutes from '../config/appRoutes'
 
-export default function HomePage(): JSX.Element {
+export default function Home(): JSX.Element {
   const [count, setCount] = useState(0)
 
   return (
