@@ -58,7 +58,7 @@ public isolated function sendMIControlCommandAsync(string runtimeId, string arti
 
         http:Client mgmtClient = mgmtClientResult;
         string hmacToken = check issueRuntimeHmacToken();
-
+        
         string artifactPath;
         json payload;
 
@@ -88,6 +88,15 @@ public isolated function sendMIControlCommandAsync(string runtimeId, string arti
                 "trace": trace
             };
             artifactPath = string `${ICP_ARTIFACTS_PATH}/tracing`;
+        } else if action == types:ARTIFACT_ENABLE_STATISTICS || action == types:ARTIFACT_DISABLE_STATISTICS {
+            // Statistics change: enable/disable
+            string statistics = action == types:ARTIFACT_ENABLE_STATISTICS ? "enable" : "disable";
+            payload = {
+                "type": artifactType,
+                "name": artifactName,
+                "statistics": statistics
+            };
+            artifactPath = string `${ICP_ARTIFACTS_PATH}/statistics`;
         } else {
             log:printWarn(string `Unknown MI control action: ${action}`, runtimeId = runtimeId);
             return;
@@ -690,6 +699,65 @@ public isolated function upsertMIArtifactIntendedStatus(string componentId, stri
     }
 }
 
+// Upsert MI artifact intended statistics (enable/disable statistics) for a component
+public isolated function upsertMIArtifactIntendedStatistics(string componentId, string artifactName, string artifactType, string action, string? issuedBy = ()) returns error? {
+    if dbType == MSSQL {
+        _ = check dbClient->execute(`
+            MERGE INTO mi_artifact_intended_statistics AS target
+            USING (VALUES (${componentId}, ${artifactName}, ${artifactType}, ${action}, ${issuedBy}))
+                   AS source (component_id, artifact_name, artifact_type, action, issued_by)
+            ON (target.component_id = source.component_id AND target.artifact_name = source.artifact_name AND target.artifact_type = source.artifact_type)
+            WHEN MATCHED THEN
+                UPDATE SET action = source.action, issued_at = CURRENT_TIMESTAMP,
+                           issued_by = source.issued_by, updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (component_id, artifact_name, artifact_type, action, issued_by)
+                VALUES (source.component_id, source.artifact_name, source.artifact_type, source.action, source.issued_by);
+        `);
+    } else if dbType == POSTGRESQL {
+        _ = check dbClient->execute(`
+            INSERT INTO mi_artifact_intended_statistics (
+                component_id, artifact_name, artifact_type, action, issued_by
+            ) VALUES (
+                ${componentId}, ${artifactName}, ${artifactType}, ${action}, ${issuedBy}
+            )
+            ON CONFLICT (component_id, artifact_name, artifact_type) DO UPDATE SET
+                action = EXCLUDED.action,
+                issued_at = CURRENT_TIMESTAMP,
+                issued_by = EXCLUDED.issued_by,
+                updated_at = CURRENT_TIMESTAMP
+        `);
+    } else if dbType == H2 {
+        // H2 uses MERGE syntax similar to MSSQL
+        _ = check dbClient->execute(`
+            MERGE INTO mi_artifact_intended_statistics AS target
+            USING (VALUES (${componentId}, ${artifactName}, ${artifactType}, ${action}, ${issuedBy}))
+                   AS source (component_id, artifact_name, artifact_type, action, issued_by)
+            ON (target.component_id = source.component_id AND target.artifact_name = source.artifact_name AND target.artifact_type = source.artifact_type)
+            WHEN MATCHED THEN
+                UPDATE SET action = source.action, issued_at = CURRENT_TIMESTAMP,
+                           issued_by = source.issued_by, updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (component_id, artifact_name, artifact_type, action, issued_by)
+                VALUES (source.component_id, source.artifact_name, source.artifact_type, source.action, source.issued_by)
+        `);
+    } else {
+        // MySQL
+        _ = check dbClient->execute(`
+            INSERT INTO mi_artifact_intended_statistics (
+                component_id, artifact_name, artifact_type, action, issued_by
+            ) VALUES (
+                ${componentId}, ${artifactName}, ${artifactType}, ${action}, ${issuedBy}
+            )
+            ON DUPLICATE KEY UPDATE
+                action = VALUES(action),
+                issued_at = CURRENT_TIMESTAMP,
+                issued_by = VALUES(issued_by),
+                updated_at = CURRENT_TIMESTAMP
+        `);
+    }
+}
+
 // Upsert MI artifact intended tracing (enable/disable tracing) for a component
 public isolated function upsertMIArtifactIntendedTracing(string componentId, string artifactName, string artifactType, string action, string? issuedBy = ()) returns error? {
     if dbType == MSSQL {
@@ -771,6 +839,20 @@ public isolated function deleteMIArtifactIntendedTracing(
 ) returns error? {
     _ = check dbClient->execute(`
         DELETE FROM mi_artifact_intended_tracing
+        WHERE component_id = ${componentId}
+        AND artifact_name = ${artifactName}
+        AND artifact_type = ${artifactType}
+    `);
+}
+
+// Delete MI artifact intended statistics
+public isolated function deleteMIArtifactIntendedStatistics(
+        string componentId,
+        string artifactName,
+        string artifactType
+) returns error? {
+    _ = check dbClient->execute(`
+        DELETE FROM mi_artifact_intended_statistics
         WHERE component_id = ${componentId}
         AND artifact_name = ${artifactName}
         AND artifact_type = ${artifactType}

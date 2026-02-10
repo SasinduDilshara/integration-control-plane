@@ -192,6 +192,8 @@ public enum MIControlAction {
     ARTIFACT_DISABLE,
     ARTIFACT_ENABLE_TRACING,
     ARTIFACT_DISABLE_TRACING,
+    ARTIFACT_ENABLE_STATISTICS,
+    ARTIFACT_DISABLE_STATISTICS,
     ARTIFACT_TRIGGER
 }
 
@@ -642,6 +644,7 @@ public type RestApi record {
     }
     ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
     string tracing = "disabled"; // "enabled", "disabled"
+    string statistics = "disabled"; // "enabled", "disabled"
     @sql:Column {
         name: "carbon_app"
     }
@@ -670,6 +673,7 @@ public type ProxyService record {
     }
     ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
     string tracing = "disabled"; // "enabled", "disabled"
+    string statistics = "disabled"; // "enabled", "disabled"
     @sql:Column {
         name: "carbon_app"
     }
@@ -690,6 +694,7 @@ public type Endpoint record {
     }
     ArtifactState state; // "enabled", "disabled"
     string tracing = "disabled"; // "enabled", "disabled"
+    string statistics = "disabled"; // "enabled", "disabled"
     @sql:Column {
         name: "carbon_app"
     }
@@ -751,6 +756,7 @@ public type Sequence record {
     }
     ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
     string tracing = "disabled"; // "enabled", "disabled"
+    string statistics = "disabled"; // "enabled", "disabled"
     @sql:Column {
         name: "carbon_app"
     }
@@ -787,6 +793,8 @@ public type Template record {
         name: "template_type"
     }
     string 'type;
+    string tracing = "disabled"; // "enabled", "disabled"
+    string statistics = "disabled"; // "enabled", "disabled"
     @sql:Column {
         name: "carbon_app"
     }
@@ -2002,6 +2010,23 @@ public type ArtifactTracingChangeInput record {|
 
 // Response for artifact tracing change
 public type ArtifactTracingChangeResponse record {|
+    string status; // "success" or "failed"
+    string message;
+    int successCount; // Number of runtimes successfully updated
+    int failedCount; // Number of runtimes that failed
+    string[] details; // Detailed status per runtime
+|};
+
+// Input type for changing artifact statistics
+public type ArtifactStatisticsChangeInput record {|
+    string componentId;
+    string artifactType; // e.g., "proxy-service"
+    string artifactName;
+    string statistics; // "enable" or "disable"
+|};
+
+// Response for artifact statistics change
+public type ArtifactStatisticsChangeResponse record {|
     string status; // "success" or "failed"
     string message;
     int successCount; // Number of runtimes successfully updated

@@ -638,6 +638,7 @@ CREATE TABLE runtime_apis (
         'disabled'
     ) NOT NULL DEFAULT 'enabled',
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
+    statistics VARCHAR(20) NOT NULL DEFAULT 'disabled',
     carbon_app VARCHAR(200) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -674,6 +675,7 @@ CREATE TABLE runtime_proxy_services (
         'disabled'
     ) NOT NULL DEFAULT 'enabled',
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
+    statistics VARCHAR(20) NOT NULL DEFAULT 'disabled',
     carbon_app VARCHAR(200) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -709,6 +711,7 @@ CREATE TABLE runtime_endpoints (
         'disabled'
     ) NOT NULL DEFAULT 'enabled',
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
+    statistics VARCHAR(20) NOT NULL DEFAULT 'disabled',
     carbon_app VARCHAR(200) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -774,6 +777,7 @@ CREATE TABLE runtime_sequences (
         'disabled'
     ) NOT NULL DEFAULT 'enabled',
     tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
+    statistics VARCHAR(20) NOT NULL DEFAULT 'disabled',
     carbon_app VARCHAR(200) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -813,6 +817,8 @@ CREATE TABLE runtime_templates (
     runtime_id VARCHAR(100) NOT NULL,
     template_name VARCHAR(200) NOT NULL,
     template_type VARCHAR(100) NOT NULL,
+    tracing VARCHAR(20) NOT NULL DEFAULT 'disabled',
+    statistics VARCHAR(20) NOT NULL DEFAULT 'disabled',
     carbon_app VARCHAR(200) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1100,6 +1106,23 @@ CREATE TABLE mi_artifact_intended_tracing (
     INDEX idx_mi_artifact_intended_tracing_component_id (component_id),
     INDEX idx_mi_artifact_intended_tracing_artifact (artifact_name, artifact_type),
     INDEX idx_mi_artifact_intended_tracing_issued_by (issued_by)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE mi_artifact_intended_statistics (
+    component_id CHAR(36) NOT NULL,
+    artifact_name VARCHAR(200) NOT NULL,
+    artifact_type VARCHAR(100) NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    issued_by CHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, artifact_name, artifact_type),
+    CONSTRAINT fk_mi_artifact_statistics_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_mi_artifact_statistics_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_mi_artifact_intended_statistics_component_id (component_id),
+    INDEX idx_mi_artifact_intended_statistics_artifact (artifact_name, artifact_type),
+    INDEX idx_mi_artifact_intended_statistics_issued_by (issued_by)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- ============================================================================

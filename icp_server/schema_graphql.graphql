@@ -72,6 +72,7 @@ type Mutation {
   # Artifact Control Mutations
   updateArtifactStatus(input: ArtifactStatusChangeInput!): ArtifactStatusChangeResponse!
   updateArtifactTracingStatus(input: ArtifactTracingChangeInput!): ArtifactTracingChangeResponse!
+  updateArtifactStatisticsStatus(input: ArtifactStatisticsChangeInput!): ArtifactStatisticsChangeResponse!
 
   # Listener Control Mutations
   updateListenerState(input: ListenerControlInput!): ListenerControlResponse!
@@ -150,6 +151,7 @@ type RestApi {
   version: String
   state: ArtifactState!
   tracing: String!
+  statistics: String!
   carbonApp: String
   resources: [ApiResource!]!
 }
@@ -169,6 +171,7 @@ type ProxyService {
   name: String!
   state: ArtifactState!
   tracing: String!
+  statistics: String!
   carbonApp: String
   endpoints: [String!]
 }
@@ -181,6 +184,7 @@ type MIEndpoint {
   type: String!
   state: ArtifactState!
   tracing: String!
+  statistics: String!
   carbonApp: String
   attributes: [EndpointAttribute!]
 }
@@ -216,6 +220,7 @@ type Sequence {
   container: String
   state: ArtifactState!
   tracing: String!
+  statistics: String!
   carbonApp: String
 }
 
@@ -235,6 +240,8 @@ type Task {
 type Template {
   name: String!
   type: String!
+  statistics: String!
+  tracing: String!
   carbonApp: String
 }
 
@@ -884,6 +891,24 @@ input ArtifactTracingChangeInput {
 
 # Response for artifact tracing change
 type ArtifactTracingChangeResponse {
+  status: String!
+  message: String!
+  successCount: Int!
+  failedCount: Int!
+  details: [String!]!
+}
+
+# Input for artifact statistics change
+# Supported artifact types: ProxyService, Endpoint, RestApi, Sequence, InboundEndpoint, Template
+input ArtifactStatisticsChangeInput {
+  componentId: String!
+  artifactType: String!
+  artifactName: String!
+  statistics: String!
+}
+
+# Response for artifact statistics change
+type ArtifactStatisticsChangeResponse {
   status: String!
   message: String!
   successCount: Int!
