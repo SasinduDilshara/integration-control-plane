@@ -638,13 +638,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function get orgs/[string orgHandle]/groups() returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+    isolated resource function get orgs/[string orgHandle]/groups(http:Request req) returns http:Ok|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching groups for organization", orgHandle = orgHandle);
+
+        // Permission check: user must have any of these permissions at any level
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to list groups"
+                }
+            };
+        }
 
         // Resolve org handle to org ID
         // TODO : use when multiple tenants are supported
@@ -678,13 +696,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function post orgs/[string orgHandle]/groups(@http:Payload types:GroupInput groupInput) returns http:Created|http:BadRequest|http:Unauthorized|http:InternalServerError {
+    isolated resource function post orgs/[string orgHandle]/groups(@http:Payload types:GroupInput groupInput, http:Request req) returns http:Created|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Creating new group", orgHandle = orgHandle, groupName = groupInput.groupName);
+
+        // Permission check: org-level manage groups
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_GROUPS, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to create groups"
+                }
+            };
+        }
 
         // Resolve org handle to org ID
         // TODO: use when multiple tenants are supported
@@ -731,13 +767,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function get orgs/[string orgHandle]/groups/[string groupId]() returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function get orgs/[string orgHandle]/groups/[string groupId](http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching group details", orgHandle = orgHandle, groupId = groupId);
+
+        // Permission check: user must have any of these permissions at any level
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to view group details"
+                }
+            };
+        }
 
         // Fetch group by ID
         types:Group|error group = storage:getGroupById(groupId);
@@ -766,13 +820,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function put orgs/[string orgHandle]/groups/[string groupId](@http:Payload types:GroupInput groupInput) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function put orgs/[string orgHandle]/groups/[string groupId](@http:Payload types:GroupInput groupInput, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Updating group", orgHandle = orgHandle, groupId = groupId);
+
+        // Permission check: org-level manage groups
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_GROUPS, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to update groups"
+                }
+            };
+        }
 
         // Update the group
         error? updateResult = storage:updateGroup(groupId, groupInput);
@@ -811,13 +883,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId]() returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId](http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Deleting group", orgHandle = orgHandle, groupId = groupId);
+
+        // Permission check: org-level manage groups
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_GROUPS, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to delete groups"
+                }
+            };
+        }
 
         // TODO: Check if group has members or role assignments
         // For now, delete will cascade due to foreign key constraints
@@ -859,13 +949,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function post orgs/[string orgHandle]/groups/[string groupId]/users(types:AddUsersToGroupInput input) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function post orgs/[string orgHandle]/groups/[string groupId]/users(types:AddUsersToGroupInput input, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Adding users to group", orgHandle = orgHandle, groupId = groupId, userCount = input.userIds.length());
+
+        // Permission check: org-level user/group management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_USER_MANAGE_USERS], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to add users to group"
+                }
+            };
+        }
 
         // Validate input
         if input.userIds.length() == 0 {
@@ -931,13 +1039,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function get orgs/[string orgHandle]/groups/[string groupId]/users() returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function get orgs/[string orgHandle]/groups/[string groupId]/users(http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching users for group", orgHandle = orgHandle, groupId = groupId);
+
+        // Permission check: org-level user/group management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_USER_MANAGE_USERS], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to list group users"
+                }
+            };
+        }
 
         // Verify group exists
         types:Group|error existingGroup = storage:getGroupById(groupId);
@@ -987,13 +1113,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId]/users/[string userId]() returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId]/users/[string userId](http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Removing user from group", orgHandle = orgHandle, groupId = groupId, userId = userId);
+
+        // Permission check: org-level user/group management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_USER_MANAGE_USERS], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to remove user from group"
+                }
+            };
+        }
 
         // Remove user from group
         error? removeResult = storage:removeUserFromGroup(userId, groupId);
@@ -1029,13 +1173,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function put orgs/[string orgHandle]/users/[string userId]/groups(@http:Payload types:UpdateUserGroupsInput input) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function put orgs/[string orgHandle]/users/[string userId]/groups(@http:Payload types:UpdateUserGroupsInput input, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Updating groups for user", orgHandle = orgHandle, userId = userId);
+
+        // Permission check: org-level user/group management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_USER_MANAGE_USERS], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to update user groups"
+                }
+            };
+        }
 
         // Fetch current group memberships
         types:Group[]|error currentGroups = storage:getUserGroups(userId);
@@ -1291,6 +1453,7 @@ service /auth on httpListener {
     }
 
     // DELETE /auth/orgs/{orgHandle}/groups/{groupId}/roles/{mappingId} - Remove role from group
+    // TODO Update the permission checks
     @http:ResourceConfig {
         auth: {
             scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
@@ -1432,14 +1595,41 @@ service /auth on httpListener {
 
     // GET /auth/orgs/{orgHandle}/groups/{groupId}/roles - List group's role assignments
     @http:ResourceConfig {
-        auth: {
-            scopes: [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
-        }
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
     }
-    resource function get orgs/[string orgHandle]/groups/[string groupId]/roles()
-            returns http:Ok|http:NotFound|http:InternalServerError|error {
-        
+    resource function get orgs/[string orgHandle]/groups/[string groupId]/roles(http:Request req)
+            returns http:Ok|http:NotFound|http:Forbidden|http:Unauthorized|http:InternalServerError|error {
+
         log:printInfo("Fetching role assignments for group", orgHandle = orgHandle, groupId = groupId);
+
+        // Permission check: org-level group/role management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to list group role assignments"
+                }
+            };
+        }
 
         // Verify group exists
         types:Group|error existingGroup = storage:getGroupById(groupId);
@@ -1505,14 +1695,41 @@ service /auth on httpListener {
 
     // GET /auth/orgs/{orgHandle}/users - List all users with group memberships
     @http:ResourceConfig {
-        auth: {
-            scopes: [auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS]
-        }
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
     }
-    resource function get orgs/[string orgHandle]/users()
-            returns http:Ok|http:InternalServerError|error {
-        
+    resource function get orgs/[string orgHandle]/users(http:Request req)
+            returns http:Ok|http:Forbidden|http:Unauthorized|http:InternalServerError|error {
+
         log:printInfo("Fetching users for organization", orgHandle = orgHandle);
+
+        // Permission check: org-level user management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_USER_MANAGE_USERS], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to list users"
+                }
+            };
+        }
 
         // Get all users with their group memberships
         json[]|error users = storage:getAllUsersV2();
@@ -1533,14 +1750,41 @@ service /auth on httpListener {
 
     // POST /auth/orgs/{orgHandle}/users - Create a new user
     @http:ResourceConfig {
-        auth: {
-            scopes: [auth:PERMISSION_USER_MANAGE_USERS]
-        }
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
     }
-    resource function post orgs/[string orgHandle]/users(@http:Payload json payload)
-            returns http:Created|http:BadRequest|http:InternalServerError|error {
-        
+    resource function post orgs/[string orgHandle]/users(@http:Payload json payload, http:Request req)
+            returns http:Created|http:BadRequest|http:Forbidden|http:Unauthorized|http:InternalServerError|error {
+
         log:printInfo("Creating new user", orgHandle = orgHandle);
+
+        // Permission check: org-level user management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_USERS, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to create users"
+                }
+            };
+        }
 
         // Extract and validate payload
         string username = check payload.username;
@@ -1617,20 +1861,42 @@ service /auth on httpListener {
 
     // DELETE /auth/orgs/{orgHandle}/users/{userId} - Delete a user
     @http:ResourceConfig {
-        auth: {
-            scopes: [auth:PERMISSION_USER_MANAGE_USERS]
-        }
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
     }
     resource function delete orgs/[string orgHandle]/users/[string userId](http:Request req)
             returns http:NoContent|http:Unauthorized|http:Forbidden|http:NotFound|http:InternalServerError|error {
-        
+
         log:printInfo("Deleting user", orgHandle = orgHandle, userId = userId);
 
-        // Extract user context for granular permission checks
+        // Extract user context for permission checks
         types:UserContextV2|error userContext = extractUserContextFromRequest(req);
         if userContext is error {
-            log:printError("Failed to extract user context for token revocation", userContext);
             return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+
+        // Permission check: org-level user management
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_USERS, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to delete users"
+                }
+            };
         }
 
         // Delete user with safety checks (cannot delete self or system admin)
@@ -1676,13 +1942,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function get orgs/[string orgHandle]/roles() returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+    isolated resource function get orgs/[string orgHandle]/roles(http:Request req) returns http:Ok|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching all roles for organization", orgHandle = orgHandle);
+
+        // Permission check: user must have any of these permissions at any level
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to list roles"
+                }
+            };
+        }
 
         // Resolve org handle to org ID
         // TODO: use when multiple tenants are supported
@@ -1716,13 +2000,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function post orgs/[string orgHandle]/roles(@http:Payload types:RoleV2Input roleInput) returns http:Created|http:BadRequest|http:Unauthorized|http:InternalServerError {
+    isolated resource function post orgs/[string orgHandle]/roles(@http:Payload types:RoleV2Input roleInput, http:Request req) returns http:Created|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Creating new role", orgHandle = orgHandle, roleName = roleInput.roleName);
+
+        // Permission check: org-level role management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_ROLES, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to create roles"
+                }
+            };
+        }
 
         // Resolve org handle to org ID
         // TODO: use when multiple tenants are supported
@@ -1782,13 +2084,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function get orgs/[string orgHandle]/roles/[string roleId]() returns http:Ok|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function get orgs/[string orgHandle]/roles/[string roleId](http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching role details", orgHandle = orgHandle, roleId = roleId);
+
+        // Permission check: user must have any of these permissions at any level
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to view role details"
+                }
+            };
+        }
 
         // Fetch role by ID
         types:RoleV2|error role = storage:getRoleV2ById(roleId);
@@ -1835,13 +2155,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function put orgs/[string orgHandle]/roles/[string roleId](@http:Payload types:RoleV2Input roleInput) returns http:Ok|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function put orgs/[string orgHandle]/roles/[string roleId](@http:Payload types:RoleV2Input roleInput, http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Updating role", orgHandle = orgHandle, roleId = roleId);
+
+        // Permission check: org-level role management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_ROLES, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to update roles"
+                }
+            };
+        }
 
         // Update the role (name, description)
         error? updateResult = storage:updateRoleV2(roleId, roleInput);
@@ -1929,13 +2267,31 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function delete orgs/[string orgHandle]/roles/[string roleId]() returns http:Ok|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function delete orgs/[string orgHandle]/roles/[string roleId](http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Deleting role", orgHandle = orgHandle, roleId = roleId);
+
+        // Permission check: org-level role management
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_ROLES, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to delete roles"
+                }
+            };
+        }
 
         // TODO: Check if role is assigned to any groups
         // For now, delete will cascade due to foreign key constraints
@@ -1973,13 +2329,37 @@ service /auth on httpListener {
                     signatureConfig: {
                         secret: defaultJwtHMACSecret
                     }
-                },
-                scopes: [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE]
+                }
             }
         ]
     }
-    isolated resource function get orgs/[string orgHandle]/roles/[string roleId]/groups() returns http:Ok|http:NotFound|http:Unauthorized|http:InternalServerError {
+    isolated resource function get orgs/[string orgHandle]/roles/[string roleId]/groups(http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching group assignments for role", orgHandle = orgHandle, roleId = roleId);
+
+        // Permission check - loosened for role-assignment UX (check at any level)
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasAnyPermission(
+            userContext.userId,
+            [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES,
+             auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE,
+             auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE],
+            orgScope
+        );
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to view role group assignments"
+                }
+            };
+        }
 
         // Verify role exists
         types:RoleV2|error existingRole = storage:getRoleV2ById(roleId);
@@ -2110,7 +2490,7 @@ service /auth on httpListener {
         string? projectId = (),
         string? integrationId = (),
         string? environmentId = ()
-    ) returns http:Ok|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError {
+    ) returns http:Ok|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching effective permissions for user",
             orgHandle = orgHandle,
             userId = userId,
@@ -2128,18 +2508,24 @@ service /auth on httpListener {
 
         // Check if user is fetching their own permissions or has admin privileges
         boolean isSelfAccess = userContext.userId == userId;
-        boolean hasAdminAccess = userContext.permissions.indexOf(auth:PERMISSION_USER_MANAGE_USERS) != ();
-
-        if !isSelfAccess && !hasAdminAccess {
-            log:printWarn("User attempted to fetch permissions for another user without admin privileges",
-                requestingUserId = userContext.userId,
-                targetUserId = userId
-            );
-            return <http:Forbidden>{
-                body: {
-                    message: "You can only view your own permissions unless you have user management privileges"
-                }
-            };
+        if !isSelfAccess {
+            types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+            boolean|error hasAdminAccess = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_USERS, orgScope);
+            if hasAdminAccess is error {
+                log:printError("Error checking permissions", hasAdminAccess, userId = userContext.userId);
+                return utils:createInternalServerError("Error checking permissions");
+            }
+            if !hasAdminAccess {
+                log:printWarn("User attempted to fetch permissions for another user without admin privileges",
+                    requestingUserId = userContext.userId,
+                    targetUserId = userId
+                );
+                return <http:Forbidden>{
+                    body: {
+                        message: "You can only view your own permissions unless you have user management privileges"
+                    }
+                };
+            }
         }
 
         // Resolve org handle to org ID
