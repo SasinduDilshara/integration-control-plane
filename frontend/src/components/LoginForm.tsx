@@ -18,8 +18,8 @@
 
 import { useState } from 'react';
 import type { JSX } from 'react';
-import { Alert, Box, Button, Checkbox, CircularProgress, Divider, FormControlLabel, IconButton, InputAdornment, InputLabel, Link, OutlinedInput, Typography } from '@wso2/oxygen-ui';
-import { Eye, EyeOff, GitHub, Google } from '@wso2/oxygen-ui-icons-react';
+import { Alert, Box, Button, CircularProgress, Divider, IconButton, InputAdornment, InputLabel, OutlinedInput, Typography } from '@wso2/oxygen-ui';
+import { Eye, EyeOff } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate } from 'react-router';
 import { orgUrl } from '../paths';
 import { useAuth } from '../auth/AuthContext';
@@ -60,37 +60,20 @@ export default function LoginForm(): JSX.Element {
 
   return (
     <form onSubmit={handleLogin}>
-      <Box sx={{ mb: 6 }}>
-        <Typography variant="h3" gutterBottom>
-          Login to Account
-        </Typography>
-
-        <Typography>
-          Don&apos;t have an account <Link href="">Sign up!</Link>
-        </Typography>
-      </Box>
+      <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 4, textAlign: 'center' }}>
+        Sign In
+      </Typography>
 
       {error && (
-        <Alert severity="error" sx={{ my: 2 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      <Box>
-        <Button fullWidth variant="contained" startIcon={<Google />} color="secondary" sx={{ my: 1 }}>
-          Continue with Google
-        </Button>
-        <Button fullWidth variant="contained" startIcon={<GitHub />} color="secondary" sx={{ my: 1 }}>
-          Continue with GitHub
-        </Button>
-      </Box>
-
-      <Divider sx={{ my: 3 }}>or</Divider>
-
-      <Box display="flex" flexDirection="column" gap={2}>
+      <Box display="flex" flexDirection="column" gap={2.5}>
         <Box display="flex" flexDirection="column" gap={0.5}>
           <InputLabel htmlFor="username">Username</InputLabel>
-          <OutlinedInput type="text" id="username" name="username" placeholder="Enter your username" value={username} onChange={(e) => setUsername(e.target.value)} size="small" required disabled={loading} />
+          <OutlinedInput type="text" id="username" name="username" placeholder="Enter username" value={username} onChange={(e) => setUsername(e.target.value)} size="small" required disabled={loading} />
         </Box>
         <Box display="flex" flexDirection="column" gap={0.5}>
           <InputLabel htmlFor="password">Password</InputLabel>
@@ -105,7 +88,7 @@ export default function LoginForm(): JSX.Element {
             }
             id="password"
             name="password"
-            placeholder="Enter your password"
+            placeholder="Enter password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             size="small"
@@ -114,19 +97,14 @@ export default function LoginForm(): JSX.Element {
           />
         </Box>
 
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}>
-          <FormControlLabel control={<Checkbox name="remember-me-checkbox" />} label="Remember me" />
-          <Link href="">Forgot your password?</Link>
-        </Box>
+        <Button variant="contained" color="primary" type="submit" fullWidth sx={{ mt: 1, bgcolor: '#1e1e1e', '&:hover': { bgcolor: '#333' }, textTransform: 'none', py: 1.2 }} disabled={loading} startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}>
+          {loading ? 'Signing In...' : 'Login'}
+        </Button>
 
-        <input type="hidden" id="sessionDataKey" name="sessionDataKey" value="" />
-        <Button variant="contained" color="primary" type="submit" fullWidth sx={{ mt: 2 }} disabled={loading} startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}>
-          {loading ? 'Signing In...' : 'Sign In'}
+        <Divider sx={{ my: 0.5 }}>OR</Divider>
+
+        <Button variant="outlined" fullWidth sx={{ textTransform: 'none', py: 1.2, borderColor: '#ccc', color: 'text.primary' }}>
+          Sign in with SSO
         </Button>
       </Box>
     </form>
