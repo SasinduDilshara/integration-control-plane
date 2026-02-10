@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { gql } from './graphql';
-import type { GqlProject } from './queries';
+import type { GqlArtifact, GqlProject } from './queries';
 
 export interface CreateProjectInput {
   name: string;
@@ -36,5 +36,44 @@ export function useCreateProject() {
         orgHandler: input.orgHandler,
       }).then((d) => d.createProject),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+}
+
+// ── Artifact status toggle ──
+
+const UPDATE_ARTIFACT_STATUS = `
+  mutation UpdateArtifactStatus($input: ArtifactStatusChangeInput!) {
+    updateArtifactStatus(input: $input) {
+      status, message, successCount, failedCount, details
+    }
+  }`;
+
+export interface ArtifactStatusInput {
+  componentId: string;
+  artifactType: string;
+  artifactName: string;
+  status: 'active' | 'inactive';
+}
+
+/** PascalCase → kebab-case: "ProxyService" → "proxy-service" */
+function toKebab(s: string): string {
+  return s.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+export function useUpdateArtifactStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ArtifactStatusInput) =>
+      gql<{ updateArtifactStatus: { status: string; message: string } }>(UPDATE_ARTIFACT_STATUS, {
+        input: { ...input, artifactType: toKebab(input.artifactType) },
+      }).then((d) => d.updateArtifactStatus),
+    onMutate: async (input) => {
+      // Optimistic update: flip artifact state in cache immediately
+      await qc.cancelQueries({ queryKey: ['artifacts', input.artifactType] });
+      const newState = input.status === 'active' ? 'enabled' : 'disabled';
+      qc.setQueriesData<GqlArtifact[]>({ queryKey: ['artifacts', input.artifactType] }, (old) =>
+        old?.map((a) => (a.name === input.artifactName ? { ...a, state: newState } : a)),
+      );
+    },
   });
 }

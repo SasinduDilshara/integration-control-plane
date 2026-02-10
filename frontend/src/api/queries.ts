@@ -234,16 +234,34 @@ export function useArtifactSource(envId: string, componentId: string, artifactTy
   });
 }
 
+const LOCAL_ENTRY_VALUE_QUERY = `
+  query LocalEntryValue($componentId: String!, $entryName: String!, $environmentId: String) {
+    localEntryValueByComponent(componentId: $componentId, entryName: $entryName, environmentId: $environmentId)
+  }`;
+
+export function useLocalEntryValue(componentId: string, entryName: string, envId: string) {
+  return useQuery({
+    queryKey: ['localEntryValue', componentId, entryName, envId],
+    queryFn: () =>
+      gql<{ localEntryValueByComponent: string }>(LOCAL_ENTRY_VALUE_QUERY, {
+        componentId,
+        entryName,
+        environmentId: envId,
+      }).then((d) => d.localEntryValueByComponent),
+    enabled: !!componentId && !!entryName && !!envId,
+  });
+}
+
 // Maps display artifactType to the backend "type" param used in artifactSourceByComponent
 export const ARTIFACT_TYPE_TO_SOURCE_TYPE: Record<string, string> = {
   RestApi: 'api',
-  ProxyService: 'proxyServices',
-  Endpoint: 'endpoints',
-  InboundEndpoint: 'inbound-endpoints',
-  Sequence: 'sequences',
-  Task: 'tasks',
-  LocalEntry: 'local-entries',
-  CarbonApp: 'carbon-apps',
-  Connector: 'connectors',
-  RegistryResource: 'registry-resources',
+  ProxyService: 'proxy-service',
+  Endpoint: 'endpoint',
+  InboundEndpoint: 'inbound-endpoint',
+  Sequence: 'sequence',
+  Task: 'task',
+  LocalEntry: 'local-entry',
+  CarbonApp: 'carbon-app',
+  Connector: 'connector',
+  RegistryResource: 'registry-resource',
 };

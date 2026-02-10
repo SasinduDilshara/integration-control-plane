@@ -1,12 +1,12 @@
 import {
   Avatar,
-  Badge,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
   CircularProgress,
+  Divider,
   Drawer,
   Grid,
   IconButton,
@@ -32,9 +32,15 @@ import { Globe, Link2, ArrowRightLeft, Inbox, ListOrdered, Clock, FolderArchive,
 import SearchField from '../components/SearchField';
 import { useParams } from 'react-router';
 import { useEffect, useState, type JSX } from 'react';
-import { useComponentByHandler, useEnvironments, useArtifactTypes, useArtifacts, useArtifactSource, ARTIFACT_TYPE_TO_SOURCE_TYPE, type GqlEnvironment, type GqlArtifact, ARTIFACT_QUERY_MAP } from '../api/queries';
+import { useComponentByHandler, useEnvironments, useArtifactTypes, useArtifacts, useArtifactSource, useLocalEntryValue, ARTIFACT_TYPE_TO_SOURCE_TYPE, type GqlEnvironment, type GqlArtifact, ARTIFACT_QUERY_MAP } from '../api/queries';
+import { useUpdateArtifactStatus } from '../api/mutations';
 import NotFound from '../components/NotFound';
 import { projectUrl } from '../paths';
+
+/** "RestApi" → "Rest Apis", "ProxyService" → "Proxy Services" */
+function typePlural(t: string): string {
+  return t.replace(/([a-z])([A-Z])/g, '$1 $2') + 's';
+}
 
 const ARTIFACT_ICONS: Record<string, JSX.Element> = {
   RestApi: <Globe size={18} />,
@@ -114,7 +120,9 @@ function DataTable({ headers, rows, emptyMsg }: { headers?: string[]; rows: (str
   );
 }
 
-function ArtifactOverview({ artifact, artifactType }: { artifact: GqlArtifact; artifactType: string }) {
+type TabProps = SelectedArtifact;
+
+function ArtifactOverview({ artifact, artifactType }: TabProps) {
   const artifactMapping = ARTIFACT_QUERY_MAP[artifactType];
   if (!artifactMapping) return null;
   const isProxyService = artifactType === 'ProxyService';
@@ -181,9 +189,9 @@ function ArtifactOverview({ artifact, artifactType }: { artifact: GqlArtifact; a
   );
 }
 
-function ArtifactSource({ envId, componentId, artifactType, artifactName }: { envId: string; componentId: string; artifactType: string; artifactName: string }) {
+function ArtifactSource({ envId, componentId, artifactType, artifact }: TabProps) {
   const sourceType = ARTIFACT_TYPE_TO_SOURCE_TYPE[artifactType] ?? artifactType.toLowerCase();
-  const { data: source, isLoading, error } = useArtifactSource(envId, componentId, sourceType, artifactName);
+  const { data: source, isLoading, error } = useArtifactSource(envId, componentId, sourceType, artifact.name?.toString() ?? '');
   if (isLoading) return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
   if (error || !source) return <Typography sx={emptySx}>No source content available.</Typography>;
   return (
@@ -193,7 +201,7 @@ function ArtifactSource({ envId, componentId, artifactType, artifactName }: { en
   );
 }
 
-function ArtifactApiDefinition({ artifact }: { artifact: GqlArtifact }) {
+function ArtifactApiDefinition({ artifact }: TabProps) {
   const resources = (artifact.resources as Array<{ path?: string; methods?: string }> | undefined) ?? [];
   const context = (artifact.context ?? '/*').toString();
   const items = resources.length === 0 ? [{ methods: 'POST', path: context }] : resources;
@@ -211,7 +219,7 @@ function ArtifactApiDefinition({ artifact }: { artifact: GqlArtifact }) {
   );
 }
 
-function ArtifactEndpoints({ artifact }: { artifact: GqlArtifact }) {
+function ArtifactEndpoints({ artifact }: TabProps) {
   const endpoints = (artifact.endpoints as string[] | undefined) ?? [];
   return (
     <DataTable
@@ -225,12 +233,13 @@ function ArtifactEndpoints({ artifact }: { artifact: GqlArtifact }) {
   );
 }
 
-function ArtifactWsdl() {
+function ArtifactWsdl(_props: TabProps) {
   return <Typography sx={emptySx}>No WSDL content available.</Typography>;
 }
 
-function ArtifactValue({ artifact }: { artifact: GqlArtifact }) {
-  const value = (artifact.value ?? '').toString();
+function ArtifactValue({ artifact, envId, componentId }: TabProps) {
+  const { data: value, isLoading } = useLocalEntryValue(componentId, artifact.name?.toString() ?? '', envId);
+  if (isLoading) return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
   if (!value) return <Typography sx={emptySx}>No value available.</Typography>;
   return (
     <>
@@ -244,12 +253,12 @@ function ArtifactValue({ artifact }: { artifact: GqlArtifact }) {
   );
 }
 
-function ArtifactCarbonArtifacts({ artifact }: { artifact: GqlArtifact }) {
+function ArtifactCarbonArtifacts({ artifact }: TabProps) {
   const artifacts = (artifact.artifacts as Array<{ name: string; type: string }> | undefined) ?? [];
   return <DataTable headers={['Artifact Name', 'Artifact Type']} rows={artifacts.map((a) => [a.name, a.type])} emptyMsg="No artifacts found." />;
 }
 
-function ArtifactRuntimes({ artifact }: { artifact: GqlArtifact }) {
+function ArtifactRuntimes({ artifact }: TabProps) {
   const runtimes = (artifact.runtimes as Array<{ runtimeId: string; status: string }> | undefined) ?? [];
   return (
     <DataTable
@@ -284,24 +293,26 @@ function ArtifactDetail({ selected, onClose }: { selected: SelectedArtifact | nu
   const validTabIndex = Math.min(activeTabIndex, tabs.length - 1);
   const activeTab = tabs[validTabIndex];
 
+  const tabProps: TabProps = { artifact, artifactType, envId, componentId, projectId: selected.projectId };
+
   const renderActiveTab = () => {
     switch (activeTab) {
       case 'Overview':
-        return <ArtifactOverview artifact={artifact} artifactType={artifactType} />;
+        return <ArtifactOverview {...tabProps} />;
       case 'Source':
-        return <ArtifactSource envId={envId} componentId={componentId} artifactType={artifactType} artifactName={artifact.name?.toString() ?? ''} />;
+        return <ArtifactSource {...tabProps} />;
       case 'API definition':
-        return <ArtifactApiDefinition artifact={artifact} />;
+        return <ArtifactApiDefinition {...tabProps} />;
       case 'Endpoints':
-        return <ArtifactEndpoints artifact={artifact} />;
+        return <ArtifactEndpoints {...tabProps} />;
       case 'WSDL':
-        return <ArtifactWsdl />;
+        return <ArtifactWsdl {...tabProps} />;
       case 'Value':
-        return <ArtifactValue artifact={artifact} />;
+        return <ArtifactValue {...tabProps} />;
       case 'Artifacts':
-        return <ArtifactCarbonArtifacts artifact={artifact} />;
+        return <ArtifactCarbonArtifacts {...tabProps} />;
       case 'Runtimes':
-        return <ArtifactRuntimes artifact={artifact} />;
+        return <ArtifactRuntimes {...tabProps} />;
       default:
         return null;
     }
@@ -334,9 +345,10 @@ function ArtifactDetail({ selected, onClose }: { selected: SelectedArtifact | nu
   );
 }
 
-function SelectedTypeArtifacts({ artifacts, artifactType, query, onSelect }: { artifacts: GqlArtifact[]; artifactType: string; query: string; onSelect: (a: GqlArtifact) => void }) {
+function SelectedTypeArtifacts({ artifacts, artifactType, componentId, query, onSelect }: { artifacts: GqlArtifact[]; artifactType: string; componentId: string; query: string; onSelect: (a: GqlArtifact) => void }) {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+  const toggleStatus = useUpdateArtifactStatus();
   const artifactMapping = ARTIFACT_QUERY_MAP[artifactType];
   if (!artifactMapping) return null;
 
@@ -353,6 +365,7 @@ function SelectedTypeArtifacts({ artifacts, artifactType, query, onSelect }: { a
       <Stack gap={1.5}>
         {paginatedArtifacts.map((a, i) => {
           const artifactState = (a.state ?? '').toString().toLowerCase();
+          const enabled = artifactState === 'enabled';
           return (
             <Card key={i} variant="outlined" sx={{ cursor: 'pointer', width: '100%', '&:hover': { boxShadow: 1 } }} onClick={() => onSelect(a)}>
               <CardContent sx={{ display: 'flex', alignItems: 'center', py: 1.5, '&:last-child': { pb: 1.5 } }}>
@@ -372,11 +385,21 @@ function SelectedTypeArtifacts({ artifacts, artifactType, query, onSelect }: { a
                       <Typography variant="caption" color="text.secondary">
                         State
                       </Typography>
-                      <Chip label={(a.state ?? '—').toString().toUpperCase()} size="small" color={artifactState === 'enabled' ? 'success' : 'default'} />
+                      <Chip label={(a.state ?? '—').toString().toUpperCase()} size="small" color={enabled ? 'success' : 'default'} />
                     </Grid>
                   )}
                 </Grid>
-                {supportsToggle && <Switch size="small" checked={artifactState === 'enabled'} onClick={(e) => e.stopPropagation()} sx={{ mr: 1 }} />}
+                {supportsToggle && (
+                  <Switch
+                    size="small"
+                    checked={enabled}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleStatus.mutate({ componentId, artifactType, artifactName: a.name, status: enabled ? 'inactive' : 'active' });
+                    }}
+                    sx={{ mr: 1 }}
+                  />
+                )}
                 <ChevronRight size={18} style={{ color: 'var(--oxygen-palette-text-secondary)', flexShrink: 0 }} />
               </CardContent>
             </Card>
@@ -433,17 +456,20 @@ function ArtifactTypeSelector({ envId, componentId, onSelectArtifact }: { envId:
               sx={{ borderRadius: 1, mb: 0.5 }}>
               {ARTIFACT_ICONS[t.artifactType] && <ListItemIcon sx={{ minWidth: 32 }}>{ARTIFACT_ICONS[t.artifactType]}</ListItemIcon>}
               <ListItemText primary={t.artifactType} />
-              <Badge badgeContent={t.artifactCount} color="primary" sx={{ mr: 1 }} />
             </ListItemButton>
           ))}
         </List>
       </Grid>
       <Grid size={{ xs: 12, sm: 9 }}>
         <Typography variant="overline" sx={{ mb: 1, display: 'block' }}>
-          {selectedArtifactType}s
+          {typePlural(selectedArtifactType)}
         </Typography>
-        <SearchField value={query} onChange={setQuery} placeholder={`Search ${selectedArtifactType}s by name, context, or version`} fullWidth sx={{ mb: 2 }} />
-        {loadingArtifacts ? <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} /> : <SelectedTypeArtifacts artifacts={artifacts} artifactType={selectedArtifactType} query={query} onSelect={(a) => onSelectArtifact(a, selectedArtifactType, envId)} />}
+        <SearchField value={query} onChange={setQuery} placeholder={`Search ${typePlural(selectedArtifactType)} by name, context, or version`} fullWidth sx={{ mb: 2 }} />
+        {loadingArtifacts ? (
+          <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />
+        ) : (
+          <SelectedTypeArtifacts artifacts={artifacts} artifactType={selectedArtifactType} componentId={componentId} query={query} onSelect={(a) => onSelectArtifact(a, selectedArtifactType, envId)} />
+        )}
       </Grid>
     </Grid>
   );
@@ -453,7 +479,7 @@ function Environment({ env, componentId, onSelectArtifact }: { env: GqlEnvironme
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
           <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
             {env.name}
           </Typography>
@@ -464,6 +490,7 @@ function Environment({ env, componentId, onSelectArtifact }: { env: GqlEnvironme
             <Button variant="contained">Configure Runtime</Button>
           </Stack>
         </Stack>
+        <Divider sx={{ my: 2 }} />
         <ArtifactTypeSelector envId={env.id} componentId={componentId} onSelectArtifact={onSelectArtifact} />
       </CardContent>
     </Card>
