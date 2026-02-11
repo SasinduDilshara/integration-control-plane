@@ -27,13 +27,18 @@ export default function OIDCCallback(): JSX.Element {
         return;
       }
 
-      if (!code) {
-        setError('Missing authorization code. Please try logging in again.');
+      if (!state) {
+        setError('Missing state parameter. Please try logging in again.');
         return;
       }
 
-      if (state && !validateAndClearOIDCState(state)) {
+      if (!validateAndClearOIDCState(state)) {
         setError('Invalid state parameter. This may indicate a CSRF attack. Please try logging in again.');
+        return;
+      }
+
+      if (!code) {
+        setError('Missing authorization code. Please try logging in again.');
         return;
       }
 
