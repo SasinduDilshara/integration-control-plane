@@ -2,8 +2,8 @@ import { createContext, useContext, useState, useCallback, useMemo, useEffect } 
 import type { JSX, ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { loginApiUrl, loginUrl } from '../paths';
-import { saveTokens, clearTokens, getAccessToken, revokeToken, setOnAuthFailure } from './tokenManager';
+import { loginApiUrl, loginUrl, oidcAuthorizeApiUrl, oidcCallbackApiUrl } from '../paths';
+import { saveTokens, clearTokens, getAccessToken, revokeToken, setOnAuthFailure, saveRedirectUrl, generateAndSaveOIDCState } from './tokenManager';
 
 const USER_KEY = 'icp_user';
 
@@ -19,6 +19,8 @@ interface AuthContextValue {
   displayName: string;
   permissions: string[];
   login: (username: string, password: string) => Promise<void>;
+  loginWithOIDC: () => Promise<void>;
+  handleOIDCCallback: (code: string, state: string | null) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -71,6 +73,36 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     setIsAuthenticated(true);
   }, []);
 
+  const loginWithOIDC = useCallback(async () => {
+    saveRedirectUrl(window.location.href);
+    const state = generateAndSaveOIDCState();
+    const res = await fetch(`${oidcAuthorizeApiUrl}?state=${encodeURIComponent(state)}`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(body || `Failed to get OIDC authorization URL (${res.status})`);
+    }
+    const data: { authorizationUrl: string } = await res.json();
+    window.location.href = data.authorizationUrl;
+  }, []);
+
+  const handleOIDCCallback = useCallback(async (code: string, state: string | null) => {
+    const res = await fetch(oidcCallbackApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, state }),
+    });
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(body || `Token exchange failed (${res.status})`);
+    }
+    const data: { userId: string; token: string; expiresIn: number; refreshToken: string; refreshTokenExpiresIn: number; username: string; displayName: string; permissions: string[]; isOidcUser: boolean } = await res.json();
+    saveTokens({ token: data.token, expiresIn: data.expiresIn, refreshToken: data.refreshToken, refreshTokenExpiresIn: data.refreshTokenExpiresIn });
+    const user: UserInfo = { username: data.username, displayName: data.displayName, permissions: data.permissions };
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+    setUserInfo(user);
+    setIsAuthenticated(true);
+  }, []);
+
   const logout = useCallback(async () => {
     await revokeToken();
     clearTokens();
@@ -86,8 +118,10 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     displayName: userInfo?.displayName ?? '',
     permissions: userInfo?.permissions ?? [],
     login,
+    loginWithOIDC,
+    handleOIDCCallback,
     logout,
-  }), [isAuthenticated, userInfo, login, logout]);
+  }), [isAuthenticated, userInfo, login, loginWithOIDC, handleOIDCCallback, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

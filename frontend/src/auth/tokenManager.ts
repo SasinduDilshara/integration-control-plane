@@ -4,6 +4,8 @@ const ACCESS_TOKEN_KEY = 'icp_auth_token';
 const REFRESH_TOKEN_KEY = 'icp_refresh_token';
 const TOKEN_EXPIRES_AT_KEY = 'icp_token_expires_at';
 const REFRESH_TOKEN_EXPIRES_AT_KEY = 'icp_refresh_token_expires_at';
+const REDIRECT_URL_KEY = 'icp_redirect_url';
+const OIDC_STATE_KEY = 'icp_oidc_state';
 
 const EXPIRY_BUFFER_MS = 30_000;
 
@@ -135,4 +137,26 @@ export async function revokeToken(): Promise<void> {
   } catch {
     // best-effort — ignore errors
   }
+}
+
+export function saveRedirectUrl(url: string): void {
+  localStorage.setItem(REDIRECT_URL_KEY, url);
+}
+
+export function getAndClearRedirectUrl(): string | null {
+  const url = localStorage.getItem(REDIRECT_URL_KEY);
+  localStorage.removeItem(REDIRECT_URL_KEY);
+  return url;
+}
+
+export function generateAndSaveOIDCState(): string {
+  const state = crypto.randomUUID();
+  localStorage.setItem(OIDC_STATE_KEY, state);
+  return state;
+}
+
+export function validateAndClearOIDCState(state: string): boolean {
+  const savedState = localStorage.getItem(OIDC_STATE_KEY);
+  localStorage.removeItem(OIDC_STATE_KEY);
+  return savedState === state;
 }
