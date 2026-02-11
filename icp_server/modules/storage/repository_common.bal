@@ -312,6 +312,12 @@ isolated function convertToMIControlAction(string action) returns types:MIContro
         "ARTIFACT_DISABLE_TRACING" => {
             return types:ARTIFACT_DISABLE_TRACING;
         }
+        "ARTIFACT_ENABLE_STATISTICS" => {
+            return types:ARTIFACT_ENABLE_STATISTICS;
+        }
+        "ARTIFACT_DISABLE_STATISTICS" => {
+            return types:ARTIFACT_DISABLE_STATISTICS;
+        }
         _ => {
             return types:ARTIFACT_ENABLE;
         }
@@ -491,9 +497,22 @@ public isolated function getMIIntendedStatesForComponent(string componentId) ret
         check from types:MIArtifactIntendedStateDBRecord state in tracingStream
         select state;
 
-    // Combine both lists
+    // Query statistics intended states
+    stream<types:MIArtifactIntendedStateDBRecord, sql:Error?> statisticsStream = dbClient->query(`
+        SELECT component_id, artifact_name, artifact_type, action
+        FROM mi_artifact_intended_statistics
+        WHERE component_id = ${componentId}
+    `);
+    types:MIArtifactIntendedStateDBRecord[] statisticsStates =
+        check from types:MIArtifactIntendedStateDBRecord state in statisticsStream
+        select state;
+
+    // Combine all lists
     foreach types:MIArtifactIntendedStateDBRecord tracingState in tracingStates {
         intendedStatesList.push(tracingState);
+    }
+    foreach types:MIArtifactIntendedStateDBRecord statisticsState in statisticsStates {
+        intendedStatesList.push(statisticsState);
     }
 
     return intendedStatesList;
@@ -610,6 +629,7 @@ type ArtifactTableMetadata record {|
     string tableName;
     string nameColumn;
     boolean hasTracing;
+    boolean hasStatistics;
     string stateColumn;
 |};
 
@@ -617,25 +637,25 @@ type ArtifactTableMetadata record {|
 isolated function resolveArtifactTableMetadata(string artifactType) returns ArtifactTableMetadata? {
     string normalizedType = artifactType.toLowerAscii().trim();
     if normalizedType == "api" || normalizedType == "apis" {
-        return {tableName: "runtime_apis", nameColumn: "api_name", hasTracing: true, stateColumn: "state"};
+        return {tableName: "runtime_apis", nameColumn: "api_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
     } else if normalizedType == "proxy-service" || normalizedType == "proxy-services" {
-        return {tableName: "runtime_proxy_services", nameColumn: "proxy_name", hasTracing: true, stateColumn: "state"};
+        return {tableName: "runtime_proxy_services", nameColumn: "proxy_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
     } else if normalizedType == "endpoint" || normalizedType == "endpoints" {
-        return {tableName: "runtime_endpoints", nameColumn: "endpoint_name", hasTracing: true, stateColumn: "state"};
+        return {tableName: "runtime_endpoints", nameColumn: "endpoint_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
     } else if normalizedType == "inbound-endpoint" || normalizedType == "inbound-endpoints" {
-        return {tableName: "runtime_inbound_endpoints", nameColumn: "inbound_name", hasTracing: true, stateColumn: "state"};
+        return {tableName: "runtime_inbound_endpoints", nameColumn: "inbound_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
     } else if normalizedType == "sequence" || normalizedType == "sequences" {
-        return {tableName: "runtime_sequences", nameColumn: "sequence_name", hasTracing: true, stateColumn: "state"};
+        return {tableName: "runtime_sequences", nameColumn: "sequence_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
     } else if normalizedType == "task" || normalizedType == "tasks" {
-        return {tableName: "runtime_tasks", nameColumn: "task_name", hasTracing: false, stateColumn: "state"};
+        return {tableName: "runtime_tasks", nameColumn: "task_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
     } else if normalizedType == "message-processor" || normalizedType == "message-processors" {
-        return {tableName: "runtime_message_processors", nameColumn: "processor_name", hasTracing: false, stateColumn: "state"};
+        return {tableName: "runtime_message_processors", nameColumn: "processor_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
     } else if normalizedType == "local-entry" || normalizedType == "local-entries" {
-        return {tableName: "runtime_local_entries", nameColumn: "entry_name", hasTracing: false, stateColumn: "state"};
+        return {tableName: "runtime_local_entries", nameColumn: "entry_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
     } else if normalizedType == "data-service" || normalizedType == "data-services" {
-        return {tableName: "runtime_data_services", nameColumn: "service_name", hasTracing: false, stateColumn: "state"};
+        return {tableName: "runtime_data_services", nameColumn: "service_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
     } else if normalizedType == "connector" || normalizedType == "connectors" {
-        return {tableName: "runtime_connectors", nameColumn: "connector_name", hasTracing: false, stateColumn: "status"};
+        return {tableName: "runtime_connectors", nameColumn: "connector_name", hasTracing: false, hasStatistics: false, stateColumn: "status"};
     }
     return ();
 }

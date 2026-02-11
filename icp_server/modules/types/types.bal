@@ -301,13 +301,15 @@ public type BIArtifactIntendedStateDBRecord record {
 
 # Record type for artifact query result from runtime tables
 #
-# + artifact_id - Unique identifier for the artifact (not used in control commands)
-# + state - Current state of the artifact (enabled/disabled)
-# + tracing - Current tracing state of the artifact (enabled/disabled)
+# + artifact_id - Unique identifier for the artifact (not used in control commands)  
+# + state - Current state of the artifact (enabled/disabled)  
+# + tracing - Current tracing state of the artifact (enabled/disabled)  
+# + statistics - field description
 public type ArtifactQueryResult record {|
     string artifact_id;
     string state;
     string tracing?;
+    string statistics?;
 |};
 
 // === Configuration ===

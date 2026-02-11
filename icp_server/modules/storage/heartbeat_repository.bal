@@ -581,6 +581,7 @@ isolated function checkMIIntendedStatesAndInsertCommands(
                 artifactType,
                 artifactDetails.state,
                 artifactDetails.tracing,
+                artifactDetails.statistics,
                 intendedAction,
                 commandCount
         );
@@ -606,10 +607,15 @@ isolated function getArtifactDetailsByTypeAndName(string runtimeId, string artif
         return ();
     }
 
-    // Build SELECT clause: include tracing column only for tables that have it
-    string selectClause = metadata.hasTracing
-        ? string `SELECT artifact_id, ${metadata.stateColumn} AS state, tracing FROM ${metadata.tableName}`
-        : string `SELECT artifact_id, ${metadata.stateColumn} AS state FROM ${metadata.tableName}`;
+    // Build SELECT clause: include tracing/statistics columns only for tables that have them
+    string selectClause;
+    if metadata.hasTracing && metadata.hasStatistics {
+        selectClause = string `SELECT artifact_id, ${metadata.stateColumn} AS state, tracing, statistics FROM ${metadata.tableName}`;
+    } else if metadata.hasTracing {
+        selectClause = string `SELECT artifact_id, ${metadata.stateColumn} AS state, tracing FROM ${metadata.tableName}`;
+    } else {
+        selectClause = string `SELECT artifact_id, ${metadata.stateColumn} AS state FROM ${metadata.tableName}`;
+    }
 
     sql:ParameterizedQuery query = sql:queryConcat(
             sqlQueryFromString(selectClause),
@@ -637,12 +643,13 @@ isolated function processMIControlCommand(
         string artifactType,
         string currentState,
         string? currentTracingState,
+        string? currentStatisticsState,
         string intendedAction,
         int currentCommandCount
 ) returns int|error {
     int commandCount = currentCommandCount;
 
-    log:printDebug(string `Processing MI control command for ${artifactType} '${artifactName}': intendedAction=${intendedAction}, currentState=${currentState}, currentTracing=${currentTracingState ?: "N/A"}`);
+    log:printDebug(string `Processing MI control command for ${artifactType} '${artifactName}': intendedAction=${intendedAction}, currentState=${currentState}, currentTracing=${currentTracingState ?: "N/A"}, currentStatistics=${currentStatisticsState ?: "N/A"}`);
 
     // Determine if command is needed
     boolean needsCommand = false;
@@ -670,10 +677,24 @@ isolated function processMIControlCommand(
             actionToIssue = types:ARTIFACT_DISABLE_TRACING;
             log:printInfo(string `Command needed for ${artifactType} '${artifactName}': DISABLE_TRACING (intended=ARTIFACT_DISABLE_TRACING, currentTracing=${tracingState})`);
         }
+    } else if intendedAction == "ARTIFACT_ENABLE_STATISTICS" {
+        string statisticsState = currentStatisticsState ?: "disabled";
+        if statisticsState == "disabled" {
+            needsCommand = true;
+            actionToIssue = types:ARTIFACT_ENABLE_STATISTICS;
+            log:printInfo(string `Command needed for ${artifactType} '${artifactName}': ENABLE_STATISTICS (intended=ARTIFACT_ENABLE_STATISTICS, currentStatistics=${statisticsState})`);
+        }
+    } else if intendedAction == "ARTIFACT_DISABLE_STATISTICS" {
+        string statisticsState = currentStatisticsState ?: "disabled";
+        if statisticsState == "enabled" {
+            needsCommand = true;
+            actionToIssue = types:ARTIFACT_DISABLE_STATISTICS;
+            log:printInfo(string `Command needed for ${artifactType} '${artifactName}': DISABLE_STATISTICS (intended=ARTIFACT_DISABLE_STATISTICS, currentStatistics=${statisticsState})`);
+        }
     }
 
     if !needsCommand {
-        log:printDebug(string `No command needed for ${artifactType} '${artifactName}': already in desired state (intended=${intendedAction}, currentState=${currentState}, currentTracing=${currentTracingState ?: "N/A"})`);
+        log:printDebug(string `No command needed for ${artifactType} '${artifactName}': already in desired state (intended=${intendedAction}, currentState=${currentState}, currentTracing=${currentTracingState ?: "N/A"}, currentStatistics=${currentStatisticsState ?: "N/A"})`);
     }
 
     if needsCommand && actionToIssue is types:MIControlAction {
