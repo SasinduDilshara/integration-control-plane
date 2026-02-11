@@ -24,6 +24,12 @@ public enum RuntimeType {
     BI
 }
 
+public enum LogIndexRuntimeType {
+    MI,
+    BI,
+    ALL
+}
+
 public enum DeploymentType {
     VM,
     K8S
@@ -385,6 +391,25 @@ public type RuntimeDBRecord record {
     string server_name?;
     time:Utc registration_time?;
     time:Utc last_heartbeat?;
+};
+
+public type RuntimeTypeRecord record {
+    @sql:Column {
+        name: "runtime_id"
+    }
+    string runtimeId;
+    @sql:Column {
+        name: "runtime_type"
+    }
+    string runtimeType;
+    @sql:Column {
+        name: "environment_id"
+    }
+    string environmentId;
+    @sql:Column {
+        name: "component_id"
+    }
+    string componentId;
 };
 
 public type ControlCommandDBRecord record {
