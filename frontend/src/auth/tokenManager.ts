@@ -81,8 +81,12 @@ export async function refreshAccessToken(): Promise<void> {
 
     const userInfo = localStorage.getItem('icp_user');
     if (userInfo) {
-      const existing = JSON.parse(userInfo);
-      localStorage.setItem('icp_user', JSON.stringify({ ...existing, username: data.username, displayName: data.displayName, permissions: data.permissions }));
+      try {
+        const existing = JSON.parse(userInfo);
+        localStorage.setItem('icp_user', JSON.stringify({ ...existing, username: data.username, displayName: data.displayName, permissions: data.permissions }));
+      } catch {
+        localStorage.removeItem('icp_user');
+      }
     }
   })().finally(() => {
     refreshPromise = null;
