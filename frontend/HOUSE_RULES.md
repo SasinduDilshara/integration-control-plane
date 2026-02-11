@@ -7,3 +7,4 @@
 - Don't spam Box. Use correct react components for the job or just get rid of it altogether.
 - No string URLs/paths anywhere except in paths.ts
 - Don't trivially ignore empty/null/undefined cases. eg `name ?? ""`, `x ? .. : null`, `x!.y`. Try to make it impossible by redefining the type or adding a guards.
+- Effects let you “step outside” of React. If there is no external system involved, you shouldn’t need an Effect.
