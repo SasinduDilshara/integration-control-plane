@@ -64,24 +64,32 @@ function AssignRoleToGroupsDialog({
   const [selected, setSelected] = useState<Group[]>([]);
   const [envMode, setEnvMode] = useState<'all' | 'selected'>('all');
   const [selectedEnvs, setSelectedEnvs] = useState<string[]>([]);
+  const [errorMsg, setErrorMsg] = useState<string>('');
   const available = allGroups.filter((g) => !existingGroupIds.includes(g.groupId));
   const pending = mutation.isPending;
 
-  const assign = () => {
+  const assign = async () => {
     if (envMode === 'selected' && selectedEnvs.length === 0) {
       return;
     }
-    let remaining = selected.length;
+    setErrorMsg('');
     const envUuid = envMode === 'selected' && selectedEnvs.length > 0 ? selectedEnvs[0] : undefined;
-    for (const g of selected) {
-      mutation.mutate(
-        { groupId: g.groupId, roleIds: [roleId], envUuid },
-        {
-          onSuccess: () => {
-            if (--remaining === 0) onClose();
-          },
-        },
-      );
+
+    const promises = selected.map((g) =>
+      mutation.mutateAsync({ groupId: g.groupId, roleIds: [roleId], envUuid }).then(
+        () => ({ success: true, groupName: g.groupName }),
+        (error) => ({ success: false, groupName: g.groupName, error }),
+      ),
+    );
+
+    const results = await Promise.all(promises);
+    const failures = results.filter((r) => !r.success);
+
+    if (failures.length === 0) {
+      onClose();
+    } else {
+      const failedGroups = failures.map((f) => f.groupName).join(', ');
+      setErrorMsg(`Failed to assign role to: ${failedGroups}`);
     }
   };
 
@@ -92,6 +100,11 @@ function AssignRoleToGroupsDialog({
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Select groups to assign the role &quot;{roleName}&quot; to
         </Typography>
+        {errorMsg && (
+          <Typography variant="body2" color="error" sx={{ mb: 2 }}>
+            {errorMsg}
+          </Typography>
+        )}
         <Stack spacing={2}>
           <Autocomplete
             multiple
