@@ -793,7 +793,20 @@ function EntryPointsList({ envId, componentId, projectId, onOpenDrawer }: { envI
                 const isSelected = selected?.artifact.name === a.name && selected?.artifactType === activeType;
                 const meta = activeConfig?.metaField ? a[activeConfig.metaField]?.toString() : undefined;
                 return (
-                  <Box key={`${activeType}-${a.name}`} onClick={() => setSelected(isSelected ? null : { artifact: a, artifactType: activeType, envId, componentId, projectId })} sx={{ display: 'flex', alignItems: 'center', px: 1.5, py: 1, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider', bgcolor: isSelected ? 'action.selected' : 'transparent', '&:hover': { bgcolor: isSelected ? 'action.selected' : 'action.hover' } }}>
+                  <Box
+                    key={`${activeType}-${a.name}`}
+                    onClick={() => setSelected(isSelected ? null : { artifact: a, artifactType: activeType, envId, componentId, projectId })}
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      px: 1.5,
+                      py: 1,
+                      cursor: 'pointer',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      bgcolor: isSelected ? 'action.selected' : 'transparent',
+                      '&:hover': { bgcolor: isSelected ? 'action.selected' : 'action.hover' },
+                    }}>
                     <Chip label={activeConfig?.label} size="small" sx={{ bgcolor: activeConfig?.bgColor, color: activeConfig?.color, fontWeight: 700, fontSize: 11, mr: 2, minWidth: 60, justifyContent: 'center' }} />
                     <Typography variant="body2" sx={{ fontWeight: 500, flex: 1 }}>
                       {a.name?.toString()}
@@ -815,7 +828,19 @@ function EntryPointsList({ envId, componentId, projectId, onOpenDrawer }: { envI
   );
 }
 
-function Environment({ env, componentId, projectId, onSelectArtifact, onOpenDrawerForTab }: { env: GqlEnvironment; componentId: string; projectId: string; onSelectArtifact: (a: GqlArtifact, type: string, envId: string) => void; onOpenDrawerForTab: (a: GqlArtifact, type: string, envId: string, tab: string) => void }) {
+function Environment({
+  env,
+  componentId,
+  projectId,
+  onSelectArtifact,
+  onOpenDrawerForTab,
+}: {
+  env: GqlEnvironment;
+  componentId: string;
+  projectId: string;
+  onSelectArtifact: (a: GqlArtifact, type: string, envId: string) => void;
+  onOpenDrawerForTab: (a: GqlArtifact, type: string, envId: string, tab: string) => void;
+}) {
   const refreshEnvironmentArtifacts = useRefreshEnvironmentArtifacts();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'entryPoints' | 'allArtifacts'>('entryPoints');
@@ -903,7 +928,14 @@ export default function Component(scope: ComponentScope): JSX.Element {
             {component.description || '+ Add Description'}
           </Typography>
           {environments.map((env) => (
-            <Environment key={env.id} env={env} componentId={component.id} projectId={scope.project} onSelectArtifact={(a, type, envId) => setSelectedArtifact({ artifact: a, artifactType: type, envId, componentId: component.id, projectId: scope.project })} onOpenDrawerForTab={(a, type, envId, tab) => setSelectedArtifact({ artifact: a, artifactType: type, envId, componentId: component.id, projectId: scope.project, initialTab: tab })} />
+            <Environment
+              key={env.id}
+              env={env}
+              componentId={component.id}
+              projectId={scope.project}
+              onSelectArtifact={(a, type, envId) => setSelectedArtifact({ artifact: a, artifactType: type, envId, componentId: component.id, projectId: scope.project })}
+              onOpenDrawerForTab={(a, type, envId, tab) => setSelectedArtifact({ artifact: a, artifactType: type, envId, componentId: component.id, projectId: scope.project, initialTab: tab })}
+            />
           ))}
         </PageContent>
         <ArtifactDetail selected={selectedArtifact} onClose={() => setSelectedArtifact(null)} />

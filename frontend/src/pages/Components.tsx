@@ -25,7 +25,7 @@ import { projectUrl, newComponentUrl, componentUrl, editComponentUrl } from '../
 import { getStatusColor } from '../config/statusColors';
 import { capitalize } from '../utils/string';
 
-const ICONS: Record<string, any> = {
+const ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   Authentication: Key,
   Authorization: Shield,
   Registration: FileText,
@@ -101,7 +101,7 @@ export default function Components(): JSX.Element {
   const list = useMemo(() => {
     const q = filters.query.toLowerCase();
     return components.filter(
-      (c: any) => (filters.type === 'all' || c.componentType === filters.type) && (filters.status === 'all' || c.status === filters.status) && (!q || [c.name, c.displayName, c.componentType, c.description].some((s) => s?.toLowerCase().includes(q))),
+      (c) => (filters.type === 'all' || c.componentType === filters.type) && (filters.status === 'all' || c.status === filters.status) && (!q || [c.name, c.displayName, c.componentType, c.description].some((s) => s?.toLowerCase().includes(q))),
     );
   }, [filters, components]);
 
@@ -146,9 +146,9 @@ export default function Components(): JSX.Element {
             <ListingTable variant="card" density={density}>
               <ListingTable.Head>
                 <ListingTable.Row>
-                  {['name', 'type', 'category', 'status', 'author', 'lastModified'].map((f) => (
+                  {['name', 'type', 'category', 'status', 'createdAt', 'lastBuildDate'].map((f) => (
                     <ListingTable.Cell key={f}>
-                      <ListingTable.SortLabel field={f}>{f === 'lastModified' ? 'Last modified' : capitalize(f)}</ListingTable.SortLabel>
+                      <ListingTable.SortLabel field={f}>{f === 'createdAt' ? 'Created' : f === 'lastBuildDate' ? 'Last build' : capitalize(f)}</ListingTable.SortLabel>
                     </ListingTable.Cell>
                   ))}
                   <ListingTable.Cell align="right">Actions</ListingTable.Cell>
@@ -179,22 +179,22 @@ export default function Components(): JSX.Element {
                     </ListingTable.Cell>
                   </ListingTable.Row>
                 ) : (
-                  paginated.map((c: any) => {
-                    const TI = Icon(c.componentType || c.type);
+                  paginated.map((c) => {
+                    const TI = Icon(c.componentType);
                     return (
                       <ListingTable.Row key={c.id} variant="card" hover clickable onClick={() => orgId && id && navigate(componentUrl(orgId, id, c.handler))}>
                         <ListingTable.Cell>
                           <ListingTable.CellIcon icon={<TI size={20} />} primary={c.displayName || c.name} secondary={c.description} />
                         </ListingTable.Cell>
                         <ListingTable.Cell>
-                          <Chip label={c.componentType || c.type} size="small" variant="outlined" />
+                          <Chip label={c.componentType} size="small" variant="outlined" />
                         </ListingTable.Cell>
-                        <ListingTable.Cell>{c.componentSubType || c.category || '—'}</ListingTable.Cell>
+                        <ListingTable.Cell>{c.componentSubType || '—'}</ListingTable.Cell>
                         <ListingTable.Cell>
                           <Chip label={c.status} size="small" color={getStatusColor(c.status)} />
                         </ListingTable.Cell>
-                        <ListingTable.Cell>{c.createdBy || '—'}</ListingTable.Cell>
-                        <ListingTable.Cell>{c.lastBuildDate || c.lastModified || '—'}</ListingTable.Cell>
+                        <ListingTable.Cell>{c.createdAt || '—'}</ListingTable.Cell>
+                        <ListingTable.Cell>{c.lastBuildDate || '—'}</ListingTable.Cell>
                         <ListingTable.Cell align="right">
                           <ListingTable.RowActions visibility="hover">
                             <IconButton
@@ -231,11 +231,11 @@ export default function Components(): JSX.Element {
           anchor={menu.el}
           onClose={() => setMenu({ el: null, handler: null })}
           onView={() => {
-            orgId && id && menu.handler && navigate(componentUrl(orgId, id, menu.handler));
+            if (orgId && id && menu.handler) navigate(componentUrl(orgId, id, menu.handler));
             setMenu({ el: null, handler: null });
           }}
           onEdit={() => {
-            orgId && id && menu.handler && navigate(editComponentUrl(orgId, id, menu.handler));
+            if (orgId && id && menu.handler) navigate(editComponentUrl(orgId, id, menu.handler));
             setMenu({ el: null, handler: null });
           }}
         />

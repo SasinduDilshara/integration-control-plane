@@ -44,7 +44,7 @@ const DEFAULT_CODE = `{
   }
 }`;
 
-const Toolbar = ({ onBack, onTest, onPreview, isPreview, onSave }: any) => (
+const Toolbar = ({ onBack, onTest, onPreview, isPreview, onSave }: { onBack: () => void; onTest: () => void; onPreview: () => void; isPreview: boolean; onSave: () => void }) => (
   <Box
     sx={{
       p: 2,
@@ -85,7 +85,19 @@ const Toolbar = ({ onBack, onTest, onPreview, isPreview, onSave }: any) => (
   </Box>
 );
 
-const EditorPanel = ({ activeTab, onTabChange, config, onConfigChange, code }: any) => (
+const EditorPanel = ({
+  activeTab,
+  onTabChange,
+  config,
+  onConfigChange,
+  code,
+}: {
+  activeTab: number;
+  onTabChange: (_: React.SyntheticEvent, v: number) => void;
+  config: Record<string, string | boolean>;
+  onConfigChange: (k: string, v: string | boolean) => void;
+  code: string;
+}) => (
   <Box sx={{ p: 3 }}>
     <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
       <Tabs value={activeTab} onChange={onTabChange} variant="fullWidth">
@@ -137,7 +149,7 @@ const EditorPanel = ({ activeTab, onTabChange, config, onConfigChange, code }: a
   </Box>
 );
 
-const PreviewPanel = ({ config }: any) => (
+const PreviewPanel = ({ config }: { config: Record<string, string | boolean> }) => (
   <Card sx={{ width: '100%', maxWidth: 450, m: 3 }}>
     <CardContent sx={{ p: 4 }}>
       <Typography variant="h5" gutterBottom>
@@ -197,7 +209,7 @@ export default function ComponentEditor(): JSX.Element {
               overflow: 'auto',
               transition: 'width 0.3s',
             }}>
-            <EditorPanel activeTab={tab} onTabChange={(_: any, v: number) => setTab(v)} config={config} onConfigChange={(k: string, v: any) => setConfig({ ...config, [k]: v })} code={DEFAULT_CODE} />
+            <EditorPanel activeTab={tab} onTabChange={(_, v) => setTab(v)} config={config} onConfigChange={(k, v) => setConfig({ ...config, [k]: v })} code={DEFAULT_CODE} />
           </Box>
           <Box
             sx={{

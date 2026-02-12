@@ -81,7 +81,7 @@ interface SettingsState {
   };
 }
 
-const Section = ({ title, children, variant = 'outlined', titleColor }: { title: string; children: ReactNode; variant?: any; titleColor?: string }) => (
+const Section = ({ title, children, variant = 'outlined', titleColor }: { title: string; children: ReactNode; variant?: 'outlined' | 'elevation'; titleColor?: string }) => (
   <Card variant={variant} sx={{ borderColor: titleColor ? `${titleColor}.main` : undefined }}>
     <CardContent sx={{ p: 3 }}>
       <Typography variant="h5" gutterBottom sx={{ mb: 2, color: titleColor ? `${titleColor}.main` : undefined }}>
@@ -336,7 +336,7 @@ export default function SettingsPage(): JSX.Element {
                   secondary={
                     <Box display="flex" gap={1} mt={0.5}>
                       <Typography variant="body2">{m.e}</Typography>
-                      <Chip label={m.r} size="small" color={m.c as any} />
+                      <Chip label={m.r} size="small" color={m.c as 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'} />
                     </Box>
                   }
                 />

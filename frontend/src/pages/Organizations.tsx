@@ -160,7 +160,7 @@ export default function Organizations(): JSX.Element {
                           <Tooltip title={title} key={title}>
                             <IconButton
                               size="small"
-                              color={color as any}
+                              color={color as 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 action();
