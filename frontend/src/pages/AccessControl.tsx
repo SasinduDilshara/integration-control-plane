@@ -115,6 +115,11 @@ const envLabel = (m: { envUuid?: string | null }, environments: { id: string; na
   return env?.name ?? m.envUuid;
 };
 
+const getUserInitial = (user: { displayName?: string; username?: string; email?: string }): string => {
+  const initial = user.displayName?.trim().charAt(0) || user.email?.trim().charAt(0) || user.username?.trim().charAt(0) || '?';
+  return initial.toUpperCase();
+};
+
 // ── Users ──
 
 function CreateUserDialog({ orgHandler, onClose }: { orgHandler: string; onClose: () => void }) {
@@ -170,7 +175,7 @@ function UserDetailView({ orgHandler, user, onBack }: { orgHandler: string; user
         Back to Users List
       </Button>
       <Stack direction="row" alignItems="center" gap={2} sx={{ mb: 3 }}>
-        <Avatar sx={{ width: 48, height: 48 }}>{user.displayName[0]}</Avatar>
+        <Avatar sx={{ width: 48, height: 48 }}>{getUserInitial(user)}</Avatar>
         <Stack>
           <Typography variant="h6">{user.displayName}</Typography>
           <Typography variant="body2" color="text.secondary">{user.username}</Typography>
@@ -532,11 +537,20 @@ function AddRolesToGroupDialog({ orgHandler, projectId, groupId, existingRoleIds
   const pending = mutation.isPending;
   
   const assign = () => {
-    let remaining = selected.length;
-    const envUuid = envMode === 'selected' && selectedEnvs.length > 0 ? selectedEnvs[0] : undefined;
-    for (const r of selected) {
-      mutation.mutate({ groupId, roleIds: [r.roleId], envUuid }, { onSuccess: () => { if (--remaining === 0) onClose(); } });
+    if (envMode === 'selected' && selectedEnvs.length === 0) {
+      return;
     }
+    const envUuid = envMode === 'selected' && selectedEnvs.length > 0 ? selectedEnvs[0] : undefined;
+    const roleIds = selected.map((r) => r.roleId);
+    mutation.mutate(
+      { groupId, roleIds, envUuid },
+      {
+        onSuccess: () => onClose(),
+        onError: (error) => {
+          console.error('Failed to add roles to group:', error);
+        },
+      }
+    );
   };
   
   return (
@@ -582,7 +596,7 @@ function AddRolesToGroupDialog({ orgHandler, projectId, groupId, existingRoleIds
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={selected.length === 0 || pending} onClick={assign}>Add</Button>
+        <Button variant="contained" disabled={selected.length === 0 || pending || (envMode === 'selected' && selectedEnvs.length === 0)} onClick={assign}>Add</Button>
       </DialogActions>
     </Dialog>
   );
@@ -742,7 +756,7 @@ function GroupDetailView({ orgHandler, projectId, group, onBack, showUsers = tru
                           <IconButton 
                             size="small" 
                             onClick={() => setRemovingRole({ id: r.id, roleName: r.roleName })}
-                            disabled={projectId && !r.projectUuid}
+                            disabled={Boolean(projectId && !r.projectUuid)}
                           >
                             <Trash2 size={16} />
                           </IconButton>

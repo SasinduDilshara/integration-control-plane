@@ -41,9 +41,9 @@ import {
   useAppShell,
   useNotifications,
 } from '@wso2/oxygen-ui';
-import { useState } from 'react';
+import React, { useState } from 'react';
 import type { JSX } from 'react';
-import { useNavigate, Outlet, Link as NavLink, useLocation } from 'react-router';
+import { useNavigate, Outlet, Link as NavLink } from 'react-router';
 import Logo from '../components/Logo';
 import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Settings, Shield, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
 import { useProject, useProjects, useComponents } from '../api/queries';
@@ -192,22 +192,22 @@ export default function AppLayout(): JSX.Element {
           <Sidebar.Nav>
             <Sidebar.Category>
               {items.map((item, index) => (
-                <>
-                  <Link key={item.resource} component={NavLink} to={item.url}>
+                <React.Fragment key={`${item.resource}-${index}`}>
+                  <Link component={NavLink} to={item.url}>
                     <Sidebar.Item id={item.resource}>
                       <Sidebar.ItemIcon>{SIDEBAR_ICONS[item.resource]}</Sidebar.ItemIcon>
                       <Sidebar.ItemLabel>{item.label}</Sidebar.ItemLabel>
                     </Sidebar.Item>
                   </Link>
                   {hasProject(scope) && item.resource === 'logs' && (
-                    <Sidebar.Item id="metrics" key="metrics">
+                    <Sidebar.Item id="metrics" key={`${item.resource}-metrics`}>
                       <Sidebar.ItemIcon>
                         <BarChart3 size={20} />
                       </Sidebar.ItemIcon>
                       <Sidebar.ItemLabel>Metrics</Sidebar.ItemLabel>
                     </Sidebar.Item>
                   )}
-                </>
+                </React.Fragment>
               ))}
             </Sidebar.Category>
           </Sidebar.Nav>

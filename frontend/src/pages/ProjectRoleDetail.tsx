@@ -72,6 +72,9 @@ function AssignRoleToGroupsDialog({
   const pending = mutation.isPending;
   
   const assign = () => {
+    if (envMode === 'selected' && selectedEnvs.length === 0) {
+      return;
+    }
     let remaining = selected.length;
     const envUuid = envMode === 'selected' && selectedEnvs.length > 0 ? selectedEnvs[0] : undefined;
     for (const g of selected) {
@@ -132,7 +135,7 @@ function AssignRoleToGroupsDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={selected.length === 0 || pending} onClick={assign}>
+        <Button variant="contained" disabled={selected.length === 0 || pending || (envMode === 'selected' && selectedEnvs.length === 0)} onClick={assign}>
           Assign
         </Button>
       </DialogActions>
@@ -237,7 +240,7 @@ export default function ProjectRoleDetail(): JSX.Element {
                       <IconButton
                         size="small"
                         onClick={() => handleDeleteGroup(g)}
-                        disabled={removeMutation.isPending || !g.projectUuid}
+                        disabled={removeMutation.isPending || Boolean(!g.projectUuid)}
                       >
                         <Trash2 size={16} />
                       </IconButton>

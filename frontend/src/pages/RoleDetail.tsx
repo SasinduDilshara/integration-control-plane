@@ -71,6 +71,9 @@ function AssignRoleToGroupsDialog({ orgHandler, roleId, roleName, existingGroupI
   const available = allGroups.filter((g) => !existingGroupIds.includes(g.groupId));
   const pending = mutation.isPending;
   const assign = () => {
+    if (envMode === 'selected' && selectedEnvs.length === 0) {
+      return;
+    }
     let remaining = selected.length;
     const envUuid = envMode === 'selected' && selectedEnvs.length > 0 ? selectedEnvs[0] : undefined;
     for (const g of selected) {
@@ -123,7 +126,7 @@ function AssignRoleToGroupsDialog({ orgHandler, roleId, roleName, existingGroupI
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" disabled={selected.length === 0 || pending} onClick={assign}>Assign</Button>
+        <Button variant="contained" disabled={selected.length === 0 || pending || (envMode === 'selected' && selectedEnvs.length === 0)} onClick={assign}>Assign</Button>
       </DialogActions>
     </Dialog>
   );
