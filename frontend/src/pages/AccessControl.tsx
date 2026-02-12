@@ -27,6 +27,7 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@wso2/oxygen-ui';
 import { ArrowLeft, ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
@@ -736,9 +737,17 @@ function GroupDetailView({ orgHandler, projectId, group, onBack, showUsers = tru
                       <Chip label={envLabel(r, allEnvironments)} size="small" />
                     </TableCell>
                     <TableCell align="right">
-                      <IconButton size="small" onClick={() => setRemovingRole({ id: r.id, roleName: r.roleName })}>
-                        <Trash2 size={16} />
-                      </IconButton>
+                      <Tooltip title={projectId && !r.projectUuid ? "Org-level mapping" : ""} placement="right">
+                        <span>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => setRemovingRole({ id: r.id, roleName: r.roleName })}
+                            disabled={projectId && !r.projectUuid}
+                          >
+                            <Trash2 size={16} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))}

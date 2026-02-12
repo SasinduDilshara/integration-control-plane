@@ -25,6 +25,7 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from '@wso2/oxygen-ui';
 import { ArrowLeft, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
@@ -231,13 +232,17 @@ export default function ProjectRoleDetail(): JSX.Element {
                   <Chip label={envLabel(g, allEnvironments)} size="small" />
                 </TableCell>
                 <TableCell>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleDeleteGroup(g)}
-                    disabled={removeMutation.isPending}
-                  >
-                    <Trash2 size={16} />
-                  </IconButton>
+                  <Tooltip title={!g.projectUuid ? "Org-level mapping" : ""} placement="right">
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => handleDeleteGroup(g)}
+                        disabled={removeMutation.isPending || !g.projectUuid}
+                      >
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
                 </TableCell>
               </TableRow>
             ))}
