@@ -30,8 +30,8 @@ export default function PublicLayout(): JSX.Element {
           spacing={2}
           sx={{
             position: 'fixed',
-            top: '3.7rem',
-            left: '8rem',
+            top: '1.5rem',
+            left: '1.5rem',
             zIndex: 2,
           }}>
           <ThemeSwitcher />

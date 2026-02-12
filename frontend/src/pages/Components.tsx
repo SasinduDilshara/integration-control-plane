@@ -17,10 +17,10 @@
  */
 
 import { useState, useMemo, type JSX } from 'react';
-import { Box, Button, Card, CardContent, Chip, IconButton, ListingTable, Menu, MenuItem, Select, FormControl, FormLabel, TablePagination, PageContent, PageTitle, type ListingTableDensity } from '@wso2/oxygen-ui';
+import { Box, Button, Card, CardContent, Chip, IconButton, ListingTable, Menu, MenuItem, Select, FormControl, FormLabel, TablePagination, PageContent, PageTitle, type ListingTableDensity, CircularProgress } from '@wso2/oxygen-ui';
 import { Plus, MoreVertical, Filter, Download, FileText, Key, Shield, RefreshCw, Lock, Inbox } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate, useParams, Link as NavigateLink } from 'react-router';
-import { mockComponents } from '../mock-data/mockComponents';
+import { useComponents } from '../api/queries';
 import { projectUrl, newComponentUrl, componentUrl, editComponentUrl } from '../paths';
 import { getStatusColor } from '../config/statusColors';
 import { capitalize } from '../utils/string';
@@ -84,6 +84,7 @@ const ActionMenu = ({ anchor, onClose, onView, onEdit }: { anchor: HTMLElement |
 export default function Components(): JSX.Element {
   const navigate = useNavigate();
   const { id, orgId } = useParams<{ id: string; orgId: string }>();
+  const { data: components = [], isLoading, refetch, isFetching } = useComponents(orgId ?? '', id ?? '');
   const [filters, setFilters] = useState<Filters>({
     type: 'all',
     status: 'all',
@@ -94,13 +95,15 @@ export default function Components(): JSX.Element {
   const [rows, setRows] = useState(5);
   const [menu, setMenu] = useState<{
     el: HTMLElement | null;
-    id: string | null;
-  }>({ el: null, id: null });
+    handler: string | null;
+  }>({ el: null, handler: null });
 
   const list = useMemo(() => {
     const q = filters.query.toLowerCase();
-    return mockComponents.filter((c) => (filters.type === 'all' || c.type === filters.type) && (filters.status === 'all' || c.status === filters.status) && (!q || [c.name, c.type, c.category, c.description].some((s) => s.toLowerCase().includes(q))));
-  }, [filters]);
+    return components.filter(
+      (c: any) => (filters.type === 'all' || c.componentType === filters.type) && (filters.status === 'all' || c.status === filters.status) && (!q || [c.name, c.displayName, c.componentType, c.description].some((s) => s?.toLowerCase().includes(q))),
+    );
+  }, [filters, components]);
 
   const maxPage = Math.max(0, Math.ceil(list.length / rows) - 1);
   const safePage = Math.min(page, maxPage);
@@ -108,116 +111,135 @@ export default function Components(): JSX.Element {
   const Icon = (type: string) => ICONS[type] || FileText;
 
   return (
-    <PageContent>
-      <PageTitle>
-        <PageTitle.BackButton component={<NavigateLink to={orgId && id ? projectUrl(orgId, id) : '#'} />} />
-        <PageTitle.Header>Components</PageTitle.Header>
-        <PageTitle.SubHeader>Manage authentication components</PageTitle.SubHeader>
-        <PageTitle.Actions>
-          <Button variant="outlined" startIcon={<Download size={18} />}>
-            Export
-          </Button>
-          <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => orgId && id && navigate(newComponentUrl(orgId, id))}>
-            New Component
-          </Button>
-        </PageTitle.Actions>
-      </PageTitle>
+    <>
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <PageContent>
+        <PageTitle>
+          <PageTitle.BackButton component={<NavigateLink to={orgId && id ? projectUrl(orgId, id) : '#'} />} />
+          <PageTitle.Header>Components</PageTitle.Header>
+          <PageTitle.SubHeader>Manage authentication components</PageTitle.SubHeader>
+          <PageTitle.Actions>
+            <IconButton size="small" onClick={() => refetch()} disabled={isFetching} sx={{ mr: 1 }}>
+              <RefreshCw size={18} style={{ animation: isFetching ? 'spin 1s linear infinite' : 'none' }} />
+            </IconButton>
+            <Button variant="outlined" startIcon={<Download size={18} />}>
+              Export
+            </Button>
+            <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => orgId && id && navigate(newComponentUrl(orgId, id))}>
+              New Component
+            </Button>
+          </PageTitle.Actions>
+        </PageTitle>
 
-      <FilterBar filters={filters} onChange={(f) => setFilters((p) => ({ ...p, ...f }))} />
+        <FilterBar filters={filters} onChange={(f) => setFilters((p) => ({ ...p, ...f }))} />
 
-      <ListingTable.Provider searchValue={filters.query} onSearchChange={(q) => setFilters((p) => ({ ...p, query: q }))} density={density} onDensityChange={setDensity}>
-        <ListingTable.Container disablePaper>
-          <ListingTable.Toolbar showSearch searchPlaceholder="Search components..." actions={<ListingTable.DensityControl />} />
-          <ListingTable variant="card" density={density}>
-            <ListingTable.Head>
-              <ListingTable.Row>
-                {['name', 'type', 'category', 'status', 'author', 'lastModified'].map((f) => (
-                  <ListingTable.Cell key={f}>
-                    <ListingTable.SortLabel field={f}>{f === 'lastModified' ? 'Last modified' : capitalize(f)}</ListingTable.SortLabel>
-                  </ListingTable.Cell>
-                ))}
-                <ListingTable.Cell align="right">Actions</ListingTable.Cell>
-              </ListingTable.Row>
-            </ListingTable.Head>
-            <ListingTable.Body>
-              {paginated.length === 0 ? (
+        <ListingTable.Provider searchValue={filters.query} onSearchChange={(q) => setFilters((p) => ({ ...p, query: q }))} density={density} onDensityChange={setDensity}>
+          <ListingTable.Container disablePaper>
+            <ListingTable.Toolbar showSearch searchPlaceholder="Search components..." actions={<ListingTable.DensityControl />} />
+            <ListingTable variant="card" density={density}>
+              <ListingTable.Head>
                 <ListingTable.Row>
-                  <ListingTable.Cell colSpan={7}>
-                    <ListingTable.EmptyState
-                      illustration={<Inbox size={64} />}
-                      title="No components found"
-                      description="Try adjusting your filters"
-                      action={
-                        !filters.query && filters.type === 'all' ? (
-                          <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => orgId && id && navigate(newComponentUrl(orgId, id))}>
-                            Create Component
-                          </Button>
-                        ) : undefined
-                      }
-                    />
-                  </ListingTable.Cell>
+                  {['name', 'type', 'category', 'status', 'author', 'lastModified'].map((f) => (
+                    <ListingTable.Cell key={f}>
+                      <ListingTable.SortLabel field={f}>{f === 'lastModified' ? 'Last modified' : capitalize(f)}</ListingTable.SortLabel>
+                    </ListingTable.Cell>
+                  ))}
+                  <ListingTable.Cell align="right">Actions</ListingTable.Cell>
                 </ListingTable.Row>
-              ) : (
-                paginated.map((c) => {
-                  const TI = Icon(c.type);
-                  return (
-                    <ListingTable.Row key={c.id} variant="card" hover clickable onClick={() => orgId && id && navigate(componentUrl(orgId, id, c.id))}>
-                      <ListingTable.Cell>
-                        <ListingTable.CellIcon icon={<TI size={20} />} primary={c.name} secondary={c.description} />
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>
-                        <Chip label={c.type} size="small" variant="outlined" />
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>{c.category}</ListingTable.Cell>
-                      <ListingTable.Cell>
-                        <Chip label={c.status} size="small" color={getStatusColor(c.status)} />
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>{c.author}</ListingTable.Cell>
-                      <ListingTable.Cell>{c.lastModified}</ListingTable.Cell>
-                      <ListingTable.Cell align="right">
-                        <ListingTable.RowActions visibility="hover">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setMenu({ el: e.currentTarget, id: c.id });
-                            }}>
-                            <MoreVertical size={18} />
-                          </IconButton>
-                        </ListingTable.RowActions>
-                      </ListingTable.Cell>
-                    </ListingTable.Row>
-                  );
-                })
-              )}
-            </ListingTable.Body>
-          </ListingTable>
-          <TablePagination
-            component="div"
-            count={list.length}
-            rowsPerPage={rows}
-            page={safePage}
-            onPageChange={(_, p) => setPage(p)}
-            onRowsPerPageChange={(e) => {
-              setRows(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-          />
-        </ListingTable.Container>
-      </ListingTable.Provider>
+              </ListingTable.Head>
+              <ListingTable.Body>
+                {isLoading ? (
+                  <ListingTable.Row>
+                    <ListingTable.Cell colSpan={7} align="center">
+                      <CircularProgress size={32} sx={{ my: 4 }} />
+                    </ListingTable.Cell>
+                  </ListingTable.Row>
+                ) : paginated.length === 0 ? (
+                  <ListingTable.Row>
+                    <ListingTable.Cell colSpan={7}>
+                      <ListingTable.EmptyState
+                        illustration={<Inbox size={64} />}
+                        title="No components found"
+                        description="Try adjusting your filters"
+                        action={
+                          !filters.query && filters.type === 'all' ? (
+                            <Button variant="contained" startIcon={<Plus size={16} />} onClick={() => orgId && id && navigate(newComponentUrl(orgId, id))}>
+                              Create Component
+                            </Button>
+                          ) : undefined
+                        }
+                      />
+                    </ListingTable.Cell>
+                  </ListingTable.Row>
+                ) : (
+                  paginated.map((c: any) => {
+                    const TI = Icon(c.componentType || c.type);
+                    return (
+                      <ListingTable.Row key={c.id} variant="card" hover clickable onClick={() => orgId && id && navigate(componentUrl(orgId, id, c.handler))}>
+                        <ListingTable.Cell>
+                          <ListingTable.CellIcon icon={<TI size={20} />} primary={c.displayName || c.name} secondary={c.description} />
+                        </ListingTable.Cell>
+                        <ListingTable.Cell>
+                          <Chip label={c.componentType || c.type} size="small" variant="outlined" />
+                        </ListingTable.Cell>
+                        <ListingTable.Cell>{c.componentSubType || c.category || '—'}</ListingTable.Cell>
+                        <ListingTable.Cell>
+                          <Chip label={c.status} size="small" color={getStatusColor(c.status)} />
+                        </ListingTable.Cell>
+                        <ListingTable.Cell>{c.createdBy || '—'}</ListingTable.Cell>
+                        <ListingTable.Cell>{c.lastBuildDate || c.lastModified || '—'}</ListingTable.Cell>
+                        <ListingTable.Cell align="right">
+                          <ListingTable.RowActions visibility="hover">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenu({ el: e.currentTarget, handler: c.handler });
+                              }}>
+                              <MoreVertical size={18} />
+                            </IconButton>
+                          </ListingTable.RowActions>
+                        </ListingTable.Cell>
+                      </ListingTable.Row>
+                    );
+                  })
+                )}
+              </ListingTable.Body>
+            </ListingTable>
+            <TablePagination
+              component="div"
+              count={list.length}
+              rowsPerPage={rows}
+              page={safePage}
+              onPageChange={(_, p) => setPage(p)}
+              onRowsPerPageChange={(e) => {
+                setRows(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+            />
+          </ListingTable.Container>
+        </ListingTable.Provider>
 
-      <ActionMenu
-        anchor={menu.el}
-        onClose={() => setMenu({ el: null, id: null })}
-        onView={() => {
-          orgId && id && menu.id && navigate(componentUrl(orgId, id, menu.id));
-          setMenu({ el: null, id: null });
-        }}
-        onEdit={() => {
-          orgId && id && menu.id && navigate(editComponentUrl(orgId, id, menu.id));
-          setMenu({ el: null, id: null });
-        }}
-      />
-    </PageContent>
+        <ActionMenu
+          anchor={menu.el}
+          onClose={() => setMenu({ el: null, handler: null })}
+          onView={() => {
+            orgId && id && menu.handler && navigate(componentUrl(orgId, id, menu.handler));
+            setMenu({ el: null, handler: null });
+          }}
+          onEdit={() => {
+            orgId && id && menu.handler && navigate(editComponentUrl(orgId, id, menu.handler));
+            setMenu({ el: null, handler: null });
+          }}
+        />
+      </PageContent>
+    </>
   );
 }
