@@ -35,6 +35,7 @@ import { ChevronRight, Maximize2, RefreshCw, X } from '@wso2/oxygen-ui-icons-rea
 import { Globe, Link2, ListOrdered, Clock, FolderArchive, Package, Plug, FileText, Radio, Server, Wifi, Layers } from '@wso2/oxygen-ui-icons-react';
 import SearchField from '../components/SearchField';
 import { useEffect, useState, type JSX } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useComponentByHandler, useEnvironments, useArtifactTypes, useArtifacts, useArtifactSource, useLocalEntryValue, ARTIFACT_TYPE_TO_SOURCE_TYPE, type GqlEnvironment, type GqlArtifact, ARTIFACT_QUERY_MAP } from '../api/queries';
 import { useUpdateArtifactStatus, useUpdateListenerState } from '../api/mutations';
 import NotFound from '../components/NotFound';
@@ -657,6 +658,28 @@ function ArtifactTypeSelector({ envId, componentId, onSelectArtifact }: { envId:
 }
 
 function Environment({ env, componentId, onSelectArtifact }: { env: GqlEnvironment; componentId: string; onSelectArtifact: (a: GqlArtifact, type: string, envId: string) => void }) {
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      // Invalidate all queries related to this environment and component
+      await queryClient.invalidateQueries({
+        queryKey: ['artifacts'],
+        predicate: (query) => {
+          const [, , envId, compId] = query.queryKey;
+          return envId === env.id && compId === componentId;
+        }
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ['artifactTypes', componentId, env.id]
+      });
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
@@ -665,8 +688,18 @@ function Environment({ env, componentId, onSelectArtifact }: { env: GqlEnvironme
             {env.name}
           </Typography>
           <Stack direction="row" alignItems="center" gap={1}>
-            <IconButton size="small">
-              <RefreshCw size={16} />
+            <IconButton
+              size="small"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw
+                size={16}
+                style={{
+                  animation: isRefreshing ? 'spin 1s linear infinite' : 'none',
+                  transformOrigin: 'center'
+                }}
+              />
             </IconButton>
             <Button variant="contained">Configure Runtime</Button>
           </Stack>
@@ -692,22 +725,32 @@ export default function Component(scope: ComponentScope): JSX.Element {
   if (!component) return <NotFound message="Component not found" backTo={resourceUrl(broaden(scope)!, 'overview')} backLabel="Back to Project" />;
 
   return (
-    <Box sx={{ position: 'relative', overflow: 'hidden', flex: 1 }}>
-      <PageContent>
-        <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 1 }}>
-          <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{component.displayName?.[0]?.toUpperCase() ?? 'C'}</Avatar>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {component.displayName ?? scope.component}
+    <>
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+      <Box sx={{ position: 'relative', overflow: 'hidden', flex: 1 }}>
+        <PageContent>
+          <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 1 }}>
+            <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{component.displayName?.[0]?.toUpperCase() ?? 'C'}</Avatar>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              {component.displayName ?? scope.component}
+            </Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 4, ml: 9 }}>
+            {component.description || '+ Add Description'}
           </Typography>
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 4, ml: 9 }}>
-          {component.description || '+ Add Description'}
-        </Typography>
-        {environments.map((env) => (
-          <Environment key={env.id} env={env} componentId={component.id} onSelectArtifact={(a, type, envId) => setSelectedArtifact({ artifact: a, artifactType: type, envId, componentId: component.id, projectId: scope.project })} />
-        ))}
-      </PageContent>
-      <ArtifactDetail selected={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
-    </Box>
+          {environments.map((env) => (
+            <Environment key={env.id} env={env} componentId={component.id} onSelectArtifact={(a, type, envId) => setSelectedArtifact({ artifact: a, artifactType: type, envId, componentId: component.id, projectId: scope.project })} />
+          ))}
+        </PageContent>
+        <ArtifactDetail selected={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
+      </Box>
+    </>
   );
 }
