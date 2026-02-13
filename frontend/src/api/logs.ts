@@ -1,5 +1,4 @@
 import { useQuery } from '@tanstack/react-query';
-import { observabilityLogsApiUrl } from '../paths';
 import { authenticatedFetch } from '../auth/tokenManager';
 
 export interface LogsRequest {
@@ -25,7 +24,7 @@ export interface LogRow {
 }
 
 async function fetchLogs(req: LogsRequest): Promise<LogRow[]> {
-  const res = await authenticatedFetch(observabilityLogsApiUrl, {
+  const res = await authenticatedFetch(window.API_CONFIG.logsUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(req),

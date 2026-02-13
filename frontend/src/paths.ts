@@ -134,12 +134,10 @@ export const support = {
 // ---------------------------------------------------------------------------
 // API URLs
 // ---------------------------------------------------------------------------
+// Re-export from config/api for backward compatibility
+// ---------------------------------------------------------------------------
 
-export const observabilityLogsApiUrl = 'https://localhost:9448/icp/observability/logs?live=true';
+export { loginApiUrl, refreshTokenApiUrl, revokeTokenApiUrl, oidcAuthorizeApiUrl, oidcCallbackApiUrl } from './config/api';
 
-export const authApiBaseUrl = 'https://localhost:9445/auth';
-export const loginApiUrl = `${authApiBaseUrl}/login`;
-export const refreshTokenApiUrl = `${authApiBaseUrl}/refresh-token`;
-export const revokeTokenApiUrl = `${authApiBaseUrl}/revoke-token`;
-export const oidcAuthorizeApiUrl = `${authApiBaseUrl}/oidc/authorize-url`;
-export const oidcCallbackApiUrl = `${authApiBaseUrl}/login/oidc`;
+// Logs URL helper
+export const observabilityLogsApiUrl = (): string => window.API_CONFIG.logsUrl;
