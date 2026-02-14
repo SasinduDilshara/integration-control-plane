@@ -160,7 +160,7 @@ export default function ComponentRoleDetail(): JSX.Element {
   const { data: component, isLoading: loadingComponent } = useComponentByHandler(projectId, componentHandler);
   const componentId = component?.id;
   const roleModifyPerms = [...ALL_USER_MGT_PERMISSIONS, Permissions.PROJECT_EDIT, Permissions.PROJECT_MANAGE, Permissions.INTEGRATION_EDIT, Permissions.INTEGRATION_MANAGE];
-  
+
   const { data: role, isLoading: loadingRole } = useRoleDetail(orgHandler, roleId, projectId, componentId);
   const { data: roleGroups = [], isLoading: loadingGroups } = useRoleGroups(orgHandler, roleId, projectId, componentId);
   const { data: allEnvironments = [] } = useAllEnvironments();
@@ -244,7 +244,9 @@ export default function ComponentRoleDetail(): JSX.Element {
               <TableCell>Group Name</TableCell>
               <TableCell>Mapping Level</TableCell>
               <TableCell align="center">Applicable Environment</TableCell>
-              <Authorized permissions={roleModifyPerms}><TableCell width={80}>Actions</TableCell></Authorized>
+              <Authorized permissions={roleModifyPerms}>
+                <TableCell width={80}>Actions</TableCell>
+              </Authorized>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -274,7 +276,9 @@ export default function ComponentRoleDetail(): JSX.Element {
         </Table>
       )}
 
-      {addingGroups && componentId && <AssignRoleToGroupsDialog orgHandler={orgHandler} projectId={projectId} componentId={componentId} roleId={roleId} roleName={role.roleName} existingGroupIds={roleGroups.map((g) => g.groupId)} onClose={() => setAddingGroups(false)} />}
+      {addingGroups && componentId && (
+        <AssignRoleToGroupsDialog orgHandler={orgHandler} projectId={projectId} componentId={componentId} roleId={roleId} roleName={role.roleName} existingGroupIds={roleGroups.map((g) => g.groupId)} onClose={() => setAddingGroups(false)} />
+      )}
 
       {deletingGroup && (
         <Dialog open onClose={() => setDeletingGroup(null)} maxWidth="sm" fullWidth>

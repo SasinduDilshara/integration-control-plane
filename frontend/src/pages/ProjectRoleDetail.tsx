@@ -207,7 +207,9 @@ export default function ProjectRoleDetail(): JSX.Element {
               <TableCell>Group Name</TableCell>
               <TableCell>Mapping Level</TableCell>
               <TableCell align="center">Applicable Environment</TableCell>
-              <Authorized permissions={roleModifyPerms}><TableCell width={80}>Actions</TableCell></Authorized>
+              <Authorized permissions={roleModifyPerms}>
+                <TableCell width={80}>Actions</TableCell>
+              </Authorized>
             </TableRow>
           </TableHead>
           <TableBody>

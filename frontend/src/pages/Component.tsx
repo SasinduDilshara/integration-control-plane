@@ -888,7 +888,7 @@ export default function Component(scope: ComponentScope): JSX.Element {
   const { data: component, isLoading } = useComponentByHandler(scope.project, scope.component);
   const { data: environments = [] } = useEnvironments(scope.project);
   const [selectedArtifact, setSelectedArtifact] = useState<SelectedArtifact | null>(null);
-  
+
   // Load component permissions using the UUID - only when component is loaded
   useLoadComponentPermissions(scope.org, scope.project, component?.id || '');
 

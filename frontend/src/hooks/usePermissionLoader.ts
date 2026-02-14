@@ -10,12 +10,12 @@ export function useLoadProjectPermissions(orgHandle: string, projectId: string) 
 
   useEffect(() => {
     if (!projectId || !userId) return;
-    
+
     // If switching to a different project, clear previous permissions
     if (loadedRef.current && loadedRef.current !== projectId) {
       clearProjectPermissions();
     }
-    
+
     if (loadedRef.current === projectId) return;
     loadedRef.current = projectId;
 
@@ -33,15 +33,15 @@ export function useLoadComponentPermissions(orgHandle: string, projectId: string
   useEffect(() => {
     // Early return if any required value is missing
     if (!componentId || !projectId || !userId) return;
-    
+
     // If switching to a different component, clear previous permissions
     if (loadedRef.current && loadedRef.current !== componentId) {
       clearComponentPermissions();
     }
-    
+
     // Skip if already loaded for this component
     if (loadedRef.current === componentId) return;
-    
+
     loadedRef.current = componentId;
 
     fetchComponentPermissions(orgHandle, userId, projectId, componentId)

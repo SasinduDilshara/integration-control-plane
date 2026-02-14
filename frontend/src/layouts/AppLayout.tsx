@@ -98,7 +98,7 @@ export default function AppLayout(): JSX.Element {
     accessControlPerms.push(Permissions.INTEGRATION_EDIT, Permissions.INTEGRATION_MANAGE);
   }
   const canSeeAccessControl = hasAnyPermission(accessControlPerms, hasProject(scope) ? scope.project : undefined, componentId);
-  const items = sidebarItems(scope, resource).filter((item) => item.resource !== 'access-control' ||  canSeeAccessControl);
+  const items = sidebarItems(scope, resource).filter((item) => item.resource !== 'access-control' || canSeeAccessControl);
 
   return (
     <AppShell>

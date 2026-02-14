@@ -209,7 +209,11 @@ function UserDetailView({ orgHandler, user, onBack }: { orgHandler: string; user
           <TableRow>
             <TableCell>Group Name</TableCell>
             <TableCell>Description</TableCell>
-            {!isSelf && <Authorized permissions={Permissions.USER_MANAGE_USERS}><TableCell align="right">Action</TableCell></Authorized>}
+            {!isSelf && (
+              <Authorized permissions={Permissions.USER_MANAGE_USERS}>
+                <TableCell align="right">Action</TableCell>
+              </Authorized>
+            )}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -667,7 +671,7 @@ function GroupDetailView({ orgHandler, projectId, componentId, group, onBack, sh
   const roleModifyPerms: string[] = [...ALL_USER_MGT_PERMISSIONS];
   if (projectId) roleModifyPerms.push(Permissions.PROJECT_EDIT, Permissions.PROJECT_MANAGE);
   if (componentId) roleModifyPerms.push(Permissions.INTEGRATION_EDIT, Permissions.INTEGRATION_MANAGE);
-  
+
   const { data: groupRoles = [], isLoading: loadingRoles } = useGroupRoles(orgHandler, group.groupId, projectId, componentId);
   const { data: groupUsers = [], isLoading: loadingUsers } = useGroupUsers(orgHandler, group.groupId, { enabled: showUsers });
   const { data: allEnvironments = [] } = useAllEnvironments();
@@ -725,7 +729,9 @@ function GroupDetailView({ orgHandler, projectId, componentId, group, onBack, sh
                 <TableRow>
                   <TableCell>User</TableCell>
                   <TableCell>Username</TableCell>
-                  <Authorized permissions={Permissions.USER_MANAGE_GROUPS}><TableCell align="right">Action</TableCell></Authorized>
+                  <Authorized permissions={Permissions.USER_MANAGE_GROUPS}>
+                    <TableCell align="right">Action</TableCell>
+                  </Authorized>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -783,7 +789,9 @@ function GroupDetailView({ orgHandler, projectId, componentId, group, onBack, sh
                   <TableCell>Role Name</TableCell>
                   <TableCell>Mapping Level</TableCell>
                   <TableCell align="center">Applicable Environment</TableCell>
-                  <Authorized permissions={roleModifyPerms}><TableCell align="right">Action</TableCell></Authorized>
+                  <Authorized permissions={roleModifyPerms}>
+                    <TableCell align="right">Action</TableCell>
+                  </Authorized>
                 </TableRow>
               </TableHead>
               <TableBody>

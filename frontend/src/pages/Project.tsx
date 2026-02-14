@@ -104,7 +104,9 @@ function IntegrationsTable({ components, isLoading, scope, onSelect }: { compone
                 <ListingTable.Cell>Description</ListingTable.Cell>
                 <ListingTable.Cell>Type</ListingTable.Cell>
                 <ListingTable.Cell>Last Updated</ListingTable.Cell>
-                <Authorized permissions={Permissions.INTEGRATION_MANAGE}><ListingTable.Cell width={60} /></Authorized>
+                <Authorized permissions={Permissions.INTEGRATION_MANAGE}>
+                  <ListingTable.Cell width={60} />
+                </Authorized>
               </ListingTable.Row>
             </ListingTable.Head>
             <ListingTable.Body>
