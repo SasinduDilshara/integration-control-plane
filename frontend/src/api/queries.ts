@@ -210,7 +210,7 @@ const ARTIFACT_QUERY_MAP: Record<string, { queryName: string; field: string; fie
     queryName: 'restApisByEnvironmentAndComponent',
     field: 'restApisByEnvironmentAndComponent',
     fields: 'name, context',
-    gqlFields: 'name, context, tracing, statistics, url, runtimes { runtimeId, status }, resources { path, methods }',
+    gqlFields: 'name, context, tracing, statistics, url, urls, runtimes { runtimeId, status }, resources { path, methods }',
   },
   ProxyService: { queryName: 'proxyServicesByEnvironmentAndComponent', field: 'proxyServicesByEnvironmentAndComponent', fields: 'name, state', gqlFields: 'name, state, tracing, statistics, endpoints, runtimes { runtimeId, status }' },
   Endpoint: { queryName: 'endpointsByEnvironmentAndComponent', field: 'endpointsByEnvironmentAndComponent', fields: 'name, type, state', gqlFields: 'name, type, state, tracing, statistics, attributes { name, value }, runtimes { runtimeId, status }' },

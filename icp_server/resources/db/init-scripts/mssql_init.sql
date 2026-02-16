@@ -1124,6 +1124,7 @@ CREATE TABLE runtime_apis (
     api_name NVARCHAR (150) NOT NULL,
     artifact_id CHAR(36) NOT NULL UNIQUE,
     url NVARCHAR (500) NOT NULL,
+    urls NVARCHAR(MAX) NULL, -- JSON array of URLs
     context NVARCHAR (500) NOT NULL,
     version NVARCHAR (50) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'enabled' CHECK (

@@ -527,6 +527,18 @@ public type EndpointRecordInDB record {
     string? carbon_app;
 };
 
+public type RestApiRecordInDB record {
+    string api_name;
+    string url;
+    string urls?; // JSON string of array
+    string context;
+    string version?;
+    ArtifactState state;
+    string tracing;
+    string statistics = "disabled";
+    string? carbon_app;
+};
+
 public type SequenceRecordInDB record {
     string sequence_name;
     string sequence_type?;
@@ -667,6 +679,7 @@ public type RestApi record {
     }
     string name;
     string url = "";
+    string[] urls = []; // Multiple URLs for the API (HTTP and HTTPS URLs)
     string context;
     string version?;
     @sql:Column {

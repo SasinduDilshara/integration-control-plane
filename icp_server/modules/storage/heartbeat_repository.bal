@@ -963,30 +963,32 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
     foreach types:RestApi api in <types:RestApi[]>heartbeat.artifacts.apis {
         string artifactId = uuid:createType4AsString();
         string? carbonApp = api?.carbonApp;
+        string urlsJson = api.urls.toJsonString();
         if dbType == MSSQL {
             _ = check dbClient->execute(`
                 MERGE INTO runtime_apis AS target
-                USING (VALUES (${heartbeat.runtime}, ${api.name}, ${artifactId}, ${api.url}, ${api.context},
+                USING (VALUES (${heartbeat.runtime}, ${api.name}, ${artifactId}, ${api.url}, ${urlsJson}, ${api.context},
                        ${api.version}, ${api.state}, ${api.tracing}, ${api.statistics}, ${carbonApp}))
-                       AS source (runtime_id, api_name, artifact_id, url, context, version, state, tracing, [statistics], carbon_app)
+                       AS source (runtime_id, api_name, artifact_id, url, urls, context, version, state, tracing, [statistics], carbon_app)
                 ON (target.runtime_id = source.runtime_id AND target.api_name = source.api_name)
                 WHEN MATCHED THEN
-                    UPDATE SET url = source.url, context = source.context, version = source.version,
+                    UPDATE SET url = source.url, urls = source.urls, context = source.context, version = source.version,
                                state = source.state, tracing = source.tracing, [statistics] = source.[statistics], carbon_app = source.carbon_app, updated_at = CURRENT_TIMESTAMP
                 WHEN NOT MATCHED THEN
-                    INSERT (runtime_id, api_name, artifact_id, url, context, version, state, tracing, [statistics], carbon_app)
-                    VALUES (source.runtime_id, source.api_name, source.artifact_id, source.url, source.context, source.version, source.state, source.tracing, source.[statistics], source.carbon_app);
+                    INSERT (runtime_id, api_name, artifact_id, url, urls, context, version, state, tracing, [statistics], carbon_app)
+                    VALUES (source.runtime_id, source.api_name, source.artifact_id, source.url, source.urls, source.context, source.version, source.state, source.tracing, source.[statistics], source.carbon_app);
             `);
         } else if dbType == POSTGRESQL {
             _ = check dbClient->execute(`
                 INSERT INTO runtime_apis (
-                    runtime_id, api_name, url, context, version, state, tracing, statistics, carbon_app
+                    runtime_id, api_name, url, urls, context, version, state, tracing, statistics, carbon_app
                 ) VALUES (
-                    ${heartbeat.runtime}, ${api.name}, ${api.url},
+                    ${heartbeat.runtime}, ${api.name}, ${api.url}, ${urlsJson},
                     ${api.context}, ${api.version}, ${api.state}, ${api.tracing}, ${api.statistics}, ${carbonApp}
                 )
                 ON CONFLICT (runtime_id, api_name) DO UPDATE SET
                     url = EXCLUDED.url,
+                    urls = EXCLUDED.urls,
                     context = EXCLUDED.context,
                     version = EXCLUDED.version,
                     state = EXCLUDED.state,
@@ -998,13 +1000,14 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
         } else {
             _ = check dbClient->execute(`
                 INSERT INTO runtime_apis (
-                    runtime_id, api_name, artifact_id, url, context, version, state, tracing, statistics, carbon_app
+                    runtime_id, api_name, artifact_id, url, urls, context, version, state, tracing, statistics, carbon_app
                 ) VALUES (
-                    ${heartbeat.runtime}, ${api.name}, ${artifactId}, ${api.url},
+                    ${heartbeat.runtime}, ${api.name}, ${artifactId}, ${api.url}, ${urlsJson},
                     ${api.context}, ${api.version}, ${api.state}, ${api.tracing}, ${api.statistics}, ${carbonApp}
                 )
                 ON DUPLICATE KEY UPDATE
                     url = VALUES(url),
+                    urls = VALUES(urls),
                     context = VALUES(context),
                     version = VALUES(version),
                     state = VALUES(state),

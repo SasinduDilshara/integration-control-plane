@@ -147,6 +147,7 @@ type Resource {
 type RestApi {
   name: String!
   url: String!
+  urls: [String!]!
   context: String!
   version: String
   state: ArtifactState!

@@ -254,18 +254,48 @@ public isolated function getListenersForRuntime(string runtimeId) returns types:
 // Get REST APIs for a specific runtime
 public isolated function getApisForRuntime(string runtimeId) returns types:RestApi[]|error {
     types:RestApi[] apiList = [];
-    stream<types:RestApi, sql:Error?> apiStream = dbClient->query(`
-        SELECT api_name, url, context, version, state, tracing, statistics, carbon_app
+    stream<record {|
+        string api_name;
+        string url;
+        string? urls;
+        string context;
+        string? version;
+        string state;
+        string tracing;
+        string statistics;
+        string? carbon_app;
+    |}, sql:Error?> apiStream = dbClient->query(`
+        SELECT api_name, url, urls, context, version, state, tracing, statistics, carbon_app
         FROM runtime_apis
         WHERE runtime_id = ${runtimeId}
     `);
 
-    check from types:RestApi apiRecord in apiStream
+    check from var apiRecord in apiStream
         do {
             // Get resources for this API
-            types:ApiResource[] resources = check getApiResourcesForRuntime(runtimeId, apiRecord.name);
-            apiRecord.resources = resources;
-            apiList.push(apiRecord);
+            types:ApiResource[] resources = check getApiResourcesForRuntime(runtimeId, apiRecord.api_name);
+            
+            // Parse urls JSON string to array
+            string[] urlsArray = [];
+            string? urlsStr = apiRecord.urls;
+            if urlsStr is string {
+                json urlsJson = check urlsStr.fromJsonString();
+                urlsArray = check urlsJson.cloneWithType();
+            }
+            
+            types:RestApi api = {
+                name: apiRecord.api_name,
+                url: apiRecord.url,
+                urls: urlsArray,
+                context: apiRecord.context,
+                version: apiRecord.version,
+                state: <types:ArtifactState>apiRecord.state,
+                tracing: apiRecord.tracing,
+                statistics: apiRecord.statistics,
+                carbonApp: apiRecord.carbon_app,
+                resources: resources
+            };
+            apiList.push(api);
         };
 
     return apiList;

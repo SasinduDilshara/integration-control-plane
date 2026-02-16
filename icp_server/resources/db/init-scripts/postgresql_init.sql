@@ -672,6 +672,7 @@ CREATE TABLE runtime_apis (
     runtime_id VARCHAR(100) NOT NULL,
     api_name VARCHAR(200) NOT NULL,
     url VARCHAR(500) NOT NULL,
+    urls TEXT NULL, -- JSON array of URLs
     context VARCHAR(500) NOT NULL,
     version VARCHAR(50) NULL,
     state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
