@@ -927,7 +927,7 @@ function Environment({
                 Entry Points
               </Button>
               <Button variant={viewMode === 'allArtifacts' ? 'contained' : 'outlined'} size="small" startIcon={<LayoutGrid size={14} />} onClick={() => setViewMode('allArtifacts')} sx={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, ml: '-1px' }}>
-                Supporting Artiffacts
+                Supporting Artifacts
               </Button>
             </Stack>
           </Stack>
