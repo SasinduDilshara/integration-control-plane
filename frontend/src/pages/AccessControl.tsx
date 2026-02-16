@@ -31,12 +31,12 @@ import {
   Typography,
 } from '@wso2/oxygen-ui';
 import { ArrowLeft, ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
-import { useState, useMemo, useCallback, type JSX } from 'react';
+import { useState, useMemo, useCallback, useEffect, type JSX } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import SearchField from '../components/SearchField';
 import { useAuth } from '../auth/AuthContext';
 import { useAccessControl } from '../contexts/AccessControlContext';
-import { Permissions, ALL_ROLE_MODIFY_PERMISSIONS } from '../constants/permissions';
+import { Permissions, ALL_ROLE_MODIFY_PERMISSIONS, ALL_USER_MGT_PERMISSIONS } from '../constants/permissions';
 import Authorized from '../components/Authorized';
 import { orgRoleDetailUrl, projectRoleDetailUrl, componentRoleDetailUrl, componentAccessControlUrl } from '../paths';
 import {
@@ -947,6 +947,17 @@ const PROJECT_TABS = ['roles', 'groups'] as const;
 export default function AccessControl(): JSX.Element {
   const { orgHandler = 'default', tab = 'users' } = useParams();
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAccessControl();
+  
+  const accessControlPerms: string[] = [...ALL_USER_MGT_PERMISSIONS];
+  const canSeeAccessControl = hasAnyPermission(accessControlPerms);
+  
+  useEffect(() => {
+    if (!canSeeAccessControl) {
+      navigate(`/organizations/${orgHandler}`);
+    }
+  }, [canSeeAccessControl, navigate, orgHandler]);
+  
   const tabIndex = ORG_TABS.indexOf(tab as string as (typeof ORG_TABS)[number]);
   const safeIndex = tabIndex < 0 ? 0 : tabIndex;
   return (
@@ -970,6 +981,17 @@ export default function AccessControl(): JSX.Element {
 export function OrgAccessControl({ org }: { org: string }): JSX.Element {
   const { tab = 'users' } = useParams();
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAccessControl();
+  
+  const accessControlPerms: string[] = [...ALL_USER_MGT_PERMISSIONS];
+  const canSeeAccessControl = hasAnyPermission(accessControlPerms);
+  
+  useEffect(() => {
+    if (!canSeeAccessControl) {
+      navigate(`/organizations/${org}`);
+    }
+  }, [canSeeAccessControl, navigate, org]);
+  
   const tabIndex = ORG_TABS.indexOf(tab as string as (typeof ORG_TABS)[number]);
   const safeIndex = tabIndex < 0 ? 0 : tabIndex;
   return (
@@ -993,8 +1015,23 @@ export function OrgAccessControl({ org }: { org: string }): JSX.Element {
 export function ProjectAccessControl({ org, project }: { org: string; project: string }): JSX.Element {
   const { tab = 'roles' } = useParams();
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAccessControl();
   const { data: projectData, isLoading } = useProjectByHandler(project);
   const projectId = projectData?.id ?? '';
+  
+  const accessControlPerms: string[] = [
+    ...ALL_USER_MGT_PERMISSIONS,
+    Permissions.PROJECT_EDIT,
+    Permissions.PROJECT_MANAGE,
+  ];
+  const canSeeAccessControl = hasAnyPermission(accessControlPerms, projectId || undefined);
+  
+  useEffect(() => {
+    if (!isLoading && projectId && !canSeeAccessControl) {
+      navigate(`/organizations/${org}/projects/${project}`);
+    }
+  }, [canSeeAccessControl, isLoading, projectId, navigate, org, project]);
+  
   const tabIndex = PROJECT_TABS.indexOf(tab as string as (typeof PROJECT_TABS)[number]);
   const safeIndex = tabIndex < 0 ? 0 : tabIndex;
 
@@ -1024,9 +1061,27 @@ export function ProjectAccessControl({ org, project }: { org: string; project: s
 export function ComponentAccessControl({ org, project, component }: ComponentScope): JSX.Element {
   const { tab = 'roles' } = useParams();
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAccessControl();
   const { data: projectData, isLoading: loadingProject } = useProjectByHandler(project);
   const projectId = projectData?.id ?? '';
   const { data: componentData, isLoading: loadingComponent } = useComponentByHandler(projectId, component);
+  const componentId = componentData?.id;
+  
+  const accessControlPerms: string[] = [
+    ...ALL_USER_MGT_PERMISSIONS,
+    Permissions.PROJECT_EDIT,
+    Permissions.PROJECT_MANAGE,
+    Permissions.INTEGRATION_EDIT,
+    Permissions.INTEGRATION_MANAGE,
+  ];
+  const canSeeAccessControl = hasAnyPermission(accessControlPerms, projectId || undefined, componentId);
+  
+  useEffect(() => {
+    if (!loadingProject && !loadingComponent && componentId && !canSeeAccessControl) {
+      navigate(`/organizations/${org}/projects/${project}/integrations/${component}`);
+    }
+  }, [canSeeAccessControl, loadingProject, loadingComponent, componentId, navigate, org, project, component]);
+  
   const tabIndex = PROJECT_TABS.indexOf(tab as string as (typeof PROJECT_TABS)[number]);
   const safeIndex = tabIndex < 0 ? 0 : tabIndex;
 
@@ -1034,6 +1089,12 @@ export function ComponentAccessControl({ org, project, component }: ComponentSco
     return (
       <PageContent>
         <Loading />
+      </PageContent>
+    );
+  if (!projectData)
+    return (
+      <PageContent>
+        <Typography>Project not found</Typography>
       </PageContent>
     );
   if (!componentData)

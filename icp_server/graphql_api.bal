@@ -1039,8 +1039,13 @@ service /graphql on graphqlListener {
 
     // Get a specific project by handler (orgId is required for this lookup)
     isolated resource function get projectByHandler(graphql:Context context, int orgId, string projectHandler) returns types:Project?|error {
+        log:printInfo("Fetching project by handler", orgId = orgId, projectHandler = projectHandler);
         types:UserContextV2 userContext = check extractUserContext(context);
-        string projectId = check storage:getProjectIdByHandler(projectHandler, orgId);
+        string|error projectId = storage:getProjectIdByHandler(projectHandler, orgId);
+        if projectId is error {
+            log:printError("Error getting projectId from handle", projectId, orgId = orgId, projectHandler = projectHandler);
+            return ();
+        }
         // Use access resolver to check project access (handles ANY role assignment)
         auth:ProjectAccessInfo accessInfo = check auth:resolveProjectAccess(userContext.userId, projectId);
 
@@ -1048,6 +1053,7 @@ service /graphql on graphqlListener {
             log:printWarn("Attempt to access project without permission", userId = userContext.userId, projectId = projectId);
             return (); // No access - return null (404 pattern for queries)
         }
+        log:printInfo("Successfully retrieved project", projectId = projectId);
         return check storage:getProjectById(projectId);
     }
     // Check project creation eligibility for an organization
