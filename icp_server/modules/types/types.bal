@@ -957,9 +957,6 @@ public type DataSource record {
     string driver?;
     string url?;
     string username?;
-    @sql:Column {
-        name: "datasource_state"
-    }
     ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
     string[] runtimeIds?;
     ArtifactRuntimeInfo[]? runtimes?;

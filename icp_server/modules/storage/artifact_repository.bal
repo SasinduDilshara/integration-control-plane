@@ -64,6 +64,16 @@ isolated function getRuntimeStatusMap(string[] runtimeIds) returns map<string>|e
     return statusMap;
 }
 
+// Helper function to determine if an artifact from a new runtime should replace the existing one
+// Prioritizes RUNNING runtimes over non-RUNNING runtimes
+isolated function shouldReplaceArtifact(string newRuntimeId, string existingRuntimeId, map<string> statusMap) returns boolean {
+    string newStatus = statusMap[newRuntimeId] ?: "UNKNOWN";
+    string existingStatus = statusMap[existingRuntimeId] ?: "UNKNOWN";
+    
+    // Replace if new runtime is RUNNING and existing is not
+    return newStatus == "RUNNING" && existingStatus != "RUNNING";
+}
+
 // Helper function to calculate a hash for a service based on its key properties
 isolated function calculateServiceHash(types:Service 'service) returns string {
     // Create a unique string representation of the service including resources
@@ -121,39 +131,50 @@ isolated function calculateListenerHash(types:Listener listenerRecord) returns s
 
 // Get services for a specific environment and component
 public isolated function getServicesByEnvironmentAndComponent(string environmentId, string componentId) returns types:Service[]|error {
-    types:Service[] serviceList = [];
+    map<types:Service> serviceMap = {};
     map<string[]> serviceRuntimeMap = {};
+    map<string> serviceSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return serviceList;
+        return [];
     }
 
-    // Get all services for these runtimes, ensuring uniqueness
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all services for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:Service[] runtimeServices = check getServicesForRuntime(runtimeId);
         foreach types:Service 'service in runtimeServices {
             string hash = calculateServiceHash('service);
             if !serviceRuntimeMap.hasKey(hash) {
+                // First time seeing this artifact
+                serviceMap[hash] = 'service;
                 serviceRuntimeMap[hash] = [runtimeId];
-                serviceList.push('service);
+                serviceSourceRuntime[hash] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>serviceRuntimeMap[hash];
                 existing.push(runtimeId);
                 serviceRuntimeMap[hash] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = serviceSourceRuntime[hash] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    serviceMap[hash] = 'service;
+                    serviceSourceRuntime[hash] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (serviceList.length()) {
-        types:Service s = serviceList[i];
-        string hash = calculateServiceHash(s);
+    // Convert map to array and attach runtime info
+    types:Service[] serviceList = [];
+    foreach [string, types:Service] [hash, s] in serviceMap.entries() {
         string[] rids = serviceRuntimeMap[hash] ?: [];
         s.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
@@ -161,8 +182,7 @@ public isolated function getServicesByEnvironmentAndComponent(string environment
             string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        s.runtimes = infos;
-        serviceList[i] = s;
+        serviceList.push(s);
     }
     log:printDebug("Services processed: " + serviceList.length().toString());
     return serviceList;
@@ -170,48 +190,58 @@ public isolated function getServicesByEnvironmentAndComponent(string environment
 
 // Get listeners for a specific environment and component
 public isolated function getListenersByEnvironmentAndComponent(string environmentId, string componentId) returns types:Listener[]|error {
-    types:Listener[] listenerList = [];
+    map<types:Listener> listenerMap = {};
     map<string[]> listenerRuntimeMap = {};
+    map<string> listenerSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return listenerList;
+        return [];
     }
 
-    // Get all listeners for these runtimes, ensuring uniqueness
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all listeners for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:Listener[] runtimeListeners = check getListenersForRuntime(runtimeId);
         foreach types:Listener listenerRecord in runtimeListeners {
             string hash = calculateListenerHash(listenerRecord);
             if !listenerRuntimeMap.hasKey(hash) {
+                // First time seeing this artifact
+                listenerMap[hash] = listenerRecord;
                 listenerRuntimeMap[hash] = [runtimeId];
-                listenerList.push(listenerRecord);
+                listenerSourceRuntime[hash] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>listenerRuntimeMap[hash];
                 existing.push(runtimeId);
                 listenerRuntimeMap[hash] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = listenerSourceRuntime[hash] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    listenerMap[hash] = listenerRecord;
+                    listenerSourceRuntime[hash] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapL = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (listenerList.length()) {
-        types:Listener l = listenerList[i];
-        string hash = calculateListenerHash(l);
+    // Convert map to array and attach runtime info
+    types:Listener[] listenerList = [];
+    foreach [string, types:Listener] [hash, l] in listenerMap.entries() {
         string[] rids = listenerRuntimeMap[hash] ?: [];
         l.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapL[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        l.runtimes = infos;
-        listenerList[i] = l;
+        listenerList.push(l);
     }
     log:printDebug("Listeners processed: " + listenerList.length().toString());
     return listenerList;
@@ -219,48 +249,58 @@ public isolated function getListenersByEnvironmentAndComponent(string environmen
 
 // Get REST APIs for a specific environment and component
 public isolated function getRestApisByEnvironmentAndComponent(string environmentId, string componentId) returns types:RestApi[]|error {
-    types:RestApi[] apiList = [];
+    map<types:RestApi> apiMap = {};
     map<string[]> apiRuntimeMap = {};
+    map<string> apiSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return apiList;
+        return [];
     }
 
-    // Get all REST APIs for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all REST APIs for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:RestApi[] runtimeApis = check getApisForRuntime(runtimeId);
         foreach types:RestApi api in runtimeApis {
             string key = api.name;
             if !apiRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                apiMap[key] = api;
                 apiRuntimeMap[key] = [runtimeId];
-                apiList.push(api);
+                apiSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>apiRuntimeMap[key];
                 existing.push(runtimeId);
                 apiRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = apiSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    apiMap[key] = api;
+                    apiSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // attach runtimeIds
-    // Build status map once
-    map<string> statusMapApi = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (apiList.length()) {
-        types:RestApi api = apiList[i];
-        string[] rids = apiRuntimeMap[api.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:RestApi[] apiList = [];
+    foreach [string, types:RestApi] [key, api] in apiMap.entries() {
+        string[] rids = apiRuntimeMap[key] ?: [];
         api.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapApi[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        api.runtimes = infos;
-        apiList[i] = api;
+        apiList.push(api);
     }
 
     return apiList;
@@ -268,47 +308,58 @@ public isolated function getRestApisByEnvironmentAndComponent(string environment
 
 // Get Carbon Apps for a specific environment and component
 public isolated function getCarbonAppsByEnvironmentAndComponent(string environmentId, string componentId) returns types:CarbonApp[]|error {
-    types:CarbonApp[] appList = [];
+    map<types:CarbonApp> appMap = {};
     map<string[]> appRuntimeMap = {};
+    map<string> appSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return appList;
+        return [];
     }
 
-    // Get all Carbon Apps for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Carbon Apps for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:CarbonApp[] runtimeApps = check getCarbonAppsForRuntime(runtimeId);
         foreach types:CarbonApp app in runtimeApps {
             string key = app.name;
             if !appRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                appMap[key] = app;
                 appRuntimeMap[key] = [runtimeId];
-                appList.push(app);
+                appSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>appRuntimeMap[key];
                 existing.push(runtimeId);
                 appRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = appSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    appMap[key] = app;
+                    appSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapApp = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (appList.length()) {
-        types:CarbonApp app = appList[i];
-        string[] rids = appRuntimeMap[app.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:CarbonApp[] appList = [];
+    foreach [string, types:CarbonApp] [key, app] in appMap.entries() {
+        string[] rids = appRuntimeMap[key] ?: [];
         app.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapApp[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        app.runtimes = infos;
-        appList[i] = app;
+        appList.push(app);
     }
 
     return appList;
@@ -316,47 +367,58 @@ public isolated function getCarbonAppsByEnvironmentAndComponent(string environme
 
 // Get Inbound Endpoints for a specific environment and component
 public isolated function getInboundEndpointsByEnvironmentAndComponent(string environmentId, string componentId) returns types:InboundEndpoint[]|error {
-    types:InboundEndpoint[] inboundList = [];
+    map<types:InboundEndpoint> inboundMap = {};
     map<string[]> inboundRuntimeMap = {};
+    map<string> inboundSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return inboundList;
+        return [];
     }
 
-    // Get all Inbound Endpoints for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Inbound Endpoints for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:InboundEndpoint[] runtimeInbounds = check getInboundEndpointsForRuntime(runtimeId);
         foreach types:InboundEndpoint inbound in runtimeInbounds {
             string key = inbound.name;
             if !inboundRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                inboundMap[key] = inbound;
                 inboundRuntimeMap[key] = [runtimeId];
-                inboundList.push(inbound);
+                inboundSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>inboundRuntimeMap[key];
                 existing.push(runtimeId);
                 inboundRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = inboundSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    inboundMap[key] = inbound;
+                    inboundSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapInbound = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (inboundList.length()) {
-        types:InboundEndpoint inbound = inboundList[i];
-        string[] rids = inboundRuntimeMap[inbound.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:InboundEndpoint[] inboundList = [];
+    foreach [string, types:InboundEndpoint] [key, inbound] in inboundMap.entries() {
+        string[] rids = inboundRuntimeMap[key] ?: [];
         inbound.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapInbound[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        inbound.runtimes = infos;
-        inboundList[i] = inbound;
+        inboundList.push(inbound);
     }
 
     return inboundList;
@@ -364,47 +426,58 @@ public isolated function getInboundEndpointsByEnvironmentAndComponent(string env
 
 // Get Endpoints for a specific environment and component
 public isolated function getEndpointsByEnvironmentAndComponent(string environmentId, string componentId) returns types:Endpoint[]|error {
-    types:Endpoint[] endpointList = [];
+    map<types:Endpoint> endpointMap = {};
     map<string[]> endpointRuntimeMap = {};
+    map<string> endpointSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return endpointList;
+        return [];
     }
 
-    // Get all Endpoints for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Endpoints for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:Endpoint[] runtimeEndpoints = check getEndpointsForRuntime(runtimeId);
         foreach types:Endpoint endpoint in runtimeEndpoints {
             string key = endpoint.name;
             if !endpointRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                endpointMap[key] = endpoint;
                 endpointRuntimeMap[key] = [runtimeId];
-                endpointList.push(endpoint);
+                endpointSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>endpointRuntimeMap[key];
                 existing.push(runtimeId);
                 endpointRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = endpointSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    endpointMap[key] = endpoint;
+                    endpointSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapEndpoint = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (endpointList.length()) {
-        types:Endpoint endpoint = endpointList[i];
-        string[] rids = endpointRuntimeMap[endpoint.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:Endpoint[] endpointList = [];
+    foreach [string, types:Endpoint] [key, endpoint] in endpointMap.entries() {
+        string[] rids = endpointRuntimeMap[key] ?: [];
         endpoint.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapEndpoint[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        endpoint.runtimes = infos;
-        endpointList[i] = endpoint;
+        endpointList.push(endpoint);
     }
 
     return endpointList;
@@ -412,47 +485,58 @@ public isolated function getEndpointsByEnvironmentAndComponent(string environmen
 
 // Get Sequences for a specific environment and component
 public isolated function getSequencesByEnvironmentAndComponent(string environmentId, string componentId) returns types:Sequence[]|error {
-    types:Sequence[] sequenceList = [];
+    map<types:Sequence> sequenceMap = {};
     map<string[]> sequenceRuntimeMap = {};
+    map<string> sequenceSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return sequenceList;
+        return [];
     }
 
-    // Get all Sequences for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Sequences for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:Sequence[] runtimeSequences = check getSequencesForRuntime(runtimeId);
         foreach types:Sequence sequence in runtimeSequences {
             string key = sequence.name;
             if !sequenceRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                sequenceMap[key] = sequence;
                 sequenceRuntimeMap[key] = [runtimeId];
-                sequenceList.push(sequence);
+                sequenceSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>sequenceRuntimeMap[key];
                 existing.push(runtimeId);
                 sequenceRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = sequenceSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    sequenceMap[key] = sequence;
+                    sequenceSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapSeq = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (sequenceList.length()) {
-        types:Sequence sequence = sequenceList[i];
-        string[] rids = sequenceRuntimeMap[sequence.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:Sequence[] sequenceList = [];
+    foreach [string, types:Sequence] [key, sequence] in sequenceMap.entries() {
+        string[] rids = sequenceRuntimeMap[key] ?: [];
         sequence.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapSeq[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        sequence.runtimes = infos;
-        sequenceList[i] = sequence;
+        sequenceList.push(sequence);
     }
 
     return sequenceList;
@@ -460,77 +544,82 @@ public isolated function getSequencesByEnvironmentAndComponent(string environmen
 
 // Get Proxy Services for a specific environment and component
 public isolated function getProxyServicesByEnvironmentAndComponent(string environmentId, string componentId) returns types:ProxyService[]|error {
-    types:ProxyService[] proxyList = [];
+    map<types:ProxyService> proxyMap = {};
     map<string[]> proxyRuntimeMap = {};
-    map<int> proxyIndexMap = {};
+    map<string> proxySourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return proxyList;
+        return [];
     }
 
-    // Get all Proxy Services for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Proxy Services for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:ProxyService[] runtimeProxies = check getProxyServicesForRuntime(runtimeId);
         foreach types:ProxyService proxy in runtimeProxies {
             string key = proxy.name;
             if !proxyRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                proxyMap[key] = proxy;
                 proxyRuntimeMap[key] = [runtimeId];
-                proxyIndexMap[key] = proxyList.length();
-                proxyList.push(proxy);
+                proxySourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>proxyRuntimeMap[key];
                 existing.push(runtimeId);
                 proxyRuntimeMap[key] = existing;
-                // Merge endpoints across runtimes
-                int idx = -1;
-                int? idxOpt = proxyIndexMap[key];
-                if idxOpt is int {
-                    idx = idxOpt;
+                
+                // Merge endpoints across all runtimes
+                types:ProxyService existingProxy = proxyMap[key] ?: proxy;
+                string[] existingEndpoints = existingProxy.endpoints ?: [];
+                string[] newEndpoints = proxy.endpoints ?: [];
+                // Union endpoints
+                map<boolean> seen = {};
+                string[] merged = [];
+                foreach string ep in existingEndpoints {
+                    if !seen.hasKey(ep) {
+                        seen[ep] = true;
+                        merged.push(ep);
+                    }
                 }
-                if idx >= 0 {
-                    types:ProxyService existingProxy = proxyList[idx];
-                    string[] existingEndpoints = existingProxy.endpoints ?: [];
-                    string[] newEndpoints = proxy.endpoints ?: [];
-                    // Union
-                    map<boolean> seen = {};
-                    string[] merged = [];
-                    foreach string ep in existingEndpoints {
-                        if !seen.hasKey(ep) {
-                            seen[ep] = true;
-                            merged.push(ep);
-                        }
+                foreach string ep in newEndpoints {
+                    if !seen.hasKey(ep) {
+                        seen[ep] = true;
+                        merged.push(ep);
                     }
-                    foreach string ep in newEndpoints {
-                        if !seen.hasKey(ep) {
-                            seen[ep] = true;
-                            merged.push(ep);
-                        }
-                    }
+                }
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = proxySourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    proxy.endpoints = merged;
+                    proxyMap[key] = proxy;
+                    proxySourceRuntime[key] = runtimeId;
+                } else {
                     existingProxy.endpoints = merged;
-                    proxyList[idx] = existingProxy;
+                    proxyMap[key] = existingProxy;
                 }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapProxy = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (proxyList.length()) {
-        types:ProxyService proxy = proxyList[i];
-        string[] rids = proxyRuntimeMap[proxy.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:ProxyService[] proxyList = [];
+    foreach [string, types:ProxyService] [key, proxy] in proxyMap.entries() {
+        string[] rids = proxyRuntimeMap[key] ?: [];
         proxy.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapProxy[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        proxy.runtimes = infos;
-        proxyList[i] = proxy;
+        proxyList.push(proxy);
     }
 
     return proxyList;
@@ -538,47 +627,58 @@ public isolated function getProxyServicesByEnvironmentAndComponent(string enviro
 
 // Get Tasks for a specific environment and component
 public isolated function getTasksByEnvironmentAndComponent(string environmentId, string componentId) returns types:Task[]|error {
-    types:Task[] taskList = [];
+    map<types:Task> taskMap = {};
     map<string[]> taskRuntimeMap = {};
+    map<string> taskSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return taskList;
+        return [];
     }
 
-    // Get all Tasks for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Tasks for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:Task[] runtimeTasks = check getTasksForRuntime(runtimeId);
         foreach types:Task task in runtimeTasks {
             string key = task.name;
             if !taskRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                taskMap[key] = task;
                 taskRuntimeMap[key] = [runtimeId];
-                taskList.push(task);
+                taskSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>taskRuntimeMap[key];
                 existing.push(runtimeId);
                 taskRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = taskSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    taskMap[key] = task;
+                    taskSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapTask = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (taskList.length()) {
-        types:Task task = taskList[i];
-        string[] rids = taskRuntimeMap[task.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:Task[] taskList = [];
+    foreach [string, types:Task] [key, task] in taskMap.entries() {
+        string[] rids = taskRuntimeMap[key] ?: [];
         task.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapTask[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        task.runtimes = infos;
-        taskList[i] = task;
+        taskList.push(task);
     }
 
     return taskList;
@@ -586,47 +686,58 @@ public isolated function getTasksByEnvironmentAndComponent(string environmentId,
 
 // Get Templates for a specific environment and component
 public isolated function getTemplatesByEnvironmentAndComponent(string environmentId, string componentId) returns types:Template[]|error {
-    types:Template[] templateList = [];
+    map<types:Template> templateMap = {};
     map<string[]> templateRuntimeMap = {};
+    map<string> templateSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return templateList;
+        return [];
     }
 
-    // Get all Templates for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Templates for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:Template[] runtimeTemplates = check getTemplatesForRuntime(runtimeId);
         foreach types:Template template in runtimeTemplates {
             string key = template.name;
             if !templateRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                templateMap[key] = template;
                 templateRuntimeMap[key] = [runtimeId];
-                templateList.push(template);
+                templateSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>templateRuntimeMap[key];
                 existing.push(runtimeId);
                 templateRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = templateSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    templateMap[key] = template;
+                    templateSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapTpl = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (templateList.length()) {
-        types:Template template = templateList[i];
-        string[] rids = templateRuntimeMap[template.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:Template[] templateList = [];
+    foreach [string, types:Template] [key, template] in templateMap.entries() {
+        string[] rids = templateRuntimeMap[key] ?: [];
         template.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapTpl[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        template.runtimes = infos;
-        templateList[i] = template;
+        templateList.push(template);
     }
 
     return templateList;
@@ -634,47 +745,58 @@ public isolated function getTemplatesByEnvironmentAndComponent(string environmen
 
 // Get Message Stores for a specific environment and component
 public isolated function getMessageStoresByEnvironmentAndComponent(string environmentId, string componentId) returns types:MessageStore[]|error {
-    types:MessageStore[] storeList = [];
+    map<types:MessageStore> storeMap = {};
     map<string[]> storeRuntimeMap = {};
+    map<string> storeSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return storeList;
+        return [];
     }
 
-    // Get all Message Stores for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Message Stores for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:MessageStore[] runtimeStores = check getMessageStoresForRuntime(runtimeId);
         foreach types:MessageStore store in runtimeStores {
             string key = store.name;
             if !storeRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                storeMap[key] = store;
                 storeRuntimeMap[key] = [runtimeId];
-                storeList.push(store);
+                storeSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>storeRuntimeMap[key];
                 existing.push(runtimeId);
                 storeRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = storeSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    storeMap[key] = store;
+                    storeSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapStore = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (storeList.length()) {
-        types:MessageStore store = storeList[i];
-        string[] rids = storeRuntimeMap[store.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:MessageStore[] storeList = [];
+    foreach [string, types:MessageStore] [key, store] in storeMap.entries() {
+        string[] rids = storeRuntimeMap[key] ?: [];
         store.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapStore[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        store.runtimes = infos;
-        storeList[i] = store;
+        storeList.push(store);
     }
 
     return storeList;
@@ -682,47 +804,58 @@ public isolated function getMessageStoresByEnvironmentAndComponent(string enviro
 
 // Get Message Processors for a specific environment and component
 public isolated function getMessageProcessorsByEnvironmentAndComponent(string environmentId, string componentId) returns types:MessageProcessor[]|error {
-    types:MessageProcessor[] processorList = [];
+    map<types:MessageProcessor> processorMap = {};
     map<string[]> processorRuntimeMap = {};
+    map<string> processorSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return processorList;
+        return [];
     }
 
-    // Get all Message Processors for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Message Processors for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:MessageProcessor[] runtimeProcessors = check getMessageProcessorsForRuntime(runtimeId);
         foreach types:MessageProcessor proc in runtimeProcessors {
             string key = proc.name;
             if !processorRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                processorMap[key] = proc;
                 processorRuntimeMap[key] = [runtimeId];
-                processorList.push(proc);
+                processorSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>processorRuntimeMap[key];
                 existing.push(runtimeId);
                 processorRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = processorSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    processorMap[key] = proc;
+                    processorSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapProc = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (processorList.length()) {
-        types:MessageProcessor proc = processorList[i];
-        string[] rids = processorRuntimeMap[proc.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:MessageProcessor[] processorList = [];
+    foreach [string, types:MessageProcessor] [key, proc] in processorMap.entries() {
+        string[] rids = processorRuntimeMap[key] ?: [];
         proc.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapProc[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        proc.runtimes = infos;
-        processorList[i] = proc;
+        processorList.push(proc);
     }
 
     return processorList;
@@ -730,47 +863,58 @@ public isolated function getMessageProcessorsByEnvironmentAndComponent(string en
 
 // Get Local Entries for a specific environment and component
 public isolated function getLocalEntriesByEnvironmentAndComponent(string environmentId, string componentId) returns types:LocalEntry[]|error {
-    types:LocalEntry[] entryList = [];
+    map<types:LocalEntry> entryMap = {};
     map<string[]> entryRuntimeMap = {};
+    map<string> entrySourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return entryList;
+        return [];
     }
 
-    // Get all Local Entries for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Local Entries for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:LocalEntry[] runtimeEntries = check getLocalEntriesForRuntime(runtimeId);
         foreach types:LocalEntry entry in runtimeEntries {
             string key = entry.name;
             if !entryRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                entryMap[key] = entry;
                 entryRuntimeMap[key] = [runtimeId];
-                entryList.push(entry);
+                entrySourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>entryRuntimeMap[key];
                 existing.push(runtimeId);
                 entryRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = entrySourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    entryMap[key] = entry;
+                    entrySourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapEntry = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (entryList.length()) {
-        types:LocalEntry entry = entryList[i];
-        string[] rids = entryRuntimeMap[entry.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:LocalEntry[] entryList = [];
+    foreach [string, types:LocalEntry] [key, entry] in entryMap.entries() {
+        string[] rids = entryRuntimeMap[key] ?: [];
         entry.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapEntry[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        entry.runtimes = infos;
-        entryList[i] = entry;
+        entryList.push(entry);
     }
 
     return entryList;
@@ -778,47 +922,58 @@ public isolated function getLocalEntriesByEnvironmentAndComponent(string environ
 
 // Get Data Services for a specific environment and component
 public isolated function getDataServicesByEnvironmentAndComponent(string environmentId, string componentId) returns types:DataService[]|error {
-    types:DataService[] dataServiceList = [];
+    map<types:DataService> dataServiceMap = {};
     map<string[]> dsRuntimeMap = {};
+    map<string> dsSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return dataServiceList;
+        return [];
     }
 
-    // Get all Data Services for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Data Services for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:DataService[] runtimeDataServices = check getDataServicesForRuntime(runtimeId);
         foreach types:DataService ds in runtimeDataServices {
             string key = ds.name;
             if !dsRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                dataServiceMap[key] = ds;
                 dsRuntimeMap[key] = [runtimeId];
-                dataServiceList.push(ds);
+                dsSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>dsRuntimeMap[key];
                 existing.push(runtimeId);
                 dsRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = dsSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    dataServiceMap[key] = ds;
+                    dsSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapDsvc = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (dataServiceList.length()) {
-        types:DataService ds = dataServiceList[i];
-        string[] rids = dsRuntimeMap[ds.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:DataService[] dataServiceList = [];
+    foreach [string, types:DataService] [key, ds] in dataServiceMap.entries() {
+        string[] rids = dsRuntimeMap[key] ?: [];
         ds.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapDsvc[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        ds.runtimes = infos;
-        dataServiceList[i] = ds;
+        dataServiceList.push(ds);
     }
 
     return dataServiceList;
@@ -826,47 +981,58 @@ public isolated function getDataServicesByEnvironmentAndComponent(string environ
 
 // Get Data Sources for a specific environment and component
 public isolated function getDataSourcesByEnvironmentAndComponent(string environmentId, string componentId) returns types:DataSource[]|error {
-    types:DataSource[] sourceList = [];
+    map<types:DataSource> sourceMap = {};
     map<string[]> sourceRuntimeMap = {};
+    map<string> sourceSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return sourceList;
+        return [];
     }
 
-    // Get all Data Sources for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Data Sources for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:DataSource[] runtimeSources = check getDataSourcesForRuntime(runtimeId);
         foreach types:DataSource ds in runtimeSources {
             string key = ds.name;
             if !sourceRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                sourceMap[key] = ds;
                 sourceRuntimeMap[key] = [runtimeId];
-                sourceList.push(ds);
+                sourceSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>sourceRuntimeMap[key];
                 existing.push(runtimeId);
                 sourceRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = sourceSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    sourceMap[key] = ds;
+                    sourceSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapDs = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (sourceList.length()) {
-        types:DataSource ds = sourceList[i];
-        string[] rids = sourceRuntimeMap[ds.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:DataSource[] sourceList = [];
+    foreach [string, types:DataSource] [key, ds] in sourceMap.entries() {
+        string[] rids = sourceRuntimeMap[key] ?: [];
         ds.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapDs[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        ds.runtimes = infos;
-        sourceList[i] = ds;
+        sourceList.push(ds);
     }
 
     return sourceList;
@@ -874,46 +1040,57 @@ public isolated function getDataSourcesByEnvironmentAndComponent(string environm
 
 // Get Registry Resources for a specific environment and component
 public isolated function getRegistryResourcesByEnvironmentAndComponent(string environmentId, string componentId) returns types:RegistryResource[]|error {
-    types:RegistryResource[] resourceList = [];
+    map<types:RegistryResource> resourceMap = {};
     map<string[]> resourceRuntimeMap = {};
+    map<string> resourceSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return resourceList;
+        return [];
     }
 
-    // Get all Registry Resources for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Registry Resources for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:RegistryResource[] runtimeResources = check getRegistryResourcesForRuntime(runtimeId);
         foreach types:RegistryResource res in runtimeResources {
             string key = res.name;
             if !resourceRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                resourceMap[key] = res;
                 resourceRuntimeMap[key] = [runtimeId];
-                resourceList.push(res);
+                resourceSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>resourceRuntimeMap[key];
                 existing.push(runtimeId);
                 resourceRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = resourceSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    resourceMap[key] = res;
+                    resourceSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
-    // Build status map once
-    map<string> statusMapRes = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (resourceList.length()) {
-        types:RegistryResource res = resourceList[i];
-        string[] rids = resourceRuntimeMap[res.name] ?: [];
+    // Convert map to array and attach runtime info
+    types:RegistryResource[] resourceList = [];
+    foreach [string, types:RegistryResource] [key, res] in resourceMap.entries() {
+        string[] rids = resourceRuntimeMap[key] ?: [];
         res.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapRes[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        res.runtimes = infos;
-        resourceList[i] = res;
+        resourceList.push(res);
     }
 
     return resourceList;
@@ -921,49 +1098,59 @@ public isolated function getRegistryResourcesByEnvironmentAndComponent(string en
 
 // Get Connectors for a specific environment and component
 public isolated function getConnectorsByEnvironmentAndComponent(string environmentId, string componentId) returns types:Connector[]|error {
-    types:Connector[] connectorList = [];
+    map<types:Connector> connectorMap = {};
     map<string[]> connectorRuntimeMap = {};
+    map<string> connectorSourceRuntime = {}; // Tracks which runtime provided the artifact
 
     // Get all runtime IDs for this environment and component
     string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
 
     // If no runtimes found, return empty array
     if runtimeIds.length() == 0 {
-        return connectorList;
+        return [];
     }
 
-    // Get all Connectors for these runtimes
+    // Build status map first for prioritization during deduplication
+    map<string> statusMap = check getRuntimeStatusMap(runtimeIds);
+
+    // Get all Connectors for these runtimes, ensuring uniqueness and prioritizing RUNNING runtimes
     foreach string runtimeId in runtimeIds {
         types:Connector[] runtimeConnectors = check getConnectorsForRuntime(runtimeId);
         foreach types:Connector conn in runtimeConnectors {
             // Use name + package + version as uniqueness key across runtimes
             string key = string `${conn.name}|${conn.'package}|${conn.version ?: ""}`;
             if !connectorRuntimeMap.hasKey(key) {
+                // First time seeing this artifact
+                connectorMap[key] = conn;
                 connectorRuntimeMap[key] = [runtimeId];
-                connectorList.push(conn);
+                connectorSourceRuntime[key] = runtimeId;
             } else {
+                // Duplicate artifact - add runtime ID to list
                 string[] existing = <string[]>connectorRuntimeMap[key];
                 existing.push(runtimeId);
                 connectorRuntimeMap[key] = existing;
+                
+                // Replace artifact instance if new runtime is RUNNING and existing source is not
+                string sourceRuntimeId = connectorSourceRuntime[key] ?: "";
+                if shouldReplaceArtifact(runtimeId, sourceRuntimeId, statusMap) {
+                    connectorMap[key] = conn;
+                    connectorSourceRuntime[key] = runtimeId;
+                }
             }
         }
     }
 
-    // Build status map once
-    map<string> statusMapConn = check getRuntimeStatusMap(runtimeIds);
-
-    foreach int i in 0 ..< (connectorList.length()) {
-        types:Connector conn = connectorList[i];
-        string key = string `${conn.name}|${conn.'package}|${conn.version ?: ""}`;
+    // Convert map to array and attach runtime info
+    types:Connector[] connectorList = [];
+    foreach [string, types:Connector] [key, conn] in connectorMap.entries() {
         string[] rids = connectorRuntimeMap[key] ?: [];
         conn.runtimeIds = rids;
         types:ArtifactRuntimeInfo[] infos = [];
         foreach string rid in rids {
-            string st = statusMapConn[rid] ?: "UNKNOWN";
+            string st = statusMap[rid] ?: "UNKNOWN";
             infos.push({runtimeId: rid, status: st});
         }
-        conn.runtimes = infos;
-        connectorList[i] = conn;
+        connectorList.push(conn);
     }
 
     return connectorList;
