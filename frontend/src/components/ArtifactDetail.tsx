@@ -164,7 +164,7 @@ function SelectedTypeArtifacts({ artifacts, artifactType, envId, componentId, qu
           );
         })}
       </Stack>
-      {filtered.length > 5 && (
+      {filtered.length > rowsPerPage && (
         <TablePagination
           component="div"
           count={filtered.length}
@@ -226,7 +226,7 @@ export function ArtifactTypeSelector({ envId, componentId, onSelectArtifact }: {
         <Typography variant="overline" sx={{ mb: 1, display: 'block' }}>
           {typePlural(selectedArtifactType)}
         </Typography>
-        <SearchField value={query} onChange={setQuery} placeholder={`Search ${typePlural(selectedArtifactType)} by name, context, or version`} fullWidth sx={{ mb: 2 }} />
+        <SearchField value={query} onChange={setQuery} placeholder={`Search ${typePlural(selectedArtifactType)} by name`} fullWidth sx={{ mb: 2 }} />
         {loadingArtifacts ? (
           <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />
         ) : (
@@ -290,10 +290,10 @@ export function ArtifactDetail({ selected, onClose }: { selected: SelectedArtifa
           {artifact.name?.toString()}
         </Typography>
         <Stack direction="row" gap={0.5}>
-          <IconButton size="small">
+          <IconButton size="small" aria-label="maximize">
             <Maximize2 size={16} />
           </IconButton>
-          <IconButton size="small" onClick={onClose}>
+          <IconButton size="small" aria-label="close" onClick={onClose}>
             <X size={16} />
           </IconButton>
         </Stack>

@@ -85,7 +85,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
             <Typography variant="body2" color="text.secondary">
               Tracing
             </Typography>
-            <Switch size="small" checked={tracingEnabled} onChange={(e) => handleToggleTracing(e.target.checked)} disabled={updateTracingStatus.isPending} />
+            <Switch size="small" checked={tracingEnabled} onChange={(e) => handleToggleTracing(e.target.checked)} disabled={updateTracingStatus.isPending} aria-label="Enable tracing" />
           </Stack>
         )}
         {showTracingToggle && showStatisticsToggle && <Divider orientation="vertical" flexItem />}
@@ -94,7 +94,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
             <Typography variant="body2" color="text.secondary">
               Statistics
             </Typography>
-            <Switch size="small" checked={statisticsEnabled} onChange={(e) => handleToggleStatistics(e.target.checked)} disabled={updateStatisticsStatus.isPending} />
+            <Switch size="small" checked={statisticsEnabled} onChange={(e) => handleToggleStatistics(e.target.checked)} disabled={updateStatisticsStatus.isPending} aria-label="Enable statistics" />
           </Stack>
         )}
         <Stack direction="row" gap={1} sx={{ ml: 'auto' }}>
