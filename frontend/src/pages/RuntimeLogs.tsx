@@ -1,8 +1,8 @@
 import { Button, Checkbox, Chip, CircularProgress, FormControlLabel, List, ListItemButton, IconButton, ListItemText, MenuItem, PageContent, Select, Stack, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { ChevronDown, ChevronRight, Copy, Download, RefreshCw, ScrollText, X } from '@wso2/oxygen-ui-icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import { useProjectByHandler, useComponentByHandler, useComponents, useEnvironments, useRuntimes } from '../api/queries';
-import { useLogs, type LogRow, type LogsRequest } from '../api/logs';
+import { useProjectByHandler, useComponentByHandler, useComponents, useEnvironments } from '../api/queries';
+import { useInfiniteLogs, type LogRow, type LogsRequest } from '../api/logs';
 import EmptyListing from '../components/EmptyListing';
 import NotFound from '../components/NotFound';
 import SearchField from '../components/SearchField';
@@ -172,8 +172,6 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
   const componentIdsKey = componentIds.join(',');
   const envIdsKey = selectedEnvIds.join(',');
   const levelFilterKey = levelFilter.join(',');
-
-  const { data: runtimes = [] } = useRuntimes(effectiveEnvId, projectId, hasComponent(scope) && singleComponent ? singleComponent.id : '');
 
   const logsRequest = useMemo<LogsRequest | null>(() => {
     if (componentIds.length === 0 || !primaryEnv) return null;
