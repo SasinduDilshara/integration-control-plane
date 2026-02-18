@@ -31,6 +31,15 @@ final http:Client authBackendClient = check new (authBackendUrl,
             path: truststorePath,
             password: truststorePassword
         }
+    },
+    auth = {
+        issuer: userServiceJwtIssuer,
+        audience: userServiceJwtAudience,
+        expTime: 3600,
+        signatureConfig: {
+            algorithm: jwt:HS256,
+            config: userServiceJwtHMACSecret
+        }
     }
 );
 
@@ -49,9 +58,7 @@ service /auth on httpListener {
     isolated resource function post login(types:Credentials credentials, http:Request req) returns http:Ok|http:Unauthorized|http:InternalServerError|error {
         log:printInfo("Login attempt for user", username = credentials.username);
         // Call the authentication backend to verify credentials
-        http:Response|error authResponse = authBackendClient->post("/authenticate", credentials, {
-            "X-API-Key": authBackendApiKey
-        });
+        http:Response|error authResponse = authBackendClient->post("/authenticate", credentials);
 
         if authResponse is error {
             log:printError("Error calling authentication backend", authResponse);
@@ -435,9 +442,7 @@ service /auth on httpListener {
             newPassword: request.newPassword
         };
 
-        http:Response|error authResponse = authBackendClient->post("/change-password", changePasswordPayload, {
-            "X-API-Key": authBackendApiKey
-        });
+        http:Response|error authResponse = authBackendClient->post("/change-password", changePasswordPayload);
 
         if authResponse is error {
             log:printError("Error calling auth backend for password change", authResponse);
@@ -478,7 +483,7 @@ service /auth on httpListener {
     }
 
     // Force change password endpoint - used after admin password reset
-    // Requires JWT auth but does NOT require current password
+    // Requires JWT auth but does NOT require current password. Only available for users with require_password_change flag set to true
     @http:ResourceConfig {
         auth: [
             {
@@ -501,29 +506,21 @@ service /auth on httpListener {
             return utils:createUnauthorizedError("Invalid authorization token");
         }
 
-        // Permission check: only users with PERMISSION_USER_MANAGE_USERS can force change passwords
-        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
-        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_USERS, orgScope);
-        if hasPermission is error {
-            log:printError("Error checking permissions for force password change", hasPermission, userId = userContext.userId);
-            return utils:createInternalServerError("Error checking permissions");
+        types:User|error userDetails = storage:getUserDetailsById(userContext.userId);
+        if userDetails is error {
+            log:printError("Failed to fetch user details for force password change", userDetails, userId = userContext.userId);
+            return utils:createInternalServerError("Failed to fetch user details");
         }
-        if !hasPermission {
-            log:printWarn("User attempted force password change without required permissions", userId = userContext.userId);
-            return <http:Forbidden>{
-                body: {
-                    message: "Insufficient permissions to force change password"
-                }
-            };
+        if !userDetails.requirePasswordChange {
+            log:printWarn("Force password change attempted but require_password_change flag is not set", userId = userContext.userId);
+            return utils:createForbiddenError("Password change is not required for this user");
         }
 
         json payload = {
             newPassword: request.newPassword
         };
 
-        http:Response|error authResponse = authBackendClient->post(string `/force-change-password?userId=${userContext.userId}`, payload, {
-            "X-API-Key": authBackendApiKey
-        });
+        http:Response|error authResponse = authBackendClient->post(string `/force-change-password?userId=${userContext.userId}`, payload);
 
         if authResponse is error {
             log:printError("Error calling auth backend for force password change", authResponse);
@@ -2024,9 +2021,7 @@ service /auth on httpListener {
             displayName: displayName
         };
 
-        http:Response|error authResponse = authBackendClient->post("/users", createUserRequest, headers = {
-            "X-API-Key": authBackendApiKey
-        });
+        http:Response|error authResponse = authBackendClient->post("/users", createUserRequest);
 
         if authResponse is error {
             log:printError("Failed to create user credentials in auth backend", authResponse);
@@ -2177,9 +2172,7 @@ service /auth on httpListener {
             userId: userId
         };
 
-        http:Response|error authResponse = authBackendClient->post("/reset-password", resetPayload, {
-            "X-API-Key": authBackendApiKey
-        });
+        http:Response|error authResponse = authBackendClient->post("/reset-password", resetPayload);
 
         if authResponse is error {
             log:printError("Error calling auth backend for password reset", authResponse);
