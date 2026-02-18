@@ -40,6 +40,34 @@ public isolated function getUserDetailsById(string userId) returns types:User|er
 // RBAC V2 - User Management Functions
 // ============================================================================
 
+// Get single user with group memberships (RBAC v2)
+public isolated function getUserWithGroupsById(string userId) returns json|error {
+    log:printDebug(string `Fetching user with group memberships for userId: ${userId}`);
+    
+    // Get user details
+    types:User|error user = getUserDetailsById(userId);
+    if user is error {
+        return user;
+    }
+
+    // Build user with groups
+    json userWithGroups = {
+        userId: user.userId,
+        username: user.username,
+        displayName: user.displayName,
+        isSuperAdmin: user.isSuperAdmin,
+        isProjectAuthor: user.isProjectAuthor,
+        isOidcUser: user.isOidcUser,
+        groups: check getGroupsForUser(user.userId),
+        groupCount: (check getGroupsForUser(user.userId)).length(),
+        createdAt: user?.createdAt,
+        updatedAt: user?.updatedAt
+    };
+
+    log:printInfo(string `Successfully fetched user ${user.username} with group memberships`);
+    return userWithGroups;
+}
+
 // Get all users with their group memberships (RBAC v2)
 public isolated function getAllUsersV2() returns json[]|error {
     log:printDebug("Fetching all users with group memberships (RBAC v2)");

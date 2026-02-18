@@ -492,13 +492,29 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function post 'force\-change\-password(@http:Payload types:ForceChangePasswordRequest request, http:Request req) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError {
+    isolated resource function post 'force\-change\-password(@http:Payload types:ForceChangePasswordRequest request, http:Request req) returns http:Ok|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError {
         log:printInfo("Force password change requested");
 
         types:UserContextV2|error userContext = extractUserContextFromRequest(req);
         if userContext is error {
             log:printError("Failed to extract user context for force password change", userContext);
             return utils:createUnauthorizedError("Invalid authorization token");
+        }
+
+        // Permission check: only users with PERMISSION_USER_MANAGE_USERS can force change passwords
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_USERS, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions for force password change", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            log:printWarn("User attempted force password change without required permissions", userId = userContext.userId);
+            return <http:Forbidden>{
+                body: {
+                    message: "Insufficient permissions to force change password"
+                }
+            };
         }
 
         json payload = {
@@ -1887,6 +1903,59 @@ service /auth on httpListener {
         };
     }
 
+    // GET /auth/orgs/{orgHandle}/users/{userId} - Get single user details
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: defaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
+    }
+    resource function get orgs/[string orgHandle]/users/[string userId](http:Request req)
+            returns http:Ok|http:NotFound|http:Forbidden|http:Unauthorized|http:InternalServerError|error {
+
+        log:printInfo("Fetching user details", orgHandle = orgHandle, userId = userId);
+
+        // Permission check: user can only fetch their own details
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        
+        // Verify the requesting user is fetching their own details
+        if userContext.userId != userId {
+            log:printWarn("User attempted to fetch another user's details", requestingUserId = userContext.userId, targetUserId = userId);
+            return <http:Forbidden>{
+                body: {
+                    message: "You can only view your own user details"
+                }
+            };
+        }
+
+        // Get user details with group memberships
+        json|error userDetails = storage:getUserWithGroupsById(userId);
+        if userDetails is error {
+            log:printWarn("User not found", userId = userId, 'error = userDetails);
+            return <http:NotFound>{
+                body: {
+                    message: string `User not found: ${userId}`
+                }
+            };
+        }
+
+        log:printInfo("Successfully fetched user details", userId = userId);
+
+        return <http:Ok>{
+            body: userDetails
+        };
+    }
+
     // POST /auth/orgs/{orgHandle}/users - Create a new user
     @http:ResourceConfig {
         auth: [
@@ -2154,6 +2223,10 @@ service /auth on httpListener {
 
         log:printInfo("Password reset successfully by admin", targetUserId = userId, adminUserId = userContext.userId);
         return <http:Ok>{
+            headers: {
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+                "Pragma": "no-cache"
+            },
             body: responseBody
         };
     }

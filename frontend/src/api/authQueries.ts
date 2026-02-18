@@ -5,7 +5,7 @@ import type { User, Role, RoleDetail, Group, GroupRoleMapping, GroupUser, Permis
 export function useCurrentUser(orgHandler: string, userId: string) {
   return useQuery({
     queryKey: ['currentUser', orgHandler, userId],
-    queryFn: () => authGet<{ users: User[] }>(`/orgs/${orgHandler}/users`).then((d) => d.users.find((u) => u.userId === userId)),
+    queryFn: () => authGet<User>(`/orgs/${orgHandler}/users/${userId}`),
     enabled: !!userId,
   });
 }
