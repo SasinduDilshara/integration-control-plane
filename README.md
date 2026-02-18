@@ -61,7 +61,7 @@ Or use the build script:
 
 The distribution package will be created in:
 
-```
+```text
 build/distribution/wso2-integrator-icp-<version>/
 ```
 
@@ -275,10 +275,6 @@ integration-control-plane/
 ├── kubernetes/              # Kubernetes deployment manifests
 └── build.gradle             # Gradle build configuration
 ```
-
-## Contributing
-
-Please read our [Contributing Guide](CONTRIBUTING.md) before submitting pull requests.
 
 ## License
 
