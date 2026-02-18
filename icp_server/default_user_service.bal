@@ -50,19 +50,26 @@ listener http:Listener defaultAuthServiceListener = new (authServicePort,
     }
 );
 
+@http:ServiceConfig {
+    auth: [
+        {
+            jwtValidatorConfig: {
+                issuer: userServiceJwtIssuer,
+                audience: userServiceJwtAudience,
+                clockSkew: userServiceJwtClockSkewSeconds,
+                signatureConfig: {
+                    secret: userServiceJwtHMACSecret
+                }
+            }
+        }
+    ]
+}
 service / on defaultAuthServiceListener {
 
     function init() {
         log:printInfo("Authentication service started at " + authServiceHost + ":" + authServicePort.toString());
     }
-    resource function post authenticate(@http:Header {name: "X-API-Key"} string? apiKeyHeader, types:Credentials request) returns http:Ok|http:BadRequest|http:Unauthorized|error {
-
-        // TODO Remove API key. move to a different authn mechanism
-        if apiKeyHeader is () || apiKeyHeader != apiKey {
-            log:printWarn("Authentication attempt with invalid API key");
-            return utils:createUnauthorizedError("Invalid API key");
-        }
-
+    resource function post authenticate(types:Credentials request) returns http:Ok|http:BadRequest|http:Unauthorized|error {
         // Perform authentication against database
         types:User|error authResult = authenticateUser(request.username, request.password);
         if authResult is error {
@@ -83,13 +90,7 @@ service / on defaultAuthServiceListener {
         };
     }
 
-    resource function post change\-password(@http:Header {name: "X-API-Key"} string? apiKeyHeader, types:ChangePasswordRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError|error {
-
-        // TODO Validate API key
-        if apiKeyHeader is () || apiKeyHeader != apiKey {
-            log:printWarn("Password change attempt with invalid API key");
-            return utils:createUnauthorizedError("Invalid API key");
-        }
+    resource function post change\-password(types:ChangePasswordRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError|error {
 
         // Validate request
         if request.currentPassword.trim().length() == 0 {
@@ -152,13 +153,7 @@ service / on defaultAuthServiceListener {
         };
     }
 
-    resource function post 'reset\-password(@http:Header {name: "X-API-Key"} string? apiKeyHeader, types:ResetPasswordRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError|error {
-
-        if apiKeyHeader is () || apiKeyHeader != apiKey {
-            log:printWarn("Password reset attempt with invalid API key");
-            return utils:createUnauthorizedError("Invalid API key");
-        }
-
+    resource function post 'reset\-password(types:ResetPasswordRequest request) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError|error {
         // Verify user exists
         types:UserCredentials|error credentials = getUserCredentialsById(request.userId);
         if credentials is error {
@@ -194,13 +189,7 @@ service / on defaultAuthServiceListener {
         };
     }
 
-    resource function post 'force\-change\-password(@http:Header {name: "X-API-Key"} string? apiKeyHeader, types:ForceChangePasswordRequest request, string userId) returns http:Ok|http:BadRequest|http:Unauthorized|http:InternalServerError|error {
-
-        if apiKeyHeader is () || apiKeyHeader != apiKey {
-            log:printWarn("Force password change attempt with invalid API key");
-            return utils:createUnauthorizedError("Invalid API key");
-        }
-
+    resource function post 'force\-change\-password(types:ForceChangePasswordRequest request, string userId) returns http:Ok|http:BadRequest|http:InternalServerError|error {
         if request.newPassword.trim().length() == 0 {
             return utils:createBadRequestError("New password is required");
         }

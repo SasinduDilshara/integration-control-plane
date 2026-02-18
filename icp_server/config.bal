@@ -47,6 +47,12 @@ configurable string defaultJwtHMACSecret = "default-secret-key-at-least-32-chara
 configurable string frontendJwtIssuer = "icp-frontend-jwt-issuer";
 configurable string frontendJwtAudience = "icp-server";
 
+// Backend auth configuration (server and user service communication)
+configurable string userServiceJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs256";
+configurable string userServiceJwtIssuer = "icp-user-service-jwt-issuer";
+configurable string userServiceJwtAudience = "icp-user-service-jwt-audience";
+configurable decimal userServiceJwtClockSkewSeconds = 0;
+
 configurable int defaultTokenExpiryTime = 3600; // 1 hour (in seconds)
 
 configurable string defaultRuntimeJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs256";
