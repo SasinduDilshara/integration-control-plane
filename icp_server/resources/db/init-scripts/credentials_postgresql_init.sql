@@ -1,17 +1,14 @@
 -- ============================================================================
--- ICP Server H2 Credentials Database Schema
+-- ICP Server PostgreSQL Credentials Database Schema
 -- This database is separate from the main ICP database and is only accessed
 -- by the default authentication backend for user credential management.
 -- ============================================================================
-
--- Drop all database objects (tables, views, sequences, etc.)
-DROP ALL OBJECTS;
 
 -- ============================================================================
 -- USER CREDENTIALS TABLE
 -- ============================================================================
 
-CREATE TABLE user_credentials (
+CREATE TABLE IF NOT EXISTS user_credentials (
     user_id CHAR(36) NOT NULL PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
     display_name VARCHAR(200) NOT NULL,
