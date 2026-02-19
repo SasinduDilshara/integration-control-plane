@@ -550,9 +550,13 @@ function constructLogEntry(LogSource sourceData) returns string {
 // Helper function to deduplicate log entries based on composite key
 // Uses the same fields as Fluent Bit's generate_document_id to ensure consistent deduplication:
 // timestamp (raw time field) | message (raw message) | level | icp_runtimeId | log_file_path
+// Uses U+001F (unit separator) as delimiter to prevent ambiguous keys
 function deduplicateLogEntries(json[][] rows) returns json[][] {
     map<boolean> seenEntries = {};
     json[][] uniqueRows = [];
+
+    // Unit separator control character - cannot appear in ISO-8601 timestamps or normal log text
+    string delimiter = "\u{001F}";
 
     foreach json[] row in rows {
         // Extract fields using named constants to avoid fragile positional indices
@@ -564,8 +568,8 @@ function deduplicateLogEntries(json[][] rows) returns json[][] {
         string logFilePath = row[COL_LOG_FILE_PATH] is string ? <string>row[COL_LOG_FILE_PATH] : "";
 
         // Create composite key matching Fluent Bit's format:
-        // timestamp_str | message | level | runtime_id | log_file_path
-        string compositeKey = string `${rawTime}|${rawMessage}|${level}|${icpRuntimeId}|${logFilePath}`;
+        // timestamp_str <US> message <US> level <US> runtime_id <US> log_file_path
+        string compositeKey = string `${rawTime}${delimiter}${rawMessage}${delimiter}${level}${delimiter}${icpRuntimeId}${delimiter}${logFilePath}`;
 
         // Only add if we haven't seen this combination before
         if !seenEntries.hasKey(compositeKey) {

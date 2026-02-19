@@ -134,8 +134,9 @@ function simple_hash(str)
         hash2 = (hash2 * 37 + string.byte(str, i)) % 2147483647
     end
     
-    -- Concatenate both hashes in hex format for wider ID space (~62 bits)
-    return string.format("%x%x", hash1, hash2)
+    -- Concatenate both hashes with fixed-width zero-padded hex format (8 digits each)
+    -- This prevents ambiguous split points and synthetic collisions
+    return string.format("%08x%08x", hash1, hash2)
 end
 
 function generate_document_id(tag, timestamp, record)
@@ -160,8 +161,10 @@ function generate_document_id(tag, timestamp, record)
     local runtime_id = record["icp_runtimeId"] or ""
     local log_file_path = record["log_file_path"] or ""
     
-    -- Create composite string for hashing
-    local composite = timestamp_str .. "|" .. message .. "|" .. level .. "|" .. runtime_id .. "|" .. log_file_path
+    -- Create composite string for hashing using unit separator (U+001F) as delimiter
+    -- This control character cannot appear in normal log text, preventing ambiguous keys
+    local delimiter = string.char(31)  -- U+001F unit separator
+    local composite = timestamp_str .. delimiter .. message .. delimiter .. level .. delimiter .. runtime_id .. delimiter .. log_file_path
     
     -- Generate hash-based ID
     local doc_id = simple_hash(composite)
