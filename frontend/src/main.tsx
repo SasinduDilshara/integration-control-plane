@@ -33,9 +33,7 @@ const queryClient = new QueryClient();
 loadConfig().then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
-      <OxygenUIThemeProvider
-        themes={[{ key: 'acrylicOrange', label: 'Acrylic Orange Theme', theme: AcrylicOrangeTheme }]}
-        initialTheme="acrylicOrange">
+      <OxygenUIThemeProvider themes={[{ key: 'acrylicOrange', label: 'Acrylic Orange Theme', theme: AcrylicOrangeTheme }]} initialTheme="acrylicOrange">
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <AuthProvider>
