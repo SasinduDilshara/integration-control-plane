@@ -15,6 +15,14 @@ export function profileUrl(): string {
   return '/profile';
 }
 
+export function privacyPolicyUrl(): string {
+  return '/privacy-policy';
+}
+
+export function cookiePolicyUrl(): string {
+  return '/cookie-policy';
+}
+
 export function forceChangePasswordUrl(): string {
   return '/change-password';
 }
@@ -99,6 +107,7 @@ export function orgAnalyticsLogsUrl(orgHandler: string): string {
 
 export const external = {
   wso2: 'https://www.wso2.com',
+  wso2Contact: 'https://wso2.com/contact/',
   vite: 'https://vite.dev',
   react: 'https://react.dev',
   oxygenUi: 'https://github.com/wso2/oxygen-ui/tree/next',

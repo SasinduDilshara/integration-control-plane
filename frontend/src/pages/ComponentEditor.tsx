@@ -159,8 +159,8 @@ const PreviewPanel = ({ config }: { config: Record<string, string | boolean> }) 
         {config.subtitle}
       </Typography>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <TextField fullWidth placeholder={`Enter your ${config.usernameLabel.toLowerCase()}`} />
-        <TextField fullWidth type="password" placeholder={`Enter your ${config.passwordLabel.toLowerCase()}`} />
+        <TextField fullWidth placeholder={`Enter your ${String(config.usernameLabel).toLowerCase()}`} />
+        <TextField fullWidth type="password" placeholder={`Enter your ${String(config.passwordLabel).toLowerCase()}`} />
         {config.showRememberMe && <FormControlLabel control={<Switch size="small" />} label="Remember me" />}
         <Button variant="contained" fullWidth size="large">
           {config.submitButton}

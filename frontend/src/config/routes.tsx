@@ -1,7 +1,9 @@
 import { type RouteProps, Navigate } from 'react-router';
-import { orgRoleDetailUrl, projectRoleDetailUrl, componentRoleDetailUrl } from '../paths';
+import { cookiePolicyUrl, orgRoleDetailUrl, privacyPolicyUrl, projectRoleDetailUrl, componentRoleDetailUrl } from '../paths';
 import PublicLayout from '../layouts/PublicLayout';
 import Login from '../pages/Login';
+import CookiePolicy from '../pages/CookiePolicy';
+import PrivacyPolicy from '../pages/PrivacyPolicy';
 import OIDCCallback from '../pages/OIDCCallback';
 import AppLayout from '../layouts/AppLayout';
 import ProtectedRoute from '../auth/ProtectedRoute';
@@ -41,7 +43,11 @@ const routes: AppRoute[] = [
   { path: '/', element: <Navigate to="/login" replace /> },
   {
     element: <PublicLayout />,
-    children: [{ path: '/login', element: <Login /> }],
+    children: [
+      { path: '/login', element: <Login /> },
+      { path: cookiePolicyUrl(), element: <CookiePolicy /> },
+      { path: privacyPolicyUrl(), element: <PrivacyPolicy /> },
+    ],
   },
   { path: '/auth/callback', element: <OIDCCallback /> },
   {

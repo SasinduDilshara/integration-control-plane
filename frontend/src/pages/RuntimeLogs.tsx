@@ -1,4 +1,4 @@
-import { Button, Checkbox, Chip, CircularProgress, FormControlLabel, List, ListItemButton, IconButton, ListItemText, MenuItem, PageContent, Select, Stack, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
+import { Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton, ListItemText, MenuItem, PageContent, Select, Stack, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { ChevronDown, ChevronRight, Copy, Download, RefreshCw, ScrollText, X } from '@wso2/oxygen-ui-icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useProjectByHandler, useComponentByHandler, useComponents, useEnvironments } from '../api/queries';
