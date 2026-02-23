@@ -22,21 +22,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useArtifacts, useRefreshEnvironmentArtifacts, type GqlArtifact, type GqlEnvironment } from '../api/queries';
 import { useUpdateArtifactTracingStatus, useUpdateArtifactStatisticsStatus } from '../api/artifactToggleMutations';
-import { useUpdateListenerState } from '../api/mutations';
-import { ArtifactApiDefinition, ServiceResources, AutomationExecutions } from './ArtifactTabs';
+import { useUpdateArtifactStatus, useUpdateListenerState } from '../api/mutations';
+import { ArtifactApiDefinition, ServiceResources, AutomationExecutions, ProxyApiReference } from './ArtifactTabs';
 import { ArtifactTypeSelector } from './ArtifactDetail';
 import { ENTRY_POINT_CONFIG, ENTRY_POINT_DETAIL_TABS, type SelectedArtifact, type TabProps } from './artifact-config';
 
 function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArtifact; onOpenDrawerTab: (tab: string) => void }) {
   const [tracingEnabled, setTracingEnabled] = useState(false);
   const [statisticsEnabled, setStatisticsEnabled] = useState(false);
+  const [statusEnabled, setStatusEnabled] = useState(false);
   const [listenerEnabled, setListenerEnabled] = useState(false);
-  const [pendingToggle, setPendingToggle] = useState<{ type: 'tracing' | 'statistics'; checked: boolean } | null>(null);
+  const [pendingToggle, setPendingToggle] = useState<{ type: 'tracing' | 'statistics' | 'status'; checked: boolean } | null>(null);
   const [pendingListenerToggle, setPendingListenerToggle] = useState<{ checked: boolean } | null>(null);
   const { artifact, artifactType, envId, componentId, projectId } = selected;
   const queryClient = useQueryClient();
   const updateTracingStatus = useUpdateArtifactTracingStatus();
   const updateStatisticsStatus = useUpdateArtifactStatisticsStatus();
+  const updateArtifactStatus = useUpdateArtifactStatus();
   const updateListenerState = useUpdateListenerState();
   const config = ENTRY_POINT_CONFIG[artifactType];
   const tabProps: TabProps = { artifact, artifactType, envId, componentId, projectId };
@@ -48,6 +50,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const showSourceButton = artifactType === 'RestApi';
   const showWsdlButton = artifactType === 'ProxyService';
   const showStatisticsToggle = ['RestApi', 'ProxyService', 'InboundEndpoint'].includes(artifactType);
+  const showStatusToggle = artifactType === 'ProxyService';
   const showListenerToggle = artifactType === 'Listener';
   const toEnabled = (value: unknown) => {
     if (typeof value === 'boolean') return value;
@@ -60,6 +63,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   useEffect(() => {
     setTracingEnabled(toEnabled(artifact.tracing));
     setStatisticsEnabled(toEnabled(artifact.statistics));
+    setStatusEnabled(toEnabled(artifact.state));
     setListenerEnabled(toEnabled(artifact.state));
   }, [artifactKey, artifact.tracing, artifact.statistics, artifact.state]);
 
@@ -71,6 +75,11 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const handleToggleStatistics = (checked: boolean) => {
     if (!showStatisticsToggle) return;
     setPendingToggle({ type: 'statistics', checked });
+  };
+
+  const handleToggleStatus = (checked: boolean) => {
+    if (!showStatusToggle) return;
+    setPendingToggle({ type: 'status', checked });
   };
 
   const handleToggleListener = (checked: boolean) => {
@@ -91,13 +100,23 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
           onSettled: () => queryClient.invalidateQueries({ queryKey: artifactQueryKey }),
         },
       );
-    } else {
+    } else if (pendingToggle.type === 'statistics') {
       const previousValue = statisticsEnabled;
       setStatisticsEnabled(pendingToggle.checked);
       updateStatisticsStatus.mutate(
         { envId, componentId, artifactType, artifactName, statistics: pendingToggle.checked ? 'enable' : 'disable' },
         {
           onError: () => setStatisticsEnabled(previousValue),
+          onSettled: () => queryClient.invalidateQueries({ queryKey: artifactQueryKey }),
+        },
+      );
+    } else {
+      const previousValue = statusEnabled;
+      setStatusEnabled(pendingToggle.checked);
+      updateArtifactStatus.mutate(
+        { envId, componentId, artifactType, artifactName, status: pendingToggle.checked ? 'active' : 'inactive' },
+        {
+          onError: () => setStatusEnabled(previousValue),
           onSettled: () => queryClient.invalidateQueries({ queryKey: artifactQueryKey }),
         },
       );
@@ -108,18 +127,9 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const handleConfirmListenerToggle = () => {
     if (!pendingListenerToggle) return;
 
-    const runtimes = artifact.runtimes as Array<{ runtimeId: string }> | undefined;
-    const previousValue = listenerEnabled;
-
-    // Guard: abort if runtimes are not available
-    if (!runtimes || runtimes.length === 0) {
-      console.error('Cannot toggle listener state: no runtimes available for artifact', artifactName);
-      setListenerEnabled(previousValue);
-      setPendingListenerToggle(null);
-      return;
-    }
-
+    const runtimes = (artifact.runtimes as Array<{ runtimeId: string }> | undefined) ?? [];
     const runtimeIds = runtimes.map((r) => r.runtimeId);
+    const previousValue = listenerEnabled;
 
     setListenerEnabled(pendingListenerToggle.checked);
     const artifactQueryKey = ['artifacts', artifactType, envId, componentId];
@@ -139,7 +149,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
     setPendingListenerToggle(null);
   };
 
-  const toggleLabel = pendingToggle?.type === 'tracing' ? 'tracing' : 'statistics';
+  const toggleLabel = pendingToggle?.type === 'tracing' ? 'tracing' : pendingToggle?.type === 'statistics' ? 'statistics' : 'status';
   const toggleAction = pendingToggle?.checked ? 'enable' : 'disable';
   const listenerAction = pendingListenerToggle?.checked ? 'enable' : 'disable';
 
@@ -180,6 +190,15 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
         <Stack direction="row" alignItems="center" gap={1.5} sx={{ px: 2, py: 1.5 }}>
           {carbonApp && <Chip label={`C-App: ${carbonApp}`} size="small" variant="outlined" sx={{ bgcolor: '#e8eaf6', color: '#3949ab', fontSize: 11 }} />}
           {carbonApp && <Divider orientation="vertical" flexItem />}
+          {showStatusToggle && (
+            <Stack direction="row" alignItems="center" gap={1}>
+              <Typography variant="body2" color="text.secondary">
+                Status
+              </Typography>
+              <Switch size="small" checked={statusEnabled} onChange={(e) => handleToggleStatus(e.target.checked)} disabled={updateArtifactStatus.isPending} aria-label="Enable status" />
+            </Stack>
+          )}
+          {showStatusToggle && showTracingToggle && <Divider orientation="vertical" flexItem />}
           {showTracingToggle && (
             <Stack direction="row" alignItems="center" gap={1}>
               <Typography variant="body2" color="text.secondary">
@@ -217,7 +236,12 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
             </Button>
           )}
           {showWsdlButton && (
-            <Button variant="outlined" size="small" onClick={() => onOpenDrawerTab('WSDL')} sx={{ ml: 'auto' }}>
+            <Button variant="outlined" size="small" onClick={() => onOpenDrawerTab('Endpoints')} sx={{ ml: 'auto' }}>
+              View Endpoints
+            </Button>
+          )}
+          {showWsdlButton && (
+            <Button variant="outlined" size="small" onClick={() => onOpenDrawerTab('WSDL')}>
               View WSDL
             </Button>
           )}
@@ -253,6 +277,11 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
           </Box>
         )}
         {(ENTRY_POINT_DETAIL_TABS[artifactType] ?? []).includes('Resources') && <Box sx={{ px: 2, py: 1.5 }}>{artifactType === 'RestApi' ? <ArtifactApiDefinition {...tabProps} /> : <ServiceResources {...tabProps} />}</Box>}
+        {artifactType === 'ProxyService' && (
+          <Box sx={{ px: 2, py: 1.5 }}>
+            <ProxyApiReference {...tabProps} />
+          </Box>
+        )}
         {artifactType === 'Automation' && (
           <Box sx={{ px: 2, py: 1.5 }}>
             <AutomationExecutions {...tabProps} />
