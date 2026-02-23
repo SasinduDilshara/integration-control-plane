@@ -1774,6 +1774,21 @@ isolated function insertRuntimeLogLevels(types:Heartbeat heartbeat) returns erro
         return;
     }
 
+    // Delete all existing log levels for this runtime to remove stale entries
+    if dbType == MSSQL {
+        _ = check dbClient->execute(`
+            DELETE FROM bi_runtime_log_levels WHERE runtime_id = ${heartbeat.runtime}
+        `);
+    } else if dbType == POSTGRESQL {
+        _ = check dbClient->execute(`
+            DELETE FROM bi_runtime_log_levels WHERE runtime_id = ${heartbeat.runtime}
+        `);
+    } else {
+        _ = check dbClient->execute(`
+            DELETE FROM bi_runtime_log_levels WHERE runtime_id = ${heartbeat.runtime}
+        `);
+    }
+
     // Iterate through each component and its log level
     foreach var [componentName, logLevel] in logLevels.entries() {
         string logLevelStr = logLevel.toString();

@@ -108,9 +108,18 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const handleConfirmListenerToggle = () => {
     if (!pendingListenerToggle) return;
 
-    const runtimes = (artifact.runtimes as Array<{ runtimeId: string }> | undefined) ?? [];
-    const runtimeIds = runtimes.map((r) => r.runtimeId);
+    const runtimes = artifact.runtimes as Array<{ runtimeId: string }> | undefined;
     const previousValue = listenerEnabled;
+
+    // Guard: abort if runtimes are not available
+    if (!runtimes || runtimes.length === 0) {
+      console.error('Cannot toggle listener state: no runtimes available for artifact', artifactName);
+      setListenerEnabled(previousValue);
+      setPendingListenerToggle(null);
+      return;
+    }
+
+    const runtimeIds = runtimes.map((r) => r.runtimeId);
 
     setListenerEnabled(pendingListenerToggle.checked);
     const artifactQueryKey = ['artifacts', artifactType, envId, componentId];

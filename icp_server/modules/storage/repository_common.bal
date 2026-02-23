@@ -466,13 +466,17 @@ public isolated function insertLogLevelControlCommand(
     string commandId = uuid:createType1AsString();
 
     // Store as JSON payload for the SET_LOGGER_LEVEL action
-    string payload = string `{"componentName":"${componentName}","logLevel":"${logLevel}"}`;
+    json payload = {
+        "componentName": componentName,
+        "logLevel": logLevel
+    };
+    string payloadStr = payload.toJsonString();
 
     _ = check dbClient->execute(`
         INSERT INTO bi_runtime_control_commands (
             command_id, runtime_id, target_artifact, action, payload, status, issued_at, issued_by
         ) VALUES (
-            ${commandId}, ${runtimeId}, ${componentName}, 'SET_LOGGER_LEVEL', ${payload}, 'pending', CURRENT_TIMESTAMP, ${issuedBy}
+            ${commandId}, ${runtimeId}, ${componentName}, 'SET_LOGGER_LEVEL', ${payloadStr}, 'pending', CURRENT_TIMESTAMP, ${issuedBy}
         )
     `);
 

@@ -43,7 +43,7 @@ const getLogLevelColor = (level: string): 'default' | 'info' | 'warning' | 'erro
 };
 
 function LoggersList({ environmentId, componentId }: { environmentId: string; componentId: string }) {
-  const { data: loggers = [], isLoading } = useLoggers(environmentId, componentId);
+  const { data: loggers = [], isLoading, isError, error, refetch } = useLoggers(environmentId, componentId);
   const updateLogLevel = useUpdateLogLevel();
   const [updatingLogger, setUpdatingLogger] = useState<string | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
@@ -69,6 +69,20 @@ function LoggersList({ environmentId, componentId }: { environmentId: string; co
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
         <CircularProgress size={24} />
       </Box>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Alert
+        severity="error"
+        action={
+          <IconButton color="inherit" size="small" onClick={() => refetch()} aria-label="Retry">
+            <RefreshCw size={16} />
+          </IconButton>
+        }>
+        {error instanceof Error ? error.message : 'Failed to load loggers'}
+      </Alert>
     );
   }
 

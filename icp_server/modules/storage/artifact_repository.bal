@@ -1290,32 +1290,35 @@ public isolated function getLoggersByEnvironmentAndComponent(string environmentI
         return [];
     }
 
-    // Map to group loggers by component name and log level
-    map<string[]> loggerGroupMap = {}; // Key: componentName:logLevel, Value: runtime IDs
+    // Nested map to group loggers by component name and log level
+    map<map<string[]>> loggerGroupMap = {}; // Outer key: componentName, Inner key: logLevel, Value: runtime IDs
 
     // Get log levels for each runtime
     foreach string runtimeId in runtimeIds {
         types:RuntimeLogLevelRecord[] logLevels = check getLogLevelsForRuntime(runtimeId);
         foreach types:RuntimeLogLevelRecord logLevel in logLevels {
-            string key = logLevel.componentName + ":" + logLevel.logLevel;
-            if !loggerGroupMap.hasKey(key) {
-                loggerGroupMap[key] = [runtimeId];
-            } else {
-                string[] existing = <string[]>loggerGroupMap[key];
-                existing.push(runtimeId);
-                loggerGroupMap[key] = existing;
+            if !loggerGroupMap.hasKey(logLevel.componentName) {
+                loggerGroupMap[logLevel.componentName] = {};
             }
+            map<string[]> levelMap = <map<string[]>>loggerGroupMap[logLevel.componentName];
+            if !levelMap.hasKey(logLevel.logLevel) {
+                levelMap[logLevel.logLevel] = [runtimeId];
+            } else {
+                string[] existing = <string[]>levelMap[logLevel.logLevel];
+                existing.push(runtimeId);
+                levelMap[logLevel.logLevel] = existing;
+            }
+            loggerGroupMap[logLevel.componentName] = levelMap;
         }
     }
 
-    // Convert map to LoggerGroup array
+    // Convert nested map to LoggerGroup array
     types:LoggerGroup[] loggerGroups = [];
-    foreach [string, string[]] [key, rids] in loggerGroupMap.entries() {
-        string[] parts = re `:`.split(key);
-        if parts.length() == 2 {
+    foreach [string, map<string[]>] [componentName, levelMap] in loggerGroupMap.entries() {
+        foreach [string, string[]] [logLevel, rids] in levelMap.entries() {
             types:LoggerGroup group = {
-                componentName: parts[0],
-                logLevel: <types:LogLevel>parts[1],
+                componentName: componentName,
+                logLevel: <types:LogLevel>logLevel,
                 runtimeIds: rids
             };
             loggerGroups.push(group);

@@ -24,6 +24,13 @@ import ballerina/http;
 import ballerina/lang.value;
 import ballerina/log;
 
+// Helper type for pre-validating runtimes in updateLogLevel
+type ValidatedRuntime record {|
+    string runtimeId;
+    string componentId;
+    types:Runtime runtime;
+|};
+
 // GraphQL listener configuration
 listener graphql:Listener graphqlListener = new (graphqlPort,
     configuration = {
@@ -894,10 +901,10 @@ service /graphql on graphqlListener {
             return error("Component name cannot be empty");
         }
 
-        string[] commandIds = [];
-        map<boolean> processedComponents = {};
+        // Phase 1: Pre-validate all runtimes and permissions (no side-effects)
+        ValidatedRuntime[] validatedRuntimes = [];
+        map<boolean> componentIds = {}; // Track unique component IDs
 
-        // Process each runtime ID
         foreach string runtimeId in input.runtimeIds {
             // Fetch the runtime to get its context
             types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -920,43 +927,59 @@ service /graphql on graphqlListener {
                 return error(string `Access denied: insufficient permissions to control log level on runtime ${runtimeId}`);
             }
 
+            // All validations passed - collect this runtime
+            string componentId = runtime.component.id;
+            validatedRuntimes.push({
+                runtimeId: runtimeId,
+                componentId: componentId,
+                runtime: runtime
+            });
+            componentIds[componentId] = true;
+        }
+
+        // Check if we have any valid runtimes after validation
+        if validatedRuntimes.length() == 0 {
+            return {
+                success: false,
+                message: "No valid runtimes found to issue log level control commands",
+                commandIds: []
+            };
+        }
+
+        // Phase 2: All validations passed - now perform all database operations
+        string[] commandIds = [];
+        string logLevelStr = input.logLevel.toString();
+        map<boolean> processedComponents = {};
+
+        // Create commands for all validated runtimes
+        foreach ValidatedRuntime validated in validatedRuntimes {
             // Insert log level control command
-            string logLevelStr = input.logLevel.toString();
             string commandId = check storage:insertLogLevelControlCommand(
-                    runtimeId,
+                    validated.runtimeId,
                     input.componentName,
                     logLevelStr,
                     userContext.userId
             );
 
             commandIds.push(commandId);
-            log:printInfo(string `Created log level control command ${commandId} for runtime ${runtimeId} to set ${input.componentName} to ${logLevelStr}`);
+            log:printInfo(string `Created log level control command ${commandId} for runtime ${validated.runtimeId} to set ${input.componentName} to ${logLevelStr}`);
 
             // Record intended state per component so all runtimes in the component will sync to the same state
-            string componentId = runtime.component.id;
-            if !processedComponents.hasKey(componentId) {
-                processedComponents[componentId] = true;
+            if !processedComponents.hasKey(validated.componentId) {
+                processedComponents[validated.componentId] = true;
                 error? stateResult = storage:upsertBILogLevelIntendedState(
-                        componentId,
+                        validated.componentId,
                         input.componentName,
                         logLevelStr,
                         userContext.userId
                 );
 
                 if stateResult is error {
-                    log:printWarn(string `Failed to update intended log level for ${input.componentName} in component ${componentId}`, stateResult);
+                    log:printWarn(string `Failed to update intended log level for ${input.componentName} in component ${validated.componentId}`, stateResult);
                 } else {
-                    log:printInfo(string `Updated intended log level for ${input.componentName} to ${logLevelStr} in component ${componentId}`);
+                    log:printInfo(string `Updated intended log level for ${input.componentName} to ${logLevelStr} in component ${validated.componentId}`);
                 }
             }
-        }
-
-        if commandIds.length() == 0 {
-            return {
-                success: false,
-                message: "No valid runtimes found to issue log level control commands",
-                commandIds: []
-            };
         }
 
         return {
