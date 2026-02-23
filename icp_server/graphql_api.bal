@@ -2329,7 +2329,7 @@ service /graphql on graphqlListener {
                 } else {
                     valStr = v.toJsonString();
                 }
-                params.push({key: k, value: valStr});
+                params.push({name: k, value: valStr});
             }
         } else if payload is json[] {
             // Shape: [{"key":"...","value":"..."}] or [{"name":"...","paramValue":...}]
@@ -2339,13 +2339,13 @@ service /graphql on graphqlListener {
                     json vJson = item["value"] ?: item["paramValue"];
                     if kJson is string && vJson != () {
                         string vStr = vJson is string ? vJson : vJson.toJsonString();
-                        params.push({key: kJson, value: vStr});
+                        params.push({name: kJson, value: vStr});
                     }
                 }
             }
         } else if payload is string {
             // Edge: payload already a string; expose as a single entry
-            params.push({key: "payload", value: payload});
+            params.push({name: "payload", value: payload});
         } else {
             log:printWarn("Unexpected inbound parameters JSON shape", inboundName = inboundName);
         }
@@ -2465,7 +2465,7 @@ service /graphql on graphqlListener {
                 } else {
                     valStr = v.toJsonString();
                 }
-                params.push({key: k, value: valStr});
+                params.push({name: k, value: valStr});
             }
         } else if payload is json[] {
             foreach json item in payload {
@@ -2479,12 +2479,12 @@ service /graphql on graphqlListener {
                     // 3. Process only if we have a valid key and a non-null value
                     if kJson is string && vJson != () {
                         string vStr = vJson is string ? vJson : vJson.toJsonString();
-                        params.push({key: kJson, value: vStr});
+                        params.push({name: kJson, value: vStr});
                     }
                 }
             }
         } else if payload is string {
-            params.push({key: "payload", value: payload});
+            params.push({name: "payload", value: payload});
         } else {
             log:printWarn("Unexpected artifact parameters JSON shape", artifactType = artifactType, artifactName = artifactName);
         }

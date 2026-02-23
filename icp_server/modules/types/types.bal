@@ -2075,7 +2075,7 @@ public type ArtifactResponse record {|
 |};
 
 public type Parameter record {|
-    string key;
+    string name;
     string value;
 |};
 
