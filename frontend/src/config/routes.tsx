@@ -24,6 +24,7 @@ import ProjectRoleDetail from '../pages/ProjectRoleDetail';
 import ComponentRoleDetail from '../pages/ComponentRoleDetail';
 import Profile from '../pages/Profile';
 import ForceChangePassword from '../pages/ForceChangePassword';
+import ManageLoggers from '../pages/ManageLoggers';
 import { ScopeResolver, generateMatrixRoutes, withScope, type Matrix } from '../nav';
 import { createElement } from 'react';
 
@@ -38,6 +39,7 @@ const MATRIX: Matrix = {
   runtimes: { segment: 'runtimes', pages: { projects: Runtime, components: Runtime } },
   environments: { segment: 'environments', pages: { organizations: Environments, projects: Environments } },
   'access-control': { segment: 'settings/access-control/:tab', pages: { organizations: OrgAccessControl, projects: ProjectAccessControl, components: ComponentAccessControl } },
+  loggers: { segment: 'loggers', pages: { components: ManageLoggers } },
 };
 
 const routes: AppRoute[] = [

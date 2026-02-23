@@ -1279,3 +1279,48 @@ public isolated function getConnectorsByEnvironmentAndComponent(string environme
 
     return connectorList;
 }
+
+// Get loggers for a specific environment and component, grouped by component name
+public isolated function getLoggersByEnvironmentAndComponent(string environmentId, string componentId) returns types:LoggerGroup[]|error {
+    // Get all runtime IDs for this environment and component
+    string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
+
+    // If no runtimes found, return empty array
+    if runtimeIds.length() == 0 {
+        return [];
+    }
+
+    // Map to group loggers by component name and log level
+    map<string[]> loggerGroupMap = {}; // Key: componentName:logLevel, Value: runtime IDs
+
+    // Get log levels for each runtime
+    foreach string runtimeId in runtimeIds {
+        types:RuntimeLogLevelRecord[] logLevels = check getLogLevelsForRuntime(runtimeId);
+        foreach types:RuntimeLogLevelRecord logLevel in logLevels {
+            string key = logLevel.componentName + ":" + logLevel.logLevel;
+            if !loggerGroupMap.hasKey(key) {
+                loggerGroupMap[key] = [runtimeId];
+            } else {
+                string[] existing = <string[]>loggerGroupMap[key];
+                existing.push(runtimeId);
+                loggerGroupMap[key] = existing;
+            }
+        }
+    }
+
+    // Convert map to LoggerGroup array
+    types:LoggerGroup[] loggerGroups = [];
+    foreach [string, string[]] [key, rids] in loggerGroupMap.entries() {
+        string[] parts = re `:`.split(key);
+        if parts.length() == 2 {
+            types:LoggerGroup group = {
+                componentName: parts[0],
+                logLevel: <types:LogLevel>parts[1],
+                runtimeIds: rids
+            };
+            loggerGroups.push(group);
+        }
+    }
+
+    return loggerGroups;
+}

@@ -445,6 +445,93 @@ public isolated function upsertBIArtifactIntendedState(string componentId, strin
     }
 }
 
+// Insert log level control command for a runtime
+public isolated function insertLogLevelControlCommand(
+        string runtimeId,
+        string componentName,
+        string logLevel,
+        string? issuedBy = ()
+) returns string|error {
+    string commandId = uuid:createType1AsString();
+
+    // Store as JSON payload for the SET_LOG_LEVEL action
+    string payload = string `{"componentName":"${componentName}","logLevel":"${logLevel}"}`;
+
+    _ = check dbClient->execute(`
+        INSERT INTO bi_runtime_control_commands (
+            command_id, runtime_id, target_artifact, action, payload, status, issued_at, issued_by
+        ) VALUES (
+            ${commandId}, ${runtimeId}, ${componentName}, 'SET_LOG_LEVEL', ${payload}, 'pending', CURRENT_TIMESTAMP, ${issuedBy}
+        )
+    `);
+
+    return commandId;
+}
+
+// Upsert BI log level intended state for a component
+public isolated function upsertBILogLevelIntendedState(
+        string componentId,
+        string componentName,
+        string logLevel,
+        string? issuedBy = ()
+) returns error? {
+    if dbType == MSSQL {
+        _ = check dbClient->execute(`
+            MERGE INTO bi_log_level_intended_state AS target
+            USING (VALUES (${componentId}, ${componentName}, ${logLevel}, ${issuedBy}))
+                   AS source (component_id, component_name, log_level, issued_by)
+            ON (target.component_id = source.component_id AND target.component_name = source.component_name)
+            WHEN MATCHED THEN
+                UPDATE SET log_level = source.log_level, issued_at = CURRENT_TIMESTAMP, 
+                           issued_by = source.issued_by, updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (component_id, component_name, log_level, issued_by)
+                VALUES (source.component_id, source.component_name, source.log_level, source.issued_by);
+        `);
+    } else if dbType == POSTGRESQL {
+        _ = check dbClient->execute(`
+            INSERT INTO bi_log_level_intended_state (
+                component_id, component_name, log_level, issued_by
+            ) VALUES (
+                ${componentId}, ${componentName}, ${logLevel}, ${issuedBy}
+            )
+            ON CONFLICT (component_id, component_name) DO UPDATE SET
+                log_level = EXCLUDED.log_level,
+                issued_at = CURRENT_TIMESTAMP,
+                issued_by = EXCLUDED.issued_by,
+                updated_at = CURRENT_TIMESTAMP
+        `);
+    } else if dbType == H2 {
+        // H2 uses MERGE syntax
+        _ = check dbClient->execute(`
+            MERGE INTO bi_log_level_intended_state AS target
+            USING (VALUES (${componentId}, ${componentName}, ${logLevel}, ${issuedBy}))
+                   AS source (component_id, component_name, log_level, issued_by)
+            ON (target.component_id = source.component_id AND target.component_name = source.component_name)
+            WHEN MATCHED THEN
+                UPDATE SET log_level = source.log_level, issued_at = CURRENT_TIMESTAMP, 
+                           issued_by = source.issued_by, updated_at = CURRENT_TIMESTAMP
+            WHEN NOT MATCHED THEN
+                INSERT (component_id, component_name, log_level, issued_by)
+                VALUES (source.component_id, source.component_name, source.log_level, source.issued_by)
+        `);
+    } else {
+        // MySQL
+        _ = check dbClient->execute(`
+            INSERT INTO bi_log_level_intended_state (
+                component_id, component_name, log_level, issued_by
+            ) VALUES (
+                ${componentId}, ${componentName}, ${logLevel}, ${issuedBy}
+            )
+            ON DUPLICATE KEY UPDATE
+                log_level = VALUES(log_level),
+                issued_at = CURRENT_TIMESTAMP,
+                issued_by = VALUES(issued_by),
+                updated_at = CURRENT_TIMESTAMP
+        `);
+    }
+}
+
 // Get BI artifact intended states for a component
 public isolated function getBIIntendedStatesForComponent(string componentId) returns map<string>|error {
     map<string> intendedStates = {};

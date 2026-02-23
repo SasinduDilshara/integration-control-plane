@@ -94,6 +94,25 @@ public type Resource record {
     string[] methods = [];
 };
 
+public enum LogLevel {
+    DEBUG,
+    INFO,
+    WARN,
+    ERROR
+}
+
+public type Logger record {
+    string componentName;
+    LogLevel logLevel;
+    string runtimeId;
+};
+
+public type LoggerGroup record {
+    string componentName;
+    LogLevel logLevel;
+    string[] runtimeIds;
+};
+
 public type Main record {
     string packageOrg;
     string packageName;
@@ -175,7 +194,8 @@ public enum ControlCommandStatus {
 
 public enum ControlAction {
     START,
-    STOP
+    STOP,
+    SET_LOG_LEVEL
 }
 
 # Description.
@@ -2176,6 +2196,18 @@ public type ListenerControlInput record {|
 |};
 
 public type ListenerControlResponse record {|
+    boolean success;
+    string message;
+    string[] commandIds;
+|};
+
+public type LogLevelControlInput record {|
+    string[] runtimeIds;
+    string componentName;
+    LogLevel logLevel;
+|};
+
+public type LogLevelControlResponse record {|
     boolean success;
     string message;
     string[] commandIds;

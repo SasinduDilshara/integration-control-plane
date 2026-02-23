@@ -1100,6 +1100,7 @@ CREATE TABLE bi_runtime_control_commands (
     runtime_id VARCHAR(100) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL, -- start, stop, restart, deploy, undeploy
+    payload TEXT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'acknowledged', 'completed', 'failed', 'timeout')),
     issued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     sent_at TIMESTAMP NULL,
@@ -1175,6 +1176,27 @@ CREATE INDEX idx_bi_state_action ON bi_artifact_intended_state(action);
 CREATE INDEX idx_bi_state_issued_by ON bi_artifact_intended_state(issued_by);
 
 CREATE TRIGGER update_bi_artifact_intended_state_updated_at BEFORE UPDATE ON bi_artifact_intended_state
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE bi_log_level_intended_state (
+    component_id CHAR(36) NOT NULL,
+    component_name VARCHAR(500) NOT NULL,
+    log_level VARCHAR(50) NOT NULL,
+    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    issued_by CHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, component_name),
+    CONSTRAINT fk_bi_log_level_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bi_log_level_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    CONSTRAINT chk_log_level_state CHECK (log_level IN ('DEBUG', 'INFO', 'WARN', 'ERROR'))
+);
+
+CREATE INDEX idx_bi_log_level_state_component_id ON bi_log_level_intended_state(component_id);
+CREATE INDEX idx_bi_log_level_state_component_name ON bi_log_level_intended_state(component_name);
+CREATE INDEX idx_bi_log_level_state_log_level ON bi_log_level_intended_state(log_level);
+
+CREATE TRIGGER update_bi_log_level_intended_state_updated_at BEFORE UPDATE ON bi_log_level_intended_state
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TABLE mi_artifact_intended_status (

@@ -45,7 +45,7 @@ import React, { useState } from 'react';
 import type { JSX } from 'react';
 import { useNavigate, Outlet, Link as NavLink } from 'react-router';
 import Logo from '../components/Logo';
-import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Settings, Shield, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
+import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Settings, Shield, Sliders, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
 import { useProjectByHandler, useProjects, useComponents } from '../api/queries';
 import { mockNotifications } from '../mock-data/mockNotifications';
 import { useScope, useResource, resourceUrl, broaden, narrow, sidebarItems, hasProject, hasComponent, type Resource } from '../nav';
@@ -61,6 +61,7 @@ const SIDEBAR_ICONS: Record<Resource, JSX.Element> = {
   runtimes: <Settings size={20} />,
   environments: <Layers size={20} />,
   'access-control': <Shield size={20} />,
+  loggers: <Sliders size={20} />,
 };
 
 export default function AppLayout(): JSX.Element {
@@ -111,6 +112,8 @@ export default function AppLayout(): JSX.Element {
         return 'runtimes';
       case 'environments':
         return 'environments';
+      case 'loggers':
+        return 'loggers';
     }
   };
 

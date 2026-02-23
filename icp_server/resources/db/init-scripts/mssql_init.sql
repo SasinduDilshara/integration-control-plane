@@ -1838,6 +1838,7 @@ CREATE TABLE bi_runtime_control_commands (
     runtime_id VARCHAR(100) NOT NULL,
     target_artifact NVARCHAR (200) NOT NULL,
     action NVARCHAR (50) NOT NULL, -- start, stop, restart, deploy, undeploy
+    payload NVARCHAR (MAX) NULL,
     status NVARCHAR (20) NOT NULL DEFAULT 'pending' CHECK (
         status IN (
             'pending',
@@ -1934,6 +1935,39 @@ BEGIN
     SET updated_at = GETDATE()
     FROM bi_artifact_intended_state bas
     INNER JOIN inserted i ON bas.component_id = i.component_id AND bas.target_artifact = i.target_artifact;
+END;
+GO
+
+CREATE TABLE bi_log_level_intended_state (
+    component_id CHAR(36) NOT NULL,
+    component_name NVARCHAR(500) NOT NULL,
+    log_level NVARCHAR(50) NOT NULL,
+    issued_at DATETIME2(6) NOT NULL DEFAULT SYSDATETIME(),
+    issued_by CHAR(36),
+    created_at DATETIME2(6) NOT NULL DEFAULT SYSDATETIME(),
+    updated_at DATETIME2(6) NOT NULL DEFAULT SYSDATETIME(),
+    PRIMARY KEY (component_id, component_name),
+    CONSTRAINT fk_bi_log_level_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bi_log_level_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    CONSTRAINT chk_log_level_state CHECK (log_level IN ('DEBUG', 'INFO', 'WARN', 'ERROR'))
+);
+GO
+
+CREATE INDEX idx_bi_log_level_state_component_id ON bi_log_level_intended_state(component_id);
+CREATE INDEX idx_bi_log_level_state_component_name ON bi_log_level_intended_state(component_name);
+CREATE INDEX idx_bi_log_level_state_log_level ON bi_log_level_intended_state(log_level);
+GO
+
+CREATE TRIGGER trg_bi_log_level_intended_state_updated_at
+ON bi_log_level_intended_state
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE bi_log_level_intended_state
+    SET updated_at = GETDATE()
+    FROM bi_log_level_intended_state blls
+    INNER JOIN inserted i ON blls.component_id = i.component_id AND blls.component_name = i.component_name;
 END;
 GO
 

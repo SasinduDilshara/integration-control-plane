@@ -706,6 +706,69 @@ service /graphql on graphqlListener {
         return check storage:getConnectorsByEnvironmentAndComponent(environmentId, componentId);
     }
 
+    // Get loggers for a specific runtime
+    isolated resource function get loggersByRuntime(graphql:Context context, string runtimeId) returns types:Logger[]|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Fetch the runtime to get its context for authorization
+        types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+
+        if runtime is () {
+            log:printWarn("Runtime not found for loggers query", userId = userContext.userId, runtimeId = runtimeId);
+            return [];
+        }
+
+        // Build scope from runtime's context
+        types:AccessScope scope = auth:buildScopeFromContext(
+                runtime.component.projectId,
+                runtime.component.id,
+                runtime.environment.id
+        );
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access runtime loggers without permission", userId = userContext.userId, runtimeId = runtimeId);
+            return [];
+        }
+
+        // Get log levels for runtime and convert to Logger type
+        types:RuntimeLogLevelRecord[] logLevels = check storage:getLogLevelsForRuntime(runtimeId);
+        types:Logger[] loggers = [];
+        foreach types:RuntimeLogLevelRecord logLevel in logLevels {
+            loggers.push({
+                componentName: logLevel.componentName,
+                logLevel: <types:LogLevel>logLevel.logLevel,
+                runtimeId: runtimeId
+            });
+        }
+
+        return loggers;
+    }
+
+    // Get loggers for a specific environment and component, grouped by component name
+    isolated resource function get loggersByEnvironmentAndComponent(graphql:Context context, string environmentId, string componentId) returns types:LoggerGroup[]|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Get project ID for the component (lightweight query for access control)
+        string projectId = check storage:getProjectIdByComponentId(componentId);
+
+        // Build scope with project, integration, and environment
+        types:AccessScope scope = {
+            orgUuid: 1,
+            projectUuid: projectId,
+            integrationUuid: componentId,
+            envUuid: environmentId
+        };
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access component loggers without permission", userId = userContext.userId, environmentId = environmentId, componentId = componentId);
+            return [];
+        }
+
+        return check storage:getLoggersByEnvironmentAndComponent(environmentId, componentId);
+    }
+
     // Delete a runtime by ID
     isolated remote function deleteRuntime(graphql:Context context, string runtimeId) returns boolean|error {
         types:UserContextV2 userContext = check extractUserContext(context);
@@ -814,6 +877,91 @@ service /graphql on graphqlListener {
         return {
             success: true,
             message: string `Successfully created ${commandIds.length()} control command(s) to ${input.action} listener ${input.listenerName}`,
+            commandIds: commandIds
+        };
+    }
+
+    // Update log level for BI runtimes
+    isolated remote function updateLogLevel(graphql:Context context, types:LogLevelControlInput input) returns types:LogLevelControlResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Validate inputs
+        if input.runtimeIds.length() == 0 {
+            return error("At least one runtime ID must be provided");
+        }
+
+        if input.componentName.trim().length() == 0 {
+            return error("Component name cannot be empty");
+        }
+
+        string[] commandIds = [];
+        map<boolean> processedComponents = {};
+
+        // Process each runtime ID
+        foreach string runtimeId in input.runtimeIds {
+            // Fetch the runtime to get its context
+            types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+
+            if runtime is () {
+                log:printWarn(string `Runtime ${runtimeId} not found, skipping`);
+                continue;
+            }
+
+            // Build scope from runtime's context
+            types:AccessScope scope = auth:buildScopeFromContext(
+                    runtime.component.projectId,
+                    runtime.component.id,
+                    runtime.environment.id
+            );
+
+            // Check permission to manage this integration's runtime
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+                log:printWarn(string `User ${userContext.userId} lacks permission to manage runtime ${runtimeId}`);
+                return error(string `Access denied: insufficient permissions to control log level on runtime ${runtimeId}`);
+            }
+
+            // Insert log level control command
+            string logLevelStr = input.logLevel.toString();
+            string commandId = check storage:insertLogLevelControlCommand(
+                    runtimeId,
+                    input.componentName,
+                    logLevelStr,
+                    userContext.userId
+            );
+
+            commandIds.push(commandId);
+            log:printInfo(string `Created log level control command ${commandId} for runtime ${runtimeId} to set ${input.componentName} to ${logLevelStr}`);
+
+            // Record intended state per component so all runtimes in the component will sync to the same state
+            string componentId = runtime.component.id;
+            if !processedComponents.hasKey(componentId) {
+                processedComponents[componentId] = true;
+                error? stateResult = storage:upsertBILogLevelIntendedState(
+                        componentId,
+                        input.componentName,
+                        logLevelStr,
+                        userContext.userId
+                );
+
+                if stateResult is error {
+                    log:printWarn(string `Failed to update intended log level for ${input.componentName} in component ${componentId}`, stateResult);
+                } else {
+                    log:printInfo(string `Updated intended log level for ${input.componentName} to ${logLevelStr} in component ${componentId}`);
+                }
+            }
+        }
+
+        if commandIds.length() == 0 {
+            return {
+                success: false,
+                message: "No valid runtimes found to issue log level control commands",
+                commandIds: []
+            };
+        }
+
+        return {
+            success: true,
+            message: string `Successfully created ${commandIds.length()} log level control command(s) for ${input.componentName}`,
             commandIds: commandIds
         };
     }

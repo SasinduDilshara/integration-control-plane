@@ -148,6 +148,27 @@ export function useAllEnvironments() {
   });
 }
 
+export interface GqlLogger {
+  componentName: string;
+  logLevel: string;
+  runtimeIds: string[];
+}
+
+const LOGGERS_BY_ENV_AND_COMPONENT_QUERY = `
+  query GetLoggers($environmentId: String!, $componentId: String!) {
+    loggersByEnvironmentAndComponent(environmentId: $environmentId, componentId: $componentId) {
+      componentName, logLevel, runtimeIds
+    }
+  }`;
+
+export function useLoggers(environmentId: string, componentId: string) {
+  return useQuery({
+    queryKey: ['loggers', environmentId, componentId],
+    queryFn: () => gql<{ loggersByEnvironmentAndComponent: GqlLogger[] }>(LOGGERS_BY_ENV_AND_COMPONENT_QUERY, { environmentId, componentId }).then((d) => d.loggersByEnvironmentAndComponent),
+    enabled: !!environmentId && !!componentId,
+  });
+}
+
 export interface GqlRuntime {
   runtimeId: string;
   runtimeType: string;

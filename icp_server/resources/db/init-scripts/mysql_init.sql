@@ -1017,6 +1017,7 @@ CREATE TABLE bi_runtime_control_commands (
     runtime_id VARCHAR(100) NOT NULL,
     target_artifact VARCHAR(200) NOT NULL,
     action VARCHAR(50) NOT NULL, -- start, stop, restart, deploy, undeploy
+    payload TEXT NULL,
     status ENUM(
         'pending',
         'sent',
@@ -1094,6 +1095,22 @@ CREATE TABLE bi_artifact_intended_state (
     INDEX idx_target_artifact (target_artifact),
     INDEX idx_action (action),
     INDEX idx_issued_by (issued_by)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+CREATE TABLE bi_log_level_intended_state (
+    component_id CHAR(36) NOT NULL,
+    component_name VARCHAR(500) NOT NULL,
+    log_level ENUM('DEBUG', 'INFO', 'WARN', 'ERROR') NOT NULL,
+    issued_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+    issued_by CHAR(36),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (component_id, component_name),
+    CONSTRAINT fk_bi_log_level_state_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bi_log_level_state_issued_by FOREIGN KEY (issued_by) REFERENCES users (user_id) ON DELETE SET NULL,
+    INDEX idx_log_level_component_id (component_id),
+    INDEX idx_log_level_component_name (component_name),
+    INDEX idx_log_level_log_level (log_level)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 CREATE TABLE mi_artifact_intended_status (
