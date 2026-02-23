@@ -16,13 +16,36 @@
  * under the License.
  */
 
-import { Autocomplete, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, IconButton, InputAdornment, Stack, Switch, TextField, Typography } from '@wso2/oxygen-ui';
-import { RefreshCw, ListFilter, LayoutGrid, Settings, Copy, Check } from '@wso2/oxygen-ui-icons-react';
+import {
+  Autocomplete,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  Divider,
+  IconButton,
+  InputAdornment,
+  Snackbar,
+  Alert,
+  Stack,
+  Switch,
+  TextField,
+  Tooltip,
+  Typography,
+} from '@wso2/oxygen-ui';
+import { RefreshCw, ListFilter, LayoutGrid, Settings, Copy, Check, Play } from '@wso2/oxygen-ui-icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useArtifacts, useRefreshEnvironmentArtifacts, type GqlArtifact, type GqlEnvironment } from '../api/queries';
 import { useUpdateArtifactTracingStatus, useUpdateArtifactStatisticsStatus } from '../api/artifactToggleMutations';
-import { useUpdateArtifactStatus, useUpdateListenerState } from '../api/mutations';
+import { useUpdateArtifactStatus, useUpdateListenerState, useTriggerTask } from '../api/mutations';
 import { ArtifactApiDefinition, ServiceResources, AutomationExecutions, ProxyApiReference } from './ArtifactTabs';
 import { ArtifactTypeSelector } from './ArtifactDetail';
 import { ENTRY_POINT_CONFIG, ENTRY_POINT_DETAIL_TABS, type SelectedArtifact, type TabProps } from './artifact-config';
@@ -34,12 +57,15 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const [listenerEnabled, setListenerEnabled] = useState(false);
   const [pendingToggle, setPendingToggle] = useState<{ type: 'tracing' | 'statistics' | 'status'; checked: boolean } | null>(null);
   const [pendingListenerToggle, setPendingListenerToggle] = useState<{ checked: boolean } | null>(null);
+  const [triggerConfirmDialogOpen, setTriggerConfirmDialogOpen] = useState(false);
+  const [triggerSuccessMessage, setTriggerSuccessMessage] = useState<string | null>(null);
   const { artifact, artifactType, envId, componentId, projectId } = selected;
   const queryClient = useQueryClient();
   const updateTracingStatus = useUpdateArtifactTracingStatus();
   const updateStatisticsStatus = useUpdateArtifactStatisticsStatus();
   const updateArtifactStatus = useUpdateArtifactStatus();
   const updateListenerState = useUpdateListenerState();
+  const triggerTask = useTriggerTask();
   const config = ENTRY_POINT_CONFIG[artifactType];
   const tabProps: TabProps = { artifact, artifactType, envId, componentId, projectId };
   const carbonApp = artifact.carbonApp?.toString();
@@ -47,11 +73,14 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const showTracingToggle = ['RestApi', 'ProxyService', 'InboundEndpoint'].includes(artifactType);
   const showRuntimesButton = true; // Show View Runtimes button for all entry points
   const showParametersButton = artifactType === 'InboundEndpoint';
-  const showSourceButton = artifactType === 'RestApi';
+  const showSourceButton = ['RestApi', 'ProxyService', 'InboundEndpoint', 'Task'].includes(artifactType);
   const showWsdlButton = artifactType === 'ProxyService';
   const showStatisticsToggle = ['RestApi', 'ProxyService', 'InboundEndpoint'].includes(artifactType);
   const showStatusToggle = artifactType === 'ProxyService';
   const showListenerToggle = artifactType === 'Listener';
+  const showTaskToggle = artifactType === 'Task';
+  const showTaskTrigger = artifactType === 'Task';
+  const hasRuntimes = artifact.runtimes && Array.isArray(artifact.runtimes) && artifact.runtimes.length > 0;
   const toEnabled = (value: unknown) => {
     if (typeof value === 'boolean') return value;
     const normalized = (value ?? '').toString().toLowerCase();
@@ -78,13 +107,34 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   };
 
   const handleToggleStatus = (checked: boolean) => {
-    if (!showStatusToggle) return;
+    if (!showStatusToggle && !showTaskToggle) return;
     setPendingToggle({ type: 'status', checked });
   };
 
   const handleToggleListener = (checked: boolean) => {
     if (!showListenerToggle) return;
     setPendingListenerToggle({ checked });
+  };
+
+  const handleTriggerTask = () => {
+    if (!showTaskTrigger) return;
+    setTriggerConfirmDialogOpen(true);
+  };
+
+  const handleConfirmTrigger = () => {
+    setTriggerConfirmDialogOpen(false);
+    triggerTask.mutate(
+      { componentId, taskName: artifactName },
+      {
+        onSuccess: () => {
+          setTriggerSuccessMessage(`Successfully triggered task ${artifactName}`);
+        },
+        onSettled: () => {
+          const artifactQueryKey = ['artifacts', artifactType, envId, componentId];
+          queryClient.invalidateQueries({ queryKey: artifactQueryKey });
+        },
+      },
+    );
   };
 
   const handleConfirmToggle = () => {
@@ -185,6 +235,21 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
           </Button>
         </DialogActions>
       </Dialog>
+      <Dialog open={triggerConfirmDialogOpen} onClose={() => setTriggerConfirmDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Trigger Task</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to trigger task <strong>{artifactName}</strong>?
+          </DialogContentText>
+          <DialogContentText sx={{ mt: 1.5, fontSize: 13, color: 'text.secondary' }}>This will send a trigger command to all runtimes associated with this task.</DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTriggerConfirmDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={handleConfirmTrigger}>
+            Trigger
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Box sx={{ mt: 2 }}>
         {/* Header row */}
         <Stack direction="row" alignItems="center" gap={1.5} sx={{ px: 2, py: 1.5 }}>
@@ -224,6 +289,29 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
               </Typography>
               <Switch size="small" checked={listenerEnabled} onChange={(e) => handleToggleListener(e.target.checked)} disabled={updateListenerState.isPending} aria-label="Enable listener" />
             </Stack>
+          )}
+          {showTaskToggle && (
+            <>
+              <Divider orientation="vertical" flexItem />
+              <Stack direction="row" alignItems="center" gap={1}>
+                <Typography variant="body2" color="text.secondary">
+                  Status
+                </Typography>
+                <Switch size="small" checked={statusEnabled} onChange={(e) => handleToggleStatus(e.target.checked)} disabled={updateArtifactStatus.isPending || !hasRuntimes} aria-label="Enable task" />
+              </Stack>
+            </>
+          )}
+          {showTaskTrigger && (
+            <>
+              <Divider orientation="vertical" flexItem />
+              <Tooltip title={!hasRuntimes ? 'No runtimes available' : 'Trigger task'}>
+                <Box>
+                  <IconButton size="small" onClick={handleTriggerTask} disabled={triggerTask.isPending || !hasRuntimes} aria-label="Trigger task" sx={{ color: hasRuntimes ? 'primary.main' : 'text.disabled' }}>
+                    <Play size={16} />
+                  </IconButton>
+                </Box>
+              </Tooltip>
+            </>
           )}
           {showSourceButton && (
             <Button variant="outlined" size="small" onClick={() => onOpenDrawerTab('Source')} sx={{ ml: 'auto' }}>
@@ -288,6 +376,11 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
           </Box>
         )}
       </Box>
+      <Snackbar open={triggerSuccessMessage !== null} autoHideDuration={4000} onClose={() => setTriggerSuccessMessage(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={() => setTriggerSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {triggerSuccessMessage}
+        </Alert>
+      </Snackbar>
     </>
   );
 }

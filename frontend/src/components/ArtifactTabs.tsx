@@ -247,9 +247,7 @@ function OperationRow({ op }: { op: WsdlOperation }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-      <Box
-        onClick={() => setExpanded((v) => !v)}
-        sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25, bgcolor: 'action.hover', cursor: 'pointer', userSelect: 'none', '&:hover': { bgcolor: 'action.selected' } }}>
+      <Box onClick={() => setExpanded((v) => !v)} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25, bgcolor: 'action.hover', cursor: 'pointer', userSelect: 'none', '&:hover': { bgcolor: 'action.selected' } }}>
         <Chip label="SOAP" size="small" sx={{ bgcolor: '#1565c0', color: 'white', fontWeight: 700, fontSize: '0.7rem', height: 22, borderRadius: 1 }} />
         <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, flex: 1 }}>
           {op.name}

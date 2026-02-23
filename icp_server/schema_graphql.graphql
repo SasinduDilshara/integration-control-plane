@@ -367,9 +367,11 @@ type Sequence {
 # ============================================
 type Task {
   name: String!
+  class: String
   group: String
   state: ArtifactState!
   carbonApp: String
+  runtimes: [ArtifactRuntimeInfo]
 }
 
 # ============================================

@@ -59,3 +59,5 @@ These are enforced conventions for this codebase:
 ## Formatting
 
 Prettier config: 260 char print width, single quotes in JS, double quotes in JSX, `bracketSameLine: true`.
+- Don't look at the attached file
+- For now look at this repo and also the repo for old ui at /Users/dilhasha/GitRepos/customized_icp_ui/icp-console/workspaces/apps/choreo-console. I need to add the missing functionalities in new ui based on the old.
