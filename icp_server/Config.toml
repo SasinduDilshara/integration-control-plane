@@ -32,7 +32,6 @@ enableMetrics = true
 # Authentication backend service settings
 # URL of the authentication backend service (can be custom implementation)
 authBackendUrl = "https://localhost:9447"
-authBackendApiKey = "default-api-key"
 
 
 # =============================================================================
