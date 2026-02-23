@@ -153,9 +153,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
         </DialogActions>
       </Dialog>
       <Dialog open={pendingListenerToggle !== null} onClose={() => setPendingListenerToggle(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>
-          {listenerAction === 'enable' ? 'Enable Listener' : 'Disable Listener'}
-        </DialogTitle>
+        <DialogTitle>{listenerAction === 'enable' ? 'Enable Listener' : 'Disable Listener'}</DialogTitle>
         <DialogContent>
           <DialogContentText>
             Are you sure you want to {listenerAction} the listener <strong>{artifactName}</strong>?

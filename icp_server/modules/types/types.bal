@@ -195,17 +195,18 @@ public enum ControlCommandStatus {
 public enum ControlAction {
     START,
     STOP,
-    SET_LOG_LEVEL
+    SET_LOGGER_LEVEL
 }
 
-# Description.
+# Represents a control command issued to a runtime
 #
-# + commandId - field description  
-# + runtimeId - field description  
-# + targetArtifact - field description  
-# + action - field description  
-# + issuedAt - field description  
-# + status - field description
+# + commandId - Unique identifier for the command
+# + runtimeId - ID of the runtime to receive the command
+# + targetArtifact - The artifact to be controlled
+# + action - The control action to perform
+# + issuedAt - Timestamp when the command was issued
+# + status - Current status of the command
+# + payload - Optional JSON payload for actions that need additional data (e.g., log level settings)
 public type ControlCommand record {
     string commandId;
     string runtimeId;
@@ -213,6 +214,7 @@ public type ControlCommand record {
     ControlAction action;
     time:Utc issuedAt;
     ControlCommandStatus status; // pending, sent, acknowledged, failed
+    string? payload?; // JSON payload for actions that need additional data
 };
 
 public type HeartbeatResponse record {
@@ -452,6 +454,7 @@ public type ControlCommandDBRecord record {
     string action;
     time:Utc issued_at;
     string status;
+    string? payload?;
 };
 
 // GraphQL response types
@@ -2201,13 +2204,13 @@ public type ListenerControlResponse record {|
     string[] commandIds;
 |};
 
-public type LogLevelControlInput record {|
+public type UpdateLogLevelInput record {|
     string[] runtimeIds;
     string componentName;
     LogLevel logLevel;
 |};
 
-public type LogLevelControlResponse record {|
+public type UpdateLogLevelResponse record {|
     boolean success;
     string message;
     string[] commandIds;

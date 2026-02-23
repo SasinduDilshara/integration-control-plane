@@ -882,7 +882,7 @@ service /graphql on graphqlListener {
     }
 
     // Update log level for BI runtimes
-    isolated remote function updateLogLevel(graphql:Context context, types:LogLevelControlInput input) returns types:LogLevelControlResponse|error {
+    isolated remote function updateLogLevel(graphql:Context context, types:UpdateLogLevelInput input) returns types:UpdateLogLevelResponse|error {
         types:UserContextV2 userContext = check extractUserContext(context);
 
         // Validate inputs

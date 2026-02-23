@@ -183,7 +183,7 @@ type Mutation {
   updateListenerState(input: ListenerControlInput!): ListenerControlResponse!
 
   # Logger Control Mutations
-  updateLogLevel(input: LogLevelControlInput!): LogLevelControlResponse!
+  updateLogLevel(input: UpdateLogLevelInput!): UpdateLogLevelResponse!
 }
 
 # ============================================
@@ -1223,18 +1223,18 @@ type ListenerControlResponse {
 }
 
 # ============================================
-# Logger Control Input
+# Update Log Level Input
 # ============================================
-input LogLevelControlInput {
+input UpdateLogLevelInput {
   runtimeIds: [String!]!
   componentName: String!
   logLevel: LogLevel!
 }
 
 # ============================================
-# Logger Control Response
+# Update Log Level Response
 # ============================================
-type LogLevelControlResponse {
+type UpdateLogLevelResponse {
   success: Boolean!
   message: String!
   commandIds: [String!]!

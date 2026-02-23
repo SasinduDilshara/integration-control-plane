@@ -185,7 +185,7 @@ isolated function sendPendingBIControlCommands(string runtimeId) returns types:C
     // Retrieve pending control commands for this BI runtime (FOR UPDATE prevents concurrent heartbeats
     // from selecting the same commands within overlapping transactions)
     stream<types:ControlCommandDBRecord, sql:Error?> commandStream = dbClient->query(`
-        SELECT command_id, runtime_id, target_artifact, action, issued_at, status
+        SELECT command_id, runtime_id, target_artifact, action, payload, issued_at, status
         FROM bi_runtime_control_commands
         WHERE runtime_id = ${runtimeId}
         AND status = 'pending'
@@ -195,13 +195,24 @@ isolated function sendPendingBIControlCommands(string runtimeId) returns types:C
 
     check from types:ControlCommandDBRecord dbCommand in commandStream
         do {
+            // Convert string action to enum
+            types:ControlAction action;
+            if dbCommand.action == "START" {
+                action = types:START;
+            } else if dbCommand.action == "SET_LOGGER_LEVEL" {
+                action = types:SET_LOGGER_LEVEL;
+            } else {
+                action = types:STOP;
+            }
+
             types:ControlCommand command = {
                 commandId: dbCommand.command_id,
                 runtimeId: dbCommand.runtime_id,
                 targetArtifact: {name: dbCommand.target_artifact},
-                action: dbCommand.action == "START" ? types:START : types:STOP,
+                action: action,
                 issuedAt: dbCommand.issued_at,
-                status: convertToControlCommandStatus(dbCommand.status)
+                status: convertToControlCommandStatus(dbCommand.status),
+                payload: dbCommand?.payload
             };
             pendingCommands.push(command);
         };
@@ -454,14 +465,14 @@ public isolated function insertLogLevelControlCommand(
 ) returns string|error {
     string commandId = uuid:createType1AsString();
 
-    // Store as JSON payload for the SET_LOG_LEVEL action
+    // Store as JSON payload for the SET_LOGGER_LEVEL action
     string payload = string `{"componentName":"${componentName}","logLevel":"${logLevel}"}`;
 
     _ = check dbClient->execute(`
         INSERT INTO bi_runtime_control_commands (
             command_id, runtime_id, target_artifact, action, payload, status, issued_at, issued_by
         ) VALUES (
-            ${commandId}, ${runtimeId}, ${componentName}, 'SET_LOG_LEVEL', ${payload}, 'pending', CURRENT_TIMESTAMP, ${issuedBy}
+            ${commandId}, ${runtimeId}, ${componentName}, 'SET_LOGGER_LEVEL', ${payload}, 'pending', CURRENT_TIMESTAMP, ${issuedBy}
         )
     `);
 

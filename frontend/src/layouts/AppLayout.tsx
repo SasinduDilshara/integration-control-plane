@@ -45,7 +45,7 @@ import React, { useState } from 'react';
 import type { JSX } from 'react';
 import { useNavigate, Outlet, Link as NavLink } from 'react-router';
 import Logo from '../components/Logo';
-import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Settings, Shield, Sliders, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
+import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Server, Settings, Shield, Sliders, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
 import { useProjectByHandler, useProjects, useComponents } from '../api/queries';
 import { mockNotifications } from '../mock-data/mockNotifications';
 import { useScope, useResource, resourceUrl, broaden, narrow, sidebarItems, hasProject, hasComponent, type Resource } from '../nav';
@@ -57,11 +57,11 @@ import { ALL_USER_MGT_PERMISSIONS, Permissions } from '../constants/permissions'
 const SIDEBAR_ICONS: Record<Resource, JSX.Element> = {
   overview: <LayoutDashboard size={20} />,
   logs: <ScrollText size={20} />,
+  loggers: <Sliders size={20} />,
   metrics: <BarChart3 size={20} />,
-  runtimes: <Settings size={20} />,
+  runtimes: <Server size={20} />,
   environments: <Layers size={20} />,
   'access-control': <Shield size={20} />,
-  loggers: <Sliders size={20} />,
 };
 
 export default function AppLayout(): JSX.Element {
@@ -106,14 +106,14 @@ export default function AppLayout(): JSX.Element {
       }
       case 'logs':
         return 'logs';
+      case 'loggers':
+        return 'loggers';
       case 'metrics':
         return 'metrics';
       case 'runtimes':
         return 'runtimes';
       case 'environments':
         return 'environments';
-      case 'loggers':
-        return 'loggers';
     }
   };
 

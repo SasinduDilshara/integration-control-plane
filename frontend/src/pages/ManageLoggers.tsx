@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Avatar, Box, Card, CardContent, Chip, CircularProgress, Divider, IconButton, MenuItem, PageContent, Select, Stack, Typography } from '@wso2/oxygen-ui';
+import { Alert, Avatar, Box, Card, CardContent, Chip, CircularProgress, Divider, IconButton, MenuItem, PageContent, Select, Snackbar, Stack, Typography } from '@wso2/oxygen-ui';
 import { RefreshCw } from '@wso2/oxygen-ui-icons-react';
 import { useState, type JSX } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -46,6 +46,7 @@ function LoggersList({ environmentId, componentId }: { environmentId: string; co
   const { data: loggers = [], isLoading } = useLoggers(environmentId, componentId);
   const updateLogLevel = useUpdateLogLevel();
   const [updatingLogger, setUpdatingLogger] = useState<string | null>(null);
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
 
   const handleLogLevelChange = async (componentName: string, runtimeIds: string[], newLevel: LogLevel) => {
     setUpdatingLogger(componentName);
@@ -55,6 +56,7 @@ function LoggersList({ environmentId, componentId }: { environmentId: string; co
         componentName,
         logLevel: newLevel,
       });
+      setSnackbarOpen(true);
     } catch (error) {
       console.error('Failed to update log level:', error);
     } finally {
@@ -81,34 +83,36 @@ function LoggersList({ environmentId, componentId }: { environmentId: string; co
   }
 
   return (
-    <Stack spacing={2}>
-      {loggers.map((logger) => (
-        <Box key={logger.componentName} sx={{ p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="body1" sx={{ fontWeight: 500, fontFamily: 'monospace' }}>
-                {logger.componentName}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {logger.runtimeIds.length} runtime{logger.runtimeIds.length !== 1 ? 's' : ''}
-              </Typography>
-            </Box>
-            <Select
-              value={logger.logLevel}
-              onChange={(e) => handleLogLevelChange(logger.componentName, logger.runtimeIds, e.target.value as LogLevel)}
-              size="small"
-              disabled={updatingLogger === logger.componentName}
-              sx={{ minWidth: 120 }}>
-              {LOG_LEVELS.map((level) => (
-                <MenuItem key={level} value={level}>
-                  <Chip label={level} size="small" color={getLogLevelColor(level)} sx={{ minWidth: 70 }} />
-                </MenuItem>
-              ))}
-            </Select>
-          </Stack>
-        </Box>
-      ))}
-    </Stack>
+    <>
+      <Stack spacing={2}>
+        {loggers.map((logger) => (
+          <Box key={logger.componentName} sx={{ p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body1" sx={{ fontWeight: 500, fontFamily: 'monospace' }}>
+                  {logger.componentName}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {logger.runtimeIds.length} runtime{logger.runtimeIds.length !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+              <Select value={logger.logLevel} onChange={(e) => handleLogLevelChange(logger.componentName, logger.runtimeIds, e.target.value as LogLevel)} size="small" disabled={updatingLogger === logger.componentName} sx={{ minWidth: 120 }}>
+                {LOG_LEVELS.map((level) => (
+                  <MenuItem key={level} value={level}>
+                    <Chip label={level} size="small" color={getLogLevelColor(level)} sx={{ minWidth: 70 }} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </Stack>
+          </Box>
+        ))}
+      </Stack>
+      <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
+        <Alert onClose={() => setSnackbarOpen(false)} severity="success" variant="filled" sx={{ width: '100%' }}>
+          Logger level update in progress, please refresh after sometime to view the change
+        </Alert>
+      </Snackbar>
+    </>
   );
 }
 
@@ -146,57 +150,53 @@ export default function ManageLoggers(scope: ComponentScope): JSX.Element {
           }
         `}
       </style>
-    <Box sx={{ position: 'relative', overflow: 'hidden', flex: 1 }}>
-      <PageContent>
-        <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 1 }}>
-          <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{component.displayName?.[0]?.toUpperCase() ?? 'C'}</Avatar>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            {component.displayName ?? scope.component}
+      <Box sx={{ position: 'relative', overflow: 'hidden', flex: 1 }}>
+        <PageContent>
+          <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 1 }}>
+            <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{component.displayName?.[0]?.toUpperCase() ?? 'C'}</Avatar>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              {component.displayName ?? scope.component}
+            </Typography>
+          </Stack>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 4, ml: 9 }}>
+            {component.description || '+ Add Description'}
           </Typography>
-        </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 4, ml: 9 }}>
-          {component.description || '+ Add Description'}
-        </Typography>
 
-        {loadingEnvironments ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-            <CircularProgress />
-          </Box>
-        ) : environments.length === 0 ? (
-          <Card variant="outlined">
-            <CardContent sx={{ py: 8, textAlign: 'center' }}>
-              <Typography variant="h6" color="text.secondary" gutterBottom>
-                No Environments Found
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Create an environment to start managing loggers
-              </Typography>
-            </CardContent>
-          </Card>
-        ) : (
-          environments.map((env) => (
-            <Card key={env.id} variant="outlined" sx={{ mb: 3 }}>
-              <CardContent>
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
-                    {env.name}
-                  </Typography>
-                  <IconButton
-                    size="small"
-                    onClick={() => handleRefresh(env.id, component.id)}
-                    disabled={refreshingEnv === env.id}
-                    aria-label="Refresh loggers">
-                    <RefreshCw size={16} style={{ animation: refreshingEnv === env.id ? 'spin 1s linear infinite' : 'none', transformOrigin: 'center' }} />
-                  </IconButton>
-                </Stack>
-                <Divider sx={{ my: 2 }} />
-                <LoggersList environmentId={env.id} componentId={component.id} />
+          {loadingEnvironments ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+              <CircularProgress />
+            </Box>
+          ) : environments.length === 0 ? (
+            <Card variant="outlined">
+              <CardContent sx={{ py: 8, textAlign: 'center' }}>
+                <Typography variant="h6" color="text.secondary" gutterBottom>
+                  No Environments Found
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Create an environment to start managing loggers
+                </Typography>
               </CardContent>
             </Card>
-          ))
-        )}
-      </PageContent>
-    </Box>
+          ) : (
+            environments.map((env) => (
+              <Card key={env.id} variant="outlined" sx={{ mb: 3 }}>
+                <CardContent>
+                  <Stack direction="row" alignItems="center" justifyContent="space-between">
+                    <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
+                      {env.name}
+                    </Typography>
+                    <IconButton size="small" onClick={() => handleRefresh(env.id, component.id)} disabled={refreshingEnv === env.id} aria-label="Refresh loggers">
+                      <RefreshCw size={16} style={{ animation: refreshingEnv === env.id ? 'spin 1s linear infinite' : 'none', transformOrigin: 'center' }} />
+                    </IconButton>
+                  </Stack>
+                  <Divider sx={{ my: 2 }} />
+                  <LoggersList environmentId={env.id} componentId={component.id} />
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </PageContent>
+      </Box>
     </>
   );
 }

@@ -35,11 +35,11 @@ export interface AppRoute extends Omit<RouteProps, 'children'> {
 const MATRIX: Matrix = {
   overview: { segment: '', pages: { organizations: Projects, projects: Project, components: Component } },
   logs: { segment: 'logs', pages: { projects: RuntimeLogs, components: RuntimeLogs } },
+  loggers: { segment: 'loggers', pages: { components: ManageLoggers } },
   metrics: { segment: 'metrics', pages: { projects: Metrics, components: Metrics } },
   runtimes: { segment: 'runtimes', pages: { projects: Runtime, components: Runtime } },
   environments: { segment: 'environments', pages: { organizations: Environments, projects: Environments } },
   'access-control': { segment: 'settings/access-control/:tab', pages: { organizations: OrgAccessControl, projects: ProjectAccessControl, components: ComponentAccessControl } },
-  loggers: { segment: 'loggers', pages: { components: ManageLoggers } },
 };
 
 const routes: AppRoute[] = [
