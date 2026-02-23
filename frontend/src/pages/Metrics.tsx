@@ -19,7 +19,7 @@ import { Button, Card, CardContent, Checkbox, CircularProgress, Grid, IconButton
 import { LineChart } from '@wso2/oxygen-ui-charts-react';
 import { BarChart3, RefreshCw } from '@wso2/oxygen-ui-icons-react';
 import { useMemo, useState, type JSX } from 'react';
-import { useComponentByHandler, useComponents, useEnvironments } from '../api/queries';
+import { useProjectByHandler, useComponentByHandler, useComponents, useEnvironments } from '../api/queries';
 import { useMetrics, type MetricEntry, type MetricsRequest } from '../api/metrics';
 import EmptyListing from '../components/EmptyListing';
 import NotFound from '../components/NotFound';
@@ -57,11 +57,10 @@ interface ApiSummary {
   entries: MetricEntry[];
 }
 
-// Derive Top APIs from service-resource entries grouped by sublevel+deployment
+// Derive Top APIs grouped by sublevel+deployment
 function deriveApis(metrics: MetricEntry[]): ApiSummary[] {
   const apiMap: Record<string, { successful: MetricEntry[]; failed: MetricEntry[] }> = {};
   for (const m of metrics) {
-    if (m.tags.src_service_resource !== 'true') continue;
     const key = `${m.tags.sublevel}\0${m.tags.deployment ?? m.tags.app_name ?? ''}`;
     if (!apiMap[key]) apiMap[key] = { successful: [], failed: [] };
     apiMap[key][m.tags.status === 'failed' ? 'failed' : 'successful'].push(m);
@@ -190,9 +189,11 @@ function StatCard({ title, value, color }: { title: string; value: string; color
 
 export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Element {
   const isComponent = hasComponent(scope);
-  const { data: singleComponent, isLoading: loadingComponent } = useComponentByHandler(scope.project, isComponent ? scope.component : undefined);
-  const { data: allComponents = [], isLoading: loadingComponents } = useComponents(scope.org, scope.project);
-  const { data: environments = [], isLoading: loadingEnvironments } = useEnvironments(scope.project);
+  const { data: project, isLoading: loadingProject } = useProjectByHandler(scope.project);
+  const projectId = project?.id ?? '';
+  const { data: singleComponent, isLoading: loadingComponent } = useComponentByHandler(projectId, isComponent ? scope.component : undefined);
+  const { isLoading: loadingComponents } = useComponents(scope.org, projectId);
+  const { data: environments = [], isLoading: loadingEnvironments } = useEnvironments(projectId);
 
   const [envFilter, setEnvFilter] = useState('');
   const [timeRange, setTimeRange] = useState('Past 1 hour');
@@ -218,25 +219,23 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
     return req;
   }, [isComponent, componentId, effectiveEnvId, timeRange, resolution]);
 
-  const { data: metrics = [], isLoading, error, refetch } = useMetrics(metricsRequest);
-
-  // Only show service-resource entries (incoming requests), exclude outgoing client calls
-  const serviceMetrics = useMemo(() => metrics.filter((m) => m.tags.src_service_resource === 'true'), [metrics]);
+  const { data: metricsData, isLoading, error, refetch } = useMetrics(metricsRequest);
+  const inboundMetrics = metricsData?.inboundMetrics ?? [];
 
   // Client-side integration filter (project-level only)
   const integrations = useMemo(() => {
     const set = new Set<string>();
-    for (const m of serviceMetrics) {
+    for (const m of inboundMetrics) {
       const i = m.tags.integration;
       if (i) set.add(i);
     }
     return [...set].sort();
-  }, [serviceMetrics]);
+  }, [inboundMetrics]);
 
   const filteredMetrics = useMemo(() => {
-    if (integrationFilter === 'all') return serviceMetrics;
-    return serviceMetrics.filter((m) => m.tags.integration === integrationFilter);
-  }, [serviceMetrics, integrationFilter]);
+    if (integrationFilter === 'all') return inboundMetrics;
+    return inboundMetrics.filter((m) => m.tags.integration === integrationFilter);
+  }, [inboundMetrics, integrationFilter]);
 
   const { requestsData, latencyData, totalRequests, errorCount, errorPercentage, latestP95 } = useMemo(() => aggregate(filteredMetrics), [filteredMetrics]);
   const apis = useMemo(() => deriveApis(filteredMetrics), [filteredMetrics]);
@@ -256,22 +255,18 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
 
   // Early returns
   const loadingContext = isComponent ? loadingComponent : loadingComponents;
-  if (loadingContext || loadingEnvironments) {
+  if (loadingProject || loadingContext || loadingEnvironments) {
     return (
       <PageContent sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 8 }}>
         <CircularProgress />
       </PageContent>
     );
   }
+  if (!project) {
+    return <NotFound message="Project not found" backTo={resourceUrl(broaden(scope)!, 'overview')} backLabel="Back to Organization" />;
+  }
   if (isComponent && !singleComponent) {
     return <NotFound message="Component not found" backTo={resourceUrl(broaden(scope)!, 'overview')} backLabel="Back to Project" />;
-  }
-  if (!isComponent && allComponents.length === 0) {
-    return (
-      <PageContent>
-        <EmptyListing icon={<BarChart3 size={48} />} title="No components" description="Add a component to view metrics." />
-      </PageContent>
-    );
   }
   if (environments.length === 0) {
     return (
@@ -341,7 +336,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
             Retry
           </Button>
         </Stack>
-      ) : serviceMetrics.length === 0 ? (
+      ) : inboundMetrics.length === 0 ? (
         <EmptyListing icon={<BarChart3 size={48} />} title="No metrics data" description="No metrics available for the selected time range." />
       ) : (
         <>

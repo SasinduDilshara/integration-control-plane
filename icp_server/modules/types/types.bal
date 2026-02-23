@@ -1776,7 +1776,8 @@ public type Metric record {
 };
 
 public type MetricEntriesResponse record {
-    MetricEntry[] metrics;
+    MetricEntry[] inboundMetrics;
+    MetricEntry[] outboundMetrics;
 };
 
 // === Auth Related Types ===

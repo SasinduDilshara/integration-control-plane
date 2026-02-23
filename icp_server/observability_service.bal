@@ -130,7 +130,8 @@ service /icp/observability on observabilityListener {
         if (hasFilters && runtimeIdList.length() == 0) {
             log:printInfo("No runtimes found for the given component/environment filters. Returning empty result.");
             return {
-                metrics: []
+                inboundMetrics: [],
+                outboundMetrics: []
             };
         }
 

@@ -46,10 +46,11 @@ export interface MetricEntry {
 }
 
 export interface MetricsResponse {
-  metrics: MetricEntry[];
+  inboundMetrics: MetricEntry[];
+  outboundMetrics: MetricEntry[];
 }
 
-async function fetchMetrics(req: MetricsRequest): Promise<MetricEntry[]> {
+async function fetchMetrics(req: MetricsRequest): Promise<MetricsResponse> {
   const res = await authenticatedFetch(observabilityMetricsApiUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,11 +61,11 @@ async function fetchMetrics(req: MetricsRequest): Promise<MetricEntry[]> {
     throw new Error(`${res.status}: ${body}`);
   }
   const json: MetricsResponse = await res.json();
-  return json.metrics ?? [];
+  return json;
 }
 
 export function useMetrics(req: MetricsRequest | null) {
-  return useQuery({
+  return useQuery<MetricsResponse>({
     queryKey: ['metrics', req],
     queryFn: () => fetchMetrics(req!),
     enabled: !!req,
