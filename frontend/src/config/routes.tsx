@@ -1,5 +1,5 @@
 import { type RouteProps, Navigate } from 'react-router';
-import { cookiePolicyUrl, loginUrl, orgRoleDetailUrl, privacyPolicyUrl, projectRoleDetailUrl, componentRoleDetailUrl } from '../paths';
+import { cookiePolicyUrl, loginUrl, orgRoleDetailUrl, privacyPolicyUrl, projectRoleDetailUrl, componentRoleDetailUrl, loggersSegment } from '../paths';
 import PublicLayout from '../layouts/PublicLayout';
 import PolicyLayout from '../layouts/PolicyLayout';
 import Login from '../pages/Login';
@@ -24,6 +24,7 @@ import ProjectRoleDetail from '../pages/ProjectRoleDetail';
 import ComponentRoleDetail from '../pages/ComponentRoleDetail';
 import Profile from '../pages/Profile';
 import ForceChangePassword from '../pages/ForceChangePassword';
+import ManageLoggers from '../pages/ManageLoggers';
 import { ScopeResolver, generateMatrixRoutes, withScope, type Matrix } from '../nav';
 import { createElement } from 'react';
 
@@ -34,6 +35,7 @@ export interface AppRoute extends Omit<RouteProps, 'children'> {
 const MATRIX: Matrix = {
   overview: { segment: '', pages: { organizations: Projects, projects: Project, components: Component } },
   logs: { segment: 'logs', pages: { projects: RuntimeLogs, components: RuntimeLogs } },
+  loggers: { segment: loggersSegment, pages: { components: ManageLoggers } },
   metrics: { segment: 'metrics', pages: { projects: Metrics, components: Metrics } },
   runtimes: { segment: 'runtimes', pages: { projects: Runtime, components: Runtime } },
   environments: { segment: 'environments', pages: { organizations: Environments, projects: Environments } },

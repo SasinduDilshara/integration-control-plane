@@ -14,6 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/log;
 import ballerina/sql;
 import ballerina/time;
 
@@ -93,6 +94,25 @@ public type Resource record {
     string[] methods = [];
 };
 
+public enum LogLevel {
+    DEBUG,
+    INFO,
+    WARN,
+    ERROR
+}
+
+public type Logger record {
+    string componentName;
+    LogLevel logLevel;
+    string runtimeId;
+};
+
+public type LoggerGroup record {
+    string componentName;
+    LogLevel logLevel;
+    string[] runtimeIds;
+};
+
 public type Main record {
     string packageOrg;
     string packageName;
@@ -153,6 +173,7 @@ public type Heartbeat record {|
     Artifacts artifacts;
     string runtimeHash;
     time:Utc timestamp;
+    map<log:Level> logLevels?; // BI log levels from heartbeat payload
 |};
 
 // Delta heartbeat with hash value
@@ -173,17 +194,19 @@ public enum ControlCommandStatus {
 
 public enum ControlAction {
     START,
-    STOP
+    STOP,
+    SET_LOGGER_LEVEL
 }
 
-# Description.
+# Represents a control command issued to a runtime
 #
-# + commandId - field description  
-# + runtimeId - field description  
-# + targetArtifact - field description  
-# + action - field description  
-# + issuedAt - field description  
-# + status - field description
+# + commandId - Unique identifier for the command
+# + runtimeId - ID of the runtime to receive the command
+# + targetArtifact - The artifact to be controlled
+# + action - The control action to perform
+# + issuedAt - Timestamp when the command was issued
+# + status - Current status of the command
+# + payload - Optional JSON payload for actions that need additional data (e.g., log level settings)
 public type ControlCommand record {
     string commandId;
     string runtimeId;
@@ -191,6 +214,7 @@ public type ControlCommand record {
     ControlAction action;
     time:Utc issuedAt;
     ControlCommandStatus status; // pending, sent, acknowledged, failed
+    string? payload?; // JSON payload for actions that need additional data
 };
 
 public type HeartbeatResponse record {
@@ -430,6 +454,7 @@ public type ControlCommandDBRecord record {
     string action;
     time:Utc issued_at;
     string status;
+    string? payload?;
 };
 
 // GraphQL response types
@@ -495,6 +520,7 @@ public type Runtime record {
     }
     string lastHeartbeat?;
     Artifacts artifacts?;
+    RuntimeLogLevelRecord[] logLevels?;
 };
 
 public type ServiceRecordInDB record {
@@ -596,6 +622,21 @@ public type CarbonAppRecordInDB record {
 public type RegistryResourceRecordInDB record {
     string resource_name;
     string resource_type = "";
+};
+
+public type RuntimeLogLevelRecord record {
+    @sql:Column {
+        name: "runtime_id"
+    }
+    string runtimeId;
+    @sql:Column {
+        name: "component_name"
+    }
+    string componentName;
+    @sql:Column {
+        name: "log_level"
+    }
+    string logLevel;
 };
 
 public type ResourceRecord record {
@@ -2158,6 +2199,18 @@ public type ListenerControlInput record {|
 |};
 
 public type ListenerControlResponse record {|
+    boolean success;
+    string message;
+    string[] commandIds;
+|};
+
+public type UpdateLogLevelInput record {|
+    string[] runtimeIds;
+    string componentName;
+    LogLevel logLevel;
+|};
+
+public type UpdateLogLevelResponse record {|
     boolean success;
     string message;
     string[] commandIds;

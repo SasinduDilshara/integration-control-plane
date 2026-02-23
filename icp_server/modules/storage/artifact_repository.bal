@@ -1279,3 +1279,51 @@ public isolated function getConnectorsByEnvironmentAndComponent(string environme
 
     return connectorList;
 }
+
+// Get loggers for a specific environment and component, grouped by component name
+public isolated function getLoggersByEnvironmentAndComponent(string environmentId, string componentId) returns types:LoggerGroup[]|error {
+    // Get all runtime IDs for this environment and component
+    string[] runtimeIds = check getRuntimeIdsByEnvironmentAndComponent(environmentId, componentId);
+
+    // If no runtimes found, return empty array
+    if runtimeIds.length() == 0 {
+        return [];
+    }
+
+    // Nested map to group loggers by component name and log level
+    map<map<string[]>> loggerGroupMap = {}; // Outer key: componentName, Inner key: logLevel, Value: runtime IDs
+
+    // Get log levels for each runtime
+    foreach string runtimeId in runtimeIds {
+        types:RuntimeLogLevelRecord[] logLevels = check getLogLevelsForRuntime(runtimeId);
+        foreach types:RuntimeLogLevelRecord logLevel in logLevels {
+            if !loggerGroupMap.hasKey(logLevel.componentName) {
+                loggerGroupMap[logLevel.componentName] = {};
+            }
+            map<string[]> levelMap = <map<string[]>>loggerGroupMap[logLevel.componentName];
+            if !levelMap.hasKey(logLevel.logLevel) {
+                levelMap[logLevel.logLevel] = [runtimeId];
+            } else {
+                string[] existing = <string[]>levelMap[logLevel.logLevel];
+                existing.push(runtimeId);
+                levelMap[logLevel.logLevel] = existing;
+            }
+            loggerGroupMap[logLevel.componentName] = levelMap;
+        }
+    }
+
+    // Convert nested map to LoggerGroup array
+    types:LoggerGroup[] loggerGroups = [];
+    foreach [string, map<string[]>] [componentName, levelMap] in loggerGroupMap.entries() {
+        foreach [string, string[]] [logLevel, rids] in levelMap.entries() {
+            types:LoggerGroup group = {
+                componentName: componentName,
+                logLevel: <types:LogLevel>logLevel,
+                runtimeIds: rids
+            };
+            loggerGroups.push(group);
+        }
+    }
+
+    return loggerGroups;
+}

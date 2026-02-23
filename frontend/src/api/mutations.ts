@@ -228,3 +228,35 @@ export function useUpdateListenerState() {
     },
   });
 }
+
+// ── Logger mutations ──
+
+export interface UpdateLogLevelInput {
+  runtimeIds: string[];
+  componentName: string;
+  logLevel: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR';
+}
+
+const UPDATE_LOG_LEVEL = `
+  mutation UpdateLogLevel($input: UpdateLogLevelInput!) {
+    updateLogLevel(input: $input) {
+      success, message, commandIds
+    }
+  }`;
+
+export function useUpdateLogLevel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateLogLevelInput) =>
+      gql<{ updateLogLevel: { success: boolean; message: string; commandIds: string[] } }>(UPDATE_LOG_LEVEL, {
+        input: {
+          runtimeIds: input.runtimeIds,
+          componentName: input.componentName,
+          logLevel: input.logLevel,
+        },
+      }).then((d) => d.updateLogLevel),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['loggers'] });
+    },
+  });
+}
