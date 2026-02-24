@@ -289,16 +289,20 @@ export default function AppLayout(): JSX.Element {
           <Footer.Link
             href={privacyPolicyUrl()}
             onClick={(e) => {
-              e.preventDefault();
-              navigate(privacyPolicyUrl());
+              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.defaultPrevented) {
+                e.preventDefault();
+                navigate(privacyPolicyUrl());
+              }
             }}>
             Privacy Policy
           </Footer.Link>
           <Footer.Link
             href={cookiePolicyUrl()}
             onClick={(e) => {
-              e.preventDefault();
-              navigate(cookiePolicyUrl());
+              if (e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey && !e.defaultPrevented) {
+                e.preventDefault();
+                navigate(cookiePolicyUrl());
+              }
             }}>
             Cookie Policy
           </Footer.Link>
