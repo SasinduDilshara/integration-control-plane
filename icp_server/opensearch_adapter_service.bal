@@ -682,7 +682,7 @@ function getMetricQuery(types:MetricEntryRequest metricRequest) returns json|err
         "aggs": {
             "tag_groups": {
                 "composite": {
-                    "size": 10000,
+                    "size": 10000, // Adjust based on expected unique tag combinations
                     "sources": compositeSources
                 },
                 "aggs": {
