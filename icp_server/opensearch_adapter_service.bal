@@ -276,7 +276,7 @@ service /observability on openSerachObservabilityListener {
         };
     }
 
-    resource function post metrics(@http:Header {name: "X-API-Key"} string? apiKeyHeader, http:Request request, types:MetricEntryRequest metricRequest) returns types:MetricEntriesResponse|error {
+    isolated resource function post metrics(@http:Header {name: "X-API-Key"} string? apiKeyHeader, http:Request request, types:MetricEntryRequest metricRequest) returns types:MetricEntriesResponse|error {
         log:printInfo("Received metric request: " + metricRequest.toString());
 
         // Build OpenSearch query for metrics
@@ -599,7 +599,7 @@ function deduplicateLogEntries(json[][] rows) returns json[][] {
 //   field will be merged into the same aggregation group instead of being split.
 //   Add any new fields from ballerinax/metrics.logs emitted documents to this list
 //   when upgrading the Ballerina observability library or the ICP runtime agent.
-final string[] METRICS_TAG_FIELDS = [
+final readonly & string[] METRICS_TAG_FIELDS = [
     "status",
     "sublevel",
     "deployment",
@@ -625,7 +625,7 @@ final string[] METRICS_TAG_FIELDS = [
     "entrypoint_function_module"
 ];
 
-function getMetricQuery(types:MetricEntryRequest metricRequest) returns json|error {
+isolated function getMetricQuery(types:MetricEntryRequest metricRequest) returns json|error {
     // Build the time series query for requests per minute
     string interval = metricRequest.resolutionInterval;
     string startTime = metricRequest.startTime;
