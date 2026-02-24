@@ -44,7 +44,7 @@ import { useState } from 'react';
 import type { JSX } from 'react';
 import { useNavigate, Outlet, Link as NavLink } from 'react-router';
 import Logo from '../components/Logo';
-import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Server, Settings, Shield, Sliders, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
+import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Server, Shield, Sliders, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
 import { useProjectByHandler, useProjects, useComponents } from '../api/queries';
 import { mockNotifications } from '../mock-data/mockNotifications';
 import { useScope, useResource, resourceUrl, broaden, narrow, sidebarItems, hasProject, hasComponent, type Resource } from '../nav';
@@ -241,7 +241,6 @@ export default function AppLayout(): JSX.Element {
               <UserMenu.Trigger name={displayName || username || 'User'} />
               <UserMenu.Header name={displayName || username || 'User'} email={username} role="Admin" />
               <UserMenu.Item icon={<UserIcon size={18} />} label="Profile" onClick={() => navigate(profileUrl())} />
-              <UserMenu.Item icon={<Settings size={18} />} label="Settings" />
               <UserMenu.Divider />
               <UserMenu.Logout icon={<LogOut size={18} />} onClick={() => setConfirmDialogOpen(true)} />
             </UserMenu>
