@@ -180,7 +180,7 @@ export default function AppLayout(): JSX.Element {
                   }}
                   size="small"
                   sx={{ minWidth: 160 }}
-                  IconComponent={(props) => (
+                  IconComponent={({ ownerState: _ownerState, ...props }) => (
                     <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '3px', display: 'flex', pointerEvents: 'none' }}>
                       <ChevronDown size={18} />
                     </span>
@@ -220,7 +220,7 @@ export default function AppLayout(): JSX.Element {
                   }}
                   size="small"
                   sx={{ minWidth: 160 }}
-                  IconComponent={(props) => (
+                  IconComponent={({ ownerState: _ownerState, ...props }) => (
                     <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '3px', display: 'flex', pointerEvents: 'none' }}>
                       <ChevronDown size={18} />
                     </span>
