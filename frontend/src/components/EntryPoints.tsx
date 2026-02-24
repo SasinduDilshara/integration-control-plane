@@ -81,6 +81,9 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const showTaskToggle = artifactType === 'Task';
   const showTaskTrigger = artifactType === 'Task';
   const hasRuntimes = artifact.runtimes && Array.isArray(artifact.runtimes) && artifact.runtimes.length > 0;
+
+  // Track if any preceding controls are visible for proper divider placement
+  const hasPrecedingControls = carbonApp || showStatusToggle || showTracingToggle || showStatisticsToggle || showListenerToggle;
   const toEnabled = (value: unknown) => {
     if (typeof value === 'boolean') return value;
     const normalized = (value ?? '').toString().toLowerCase();
@@ -177,8 +180,14 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const handleConfirmListenerToggle = () => {
     if (!pendingListenerToggle) return;
 
-    const runtimes = (artifact.runtimes as Array<{ runtimeId: string }> | undefined) ?? [];
-    const runtimeIds = runtimes.map((r) => r.runtimeId);
+    const runtimes = artifact.runtimes;
+    if (!runtimes || !Array.isArray(runtimes) || runtimes.length === 0) {
+      console.error('No valid runtimes available for listener toggle');
+      setPendingListenerToggle(null);
+      return;
+    }
+
+    const runtimeIds = runtimes.map((r: { runtimeId: string }) => r.runtimeId);
     const previousValue = listenerEnabled;
 
     setListenerEnabled(pendingListenerToggle.checked);
@@ -199,7 +208,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
     setPendingListenerToggle(null);
   };
 
-  const toggleLabel = pendingToggle?.type === 'tracing' ? 'tracing' : pendingToggle?.type === 'statistics' ? 'statistics' : 'status';
+  const toggleLabel = pendingToggle?.type ?? 'status';
   const toggleAction = pendingToggle?.checked ? 'enable' : 'disable';
   const listenerAction = pendingListenerToggle?.checked ? 'enable' : 'disable';
 
@@ -292,7 +301,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
           )}
           {showTaskToggle && (
             <>
-              <Divider orientation="vertical" flexItem />
+              {hasPrecedingControls && <Divider orientation="vertical" flexItem />}
               <Stack direction="row" alignItems="center" gap={1}>
                 <Typography variant="body2" color="text.secondary">
                   Status
@@ -303,7 +312,7 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
           )}
           {showTaskTrigger && (
             <>
-              <Divider orientation="vertical" flexItem />
+              {(hasPrecedingControls || showTaskToggle) && <Divider orientation="vertical" flexItem />}
               <Tooltip title={!hasRuntimes ? 'No runtimes available' : 'Trigger task'}>
                 <Box>
                   <IconButton size="small" onClick={handleTriggerTask} disabled={triggerTask.isPending || !hasRuntimes} aria-label="Trigger task" sx={{ color: hasRuntimes ? 'primary.main' : 'text.disabled' }}>

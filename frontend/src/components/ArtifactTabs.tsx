@@ -16,10 +16,11 @@
  * under the License.
  */
 
-import { Box, Card, CardContent, Chip, CircularProgress, Divider, Stack, Typography } from '@wso2/oxygen-ui';
-import { ChevronDown, ChevronRight } from '@wso2/oxygen-ui-icons-react';
-import { useState } from 'react';
+import { Accordion, AccordionSummary, AccordionDetails, Box, Card, CardContent, Chip, CircularProgress, Divider, Stack, Typography } from '@wso2/oxygen-ui';
+import { ChevronDown } from '@wso2/oxygen-ui-icons-react';
+import { useMemo } from 'react';
 import { useArtifactSource, useArtifactParams, useArtifactWsdl, useLocalEntryValue, ARTIFACT_TYPE_TO_SOURCE_TYPE } from '../api/queries';
+import { WSDL_NS, SOAP_NS, SOAP12_NS } from '../paths';
 import CodeViewer from './CodeViewer';
 import DataTable, { emptySx } from './DataTable';
 import type { TabProps } from './artifact-config';
@@ -169,10 +170,6 @@ export function InboundEndpointParameters({ artifact, envId, componentId, artifa
 
 // ── WSDL parsing helpers ─────────────────────────────────────────────────────
 
-const WSDL_NS = 'http://schemas.xmlsoap.org/wsdl/';
-const SOAP_NS = 'http://schemas.xmlsoap.org/wsdl/soap/';
-const SOAP12_NS = 'http://schemas.xmlsoap.org/wsdl/soap12/';
-
 interface WsdlOperation {
   name: string;
   soapAction?: string;
@@ -189,9 +186,8 @@ interface WsdlInfo {
 
 function getByNs(parent: Document | Element, ns: string, localName: string): Element[] {
   const result = Array.from(parent.getElementsByTagNameNS(ns, localName));
-  if (result.length > 0) return result;
-  // Fallback for documents that don't declare the namespace correctly
-  return Array.from(parent.getElementsByTagName(localName));
+  // Return empty array if namespace-aware query fails to avoid conflating elements from different namespaces
+  return result;
 }
 
 function parseWsdl(xml: string): WsdlInfo | null {
@@ -201,15 +197,21 @@ function parseWsdl(xml: string): WsdlInfo | null {
 
     const defs = doc.documentElement;
     const serviceEls = getByNs(doc, WSDL_NS, 'service');
-    const serviceName = serviceEls[0]?.getAttribute('name') ?? defs.getAttribute('name') ?? 'Unknown Service';
-    const targetNamespace = defs.getAttribute('targetNamespace') ?? '';
+
+    // Return null if required service name is missing
+    const serviceName = serviceEls[0]?.getAttribute('name') ?? defs.getAttribute('name');
+    if (!serviceName) return null;
+
+    // Target namespace is required for valid WSDL
+    const targetNamespace = defs.getAttribute('targetNamespace');
+    if (!targetNamespace) return null;
 
     // Build soap:operation index keyed by operation name
     const soapInfo: Record<string, { soapAction?: string; style?: string }> = {};
     for (const ns of [SOAP_NS, SOAP12_NS]) {
       for (const soapOp of getByNs(doc, ns, 'operation')) {
         const bindingOpEl = soapOp.parentElement;
-        const opName = bindingOpEl?.getAttribute('name') ?? '';
+        const opName = bindingOpEl?.getAttribute('name');
         if (opName) {
           soapInfo[opName] = {
             soapAction: soapOp.getAttribute('soapAction') ?? undefined,
@@ -223,17 +225,20 @@ function parseWsdl(xml: string): WsdlInfo | null {
     const portTypeEls = getByNs(doc, WSDL_NS, 'portType');
     const opEls = portTypeEls[0] ? getByNs(portTypeEls[0], WSDL_NS, 'operation') : [];
 
-    const operations: WsdlOperation[] = opEls.map((opEl) => {
-      const name = opEl.getAttribute('name') ?? '';
+    const operations: WsdlOperation[] = [];
+    for (const opEl of opEls) {
+      const name = opEl.getAttribute('name');
+      if (!name) continue;
+
       const inputEl = getByNs(opEl, WSDL_NS, 'input')[0];
       const outputEl = getByNs(opEl, WSDL_NS, 'output')[0];
-      return {
+      operations.push({
         name,
         inputMessage: inputEl?.getAttribute('message')?.split(':').pop(),
         outputMessage: outputEl?.getAttribute('message')?.split(':').pop(),
         ...soapInfo[name],
-      };
-    });
+      });
+    }
 
     return { serviceName, targetNamespace, operations };
   } catch {
@@ -244,79 +249,78 @@ function parseWsdl(xml: string): WsdlInfo | null {
 // ── Proxy API Reference (Swagger-like SOAP UI) ────────────────────────────────
 
 function OperationRow({ op }: { op: WsdlOperation }) {
-  const [expanded, setExpanded] = useState(false);
   return (
-    <Box sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
-      <Box onClick={() => setExpanded((v) => !v)} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25, bgcolor: 'action.hover', cursor: 'pointer', userSelect: 'none', '&:hover': { bgcolor: 'action.selected' } }}>
-        <Chip label="SOAP" size="small" sx={{ bgcolor: '#1565c0', color: 'white', fontWeight: 700, fontSize: '0.7rem', height: 22, borderRadius: 1 }} />
-        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, flex: 1 }}>
-          {op.name}
-        </Typography>
-        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-      </Box>
-      {expanded && (
-        <Box sx={{ px: 2, py: 1.5, bgcolor: 'background.paper' }}>
-          <Stack gap={0.75}>
-            {op.soapAction && (
-              <Stack direction="row" gap={1} alignItems="baseline">
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
-                  SOAP Action
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                  {op.soapAction}
-                </Typography>
-              </Stack>
-            )}
-            {op.style && (
-              <Stack direction="row" gap={1} alignItems="baseline">
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
-                  Style
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                  {op.style}
-                </Typography>
-              </Stack>
-            )}
-            {op.inputMessage && (
-              <Stack direction="row" gap={1} alignItems="baseline">
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
-                  Input
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                  {op.inputMessage}
-                </Typography>
-              </Stack>
-            )}
-            {op.outputMessage && (
-              <Stack direction="row" gap={1} alignItems="baseline">
-                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
-                  Output
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                  {op.outputMessage}
-                </Typography>
-              </Stack>
-            )}
-          </Stack>
-        </Box>
-      )}
-    </Box>
+    <Accordion disableGutters sx={{ border: '1px solid', borderColor: 'divider', borderRadius: 1, '&:before': { display: 'none' } }}>
+      <AccordionSummary expandIcon={<ChevronDown size={16} />} sx={{ bgcolor: 'action.hover', '&:hover': { bgcolor: 'action.selected' } }}>
+        <Stack direction="row" alignItems="center" gap={1.5}>
+          <Chip label="SOAP" size="small" sx={{ bgcolor: '#1565c0', color: 'white', fontWeight: 700, fontSize: '0.7rem', height: 22, borderRadius: 1 }} />
+          <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+            {op.name}
+          </Typography>
+        </Stack>
+      </AccordionSummary>
+      <AccordionDetails sx={{ bgcolor: 'background.paper' }}>
+        <Stack gap={0.75}>
+          {op.soapAction && (
+            <Stack direction="row" gap={1} alignItems="baseline">
+              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
+                SOAP Action
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                {op.soapAction}
+              </Typography>
+            </Stack>
+          )}
+          {op.style && (
+            <Stack direction="row" gap={1} alignItems="baseline">
+              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
+                Style
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                {op.style}
+              </Typography>
+            </Stack>
+          )}
+          {op.inputMessage && (
+            <Stack direction="row" gap={1} alignItems="baseline">
+              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
+                Input
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                {op.inputMessage}
+              </Typography>
+            </Stack>
+          )}
+          {op.outputMessage && (
+            <Stack direction="row" gap={1} alignItems="baseline">
+              <Typography variant="caption" color="text.secondary" sx={{ minWidth: 100 }}>
+                Output
+              </Typography>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                {op.outputMessage}
+              </Typography>
+            </Stack>
+          )}
+        </Stack>
+      </AccordionDetails>
+    </Accordion>
   );
 }
 
 export function ProxyApiReference({ envId, componentId, artifactType, artifact }: TabProps) {
   const backendType = ARTIFACT_TYPE_TO_SOURCE_TYPE[artifactType] ?? artifactType.toLowerCase();
   const { data: wsdl, isLoading, error } = useArtifactWsdl(componentId, backendType, artifact.name, envId);
+
+  const info = useMemo(() => (wsdl ? parseWsdl(wsdl) : null), [wsdl]);
+
   if (isLoading) return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
   if (error || !wsdl) return <Typography sx={emptySx}>No WSDL content available.</Typography>;
-
-  const info = parseWsdl(wsdl);
   if (!info) return <Typography sx={emptySx}>Could not parse WSDL.</Typography>;
 
   return (
     <Stack gap={2}>
-      <Card variant="outlined">
-        <CardContent sx={{ pb: '12px !important' }}>
+      <Card variant="outlined" sx={{ '& .MuiCardContent-root:last-child': { pb: 1.5 } }}>
+        <CardContent>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>
             {info.serviceName}
           </Typography>
