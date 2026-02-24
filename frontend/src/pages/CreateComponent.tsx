@@ -23,10 +23,13 @@ export default function CreateComponent(scope: ProjectScope): JSX.Element {
   const [handlerEdited, setHandlerEdited] = useState(false);
   const [description, setDescription] = useState('');
   const [componentType, setComponentType] = useState<'MI' | 'BI'>('MI');
-  const [failedName, setFailedName] = useState('');
   const mutation = useCreateComponent();
 
   const effectiveHandler = handlerEdited ? handler : toHandler(displayName);
+  const nameError = displayName.trim() && (effectiveHandler.length < 3 || effectiveHandler.length > 64);
+  const isDuplicateError = !!mutation.error && /already taken/i.test(mutation.error.message);
+  const alertError = isDuplicateError ? null : mutation.error;
+  const alertMessage = alertError?.message === 'Failed to fetch' ? 'Unable to connect to the server. Please check that the server is running and try again.' : alertError?.message;
 
   const resetError = () => {
     if (mutation.error) mutation.reset();
@@ -43,7 +46,6 @@ export default function CreateComponent(scope: ProjectScope): JSX.Element {
     };
     mutation.mutate(input, {
       onSuccess: (component) => navigate(resourceUrl(narrow(scope, component.handler), 'overview')),
-      onError: () => setFailedName(effectiveHandler),
     });
   };
 
@@ -60,9 +62,9 @@ export default function CreateComponent(scope: ProjectScope): JSX.Element {
         Create New Integration
       </Typography>
 
-      {mutation.error && (
-        <Alert severity="error" role="alert" sx={{ mb: 3 }}>
-          {/unique index|primary key violation|duplicate/i.test(mutation.error.message) ? `The name "${failedName}" is already taken in this project. Try a different name.` : 'Failed to create integration. Please try again.'}
+      {alertError && (
+        <Alert severity="error" role="alert" sx={{ mb: 5 }}>
+          {alertMessage}
         </Alert>
       )}
 
@@ -77,6 +79,8 @@ export default function CreateComponent(scope: ProjectScope): JSX.Element {
               resetError();
             }}
             fullWidth
+            error={!!nameError || isDuplicateError}
+            helperText={nameError ? 'Integration name must be between 3 and 64 characters.' : isDuplicateError ? mutation.error!.message : undefined}
             slotProps={{ htmlInput: { 'aria-label': 'Display Name' } }}
           />
         </Grid>
@@ -127,7 +131,7 @@ export default function CreateComponent(scope: ProjectScope): JSX.Element {
         <Button variant="outlined" onClick={() => navigate(resourceUrl(scope, 'overview'))}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={submit} disabled={!displayName.trim() || !effectiveHandler || mutation.isPending}>
+        <Button variant="contained" onClick={submit} disabled={!displayName.trim() || effectiveHandler.length < 3 || effectiveHandler.length > 64 || mutation.isPending}>
           Create
         </Button>
       </Stack>
