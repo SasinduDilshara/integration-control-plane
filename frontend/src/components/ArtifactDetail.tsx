@@ -131,11 +131,13 @@ function SelectedTypeArtifacts({ artifacts, artifactType, envId, componentId, qu
     return max;
   })();
 
-  // Calculate column sizes: give more space to data columns, less to toggle columns
-  const toggleColumnsSpace = maxToggleColumns * 1.5; // Each toggle gets 1.5 units
+  // Calculate column sizes: use integers to avoid subpixel rendering
+  const toggleColumnSize = 1; // Each toggle gets 1 unit (integer)
+  const toggleColumnsSpace = maxToggleColumns * toggleColumnSize; // Total space for toggles
   const dataColumnsSpace = 12 - toggleColumnsSpace; // Remaining space for data columns
-  const dataColumnSize = dataColumnsSpace / columns.length;
-  const toggleColumnSize = 1.5;
+  const dataColumnSize = Math.floor(dataColumnsSpace / columns.length); // Integer division
+  // Calculate how many extra columns to distribute (remainder)
+  const extraColumns = dataColumnsSpace - dataColumnSize * columns.length;
 
   const handleToggle = (artifact: GqlArtifact, enabled: boolean) => {
     if (artifactType === 'Listener') {
@@ -221,16 +223,20 @@ function SelectedTypeArtifacts({ artifacts, artifactType, envId, componentId, qu
             <Card key={i} variant="outlined" sx={{ cursor: 'pointer', width: '100%', '&:hover': { boxShadow: 1 } }} onClick={() => onSelect(a)}>
               <CardContent sx={{ display: 'flex', alignItems: 'center', py: 1.5, '&:last-child': { pb: 1.5 } }}>
                 <Grid container spacing={2} sx={{ flex: 1 }}>
-                  {columns.map((col) => (
-                    <Grid key={col} size={{ xs: dataColumnSize }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                        {col === 'size' ? 'Message Count' : col}
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {(a[col] ?? '—').toString()}
-                      </Typography>
-                    </Grid>
-                  ))}
+                  {columns.map((col, colIndex) => {
+                    // Distribute extra columns to first N data columns to reach exactly 12
+                    const columnSize = dataColumnSize + (colIndex < extraColumns ? 1 : 0);
+                    return (
+                      <Grid key={col} size={{ xs: columnSize }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+                          {col === 'size' ? 'Message Count' : col}
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {(a[col] ?? '—').toString()}
+                        </Typography>
+                      </Grid>
+                    );
+                  })}
                   {hasStateField && (
                     <Grid size={{ xs: toggleColumnSize }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
