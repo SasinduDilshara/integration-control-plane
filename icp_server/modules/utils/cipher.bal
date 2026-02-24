@@ -20,6 +20,9 @@ import ballerina/os;
 import ballerina/lang.array;
 import ballerina/log;
 
+const string CIPHER_SECRET_PREFIX = "$secret{";
+const string CIPHER_SECRET_SUFFIX = "}";
+
 // Cipher tool keystore configuration.
 // This keystore is separate from the Ballerina TLS keystore (ballerinaKeystore.p12)
 // and is used exclusively for encrypting/decrypting secrets via the WSO2 cipher tool.
@@ -62,14 +65,15 @@ function resolvePassword(string envVar, string fallback, string errorMsg) return
 // Resolves a configurable value that may reference an encrypted secret.
 // If configValue matches "$secret{alias}", looks up alias in secrets, decrypts, and returns the plaintext.
 public isolated function resolveConfig(string configValue, map<string> secrets) returns string|error {
-    if configValue.startsWith("$secret{") && configValue.endsWith("}") {
-        string alias = configValue.substring(8, configValue.length() - 1);
+    if configValue.startsWith(CIPHER_SECRET_PREFIX) && configValue.endsWith(CIPHER_SECRET_SUFFIX) {
+        string alias = configValue.substring(CIPHER_SECRET_PREFIX.length(), configValue.length() - CIPHER_SECRET_SUFFIX.length());
         string? encrypted = secrets[alias];
         if encrypted is () {
             log:printError("Secret alias '${alias}' not found in secrets table.");
             return error(string `Secret alias '${alias}' not found in secrets table.`);
         }
-        return decrypt(encrypted);
+        string decryptedValue = check decrypt(encrypted);
+        return decryptedValue;
     }
     return configValue;
 }
