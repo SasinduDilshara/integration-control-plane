@@ -17,7 +17,7 @@
  */
 
 import { Card, CardContent, Divider, Stack, Typography } from '@wso2/oxygen-ui';
-import { Clock } from '@wso2/oxygen-ui-icons-react';
+import { PlugZap } from '@wso2/oxygen-ui-icons-react';
 import type { GqlComponent } from '../api/queries';
 import type { JSX } from 'react';
 
@@ -30,8 +30,8 @@ export default function IntegrationTypesCard({ components }: { components: GqlCo
   return (
     <Card variant="outlined">
       <CardContent>
-        <Typography variant="h6" component="h3" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-          <Clock size={20} />
+        <Typography variant="h6" component="h2" sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <PlugZap size={20} />
           Integration Types
         </Typography>
         <Stack>

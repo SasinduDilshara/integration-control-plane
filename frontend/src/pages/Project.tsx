@@ -49,7 +49,23 @@ function DeleteDialog({ component, scope, projectId, onClose }: { component: Gql
   );
 }
 
-function IntegrationsTable({ components, isLoading, scope, projectId, onSelect }: { components: GqlComponent[]; isLoading: boolean; scope: ProjectScope; projectId: string; onSelect: (handler: string) => void }) {
+function IntegrationsTable({
+  components,
+  isLoading,
+  isRefreshing,
+  onRefresh,
+  scope,
+  projectId,
+  onSelect,
+}: {
+  components: GqlComponent[];
+  isLoading: boolean;
+  isRefreshing: boolean;
+  onRefresh: () => void;
+  scope: ProjectScope;
+  projectId: string;
+  onSelect: (handler: string) => void;
+}) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [deleting, setDeleting] = useState<GqlComponent | null>(null);
@@ -61,7 +77,12 @@ function IntegrationsTable({ components, isLoading, scope, projectId, onSelect }
         <Typography variant="h6" component="h2" sx={{ fontWeight: 600 }}>
           Integrations
         </Typography>
-        <IconButton size="small" aria-label="Refresh integrations">
+        <IconButton
+          size="small"
+          aria-label="Refresh integrations"
+          onClick={onRefresh}
+          disabled={isRefreshing}
+          sx={isRefreshing ? { '@keyframes spin': { from: { transform: 'rotate(0deg)' }, to: { transform: 'rotate(360deg)' } }, '& svg': { animation: 'spin 1s linear infinite' } } : undefined}>
           <RefreshCw size={16} />
         </IconButton>
         <SearchField value={query} onChange={setQuery} placeholder="Search" sx={{ flex: 1 }} />
@@ -141,7 +162,7 @@ export default function Project(scope: ProjectScope): JSX.Element {
   const { data: project, isLoading: loadingProject } = useProjectByHandler(scope.project);
   const projectId = project?.id ?? '';
   useLoadProjectPermissions(scope.org, projectId);
-  const { data: components = [], isLoading: loadingComponents } = useComponents(scope.org, projectId);
+  const { data: components = [], isLoading: loadingComponents, isFetching: fetchingComponents, refetch: refetchComponents } = useComponents(scope.org, projectId);
 
   if (loadingProject) {
     return (
@@ -168,7 +189,15 @@ export default function Project(scope: ProjectScope): JSX.Element {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 8 }}>
-          <IntegrationsTable components={components} isLoading={loadingComponents} scope={scope} projectId={projectId} onSelect={(handler) => navigate(resourceUrl(narrow(scope, handler), 'overview'))} />
+          <IntegrationsTable
+            components={components}
+            isLoading={loadingComponents}
+            isRefreshing={fetchingComponents && !loadingComponents}
+            onRefresh={refetchComponents}
+            scope={scope}
+            projectId={projectId}
+            onSelect={(handler) => navigate(resourceUrl(narrow(scope, handler), 'overview'))}
+          />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <Stack gap={3}>
