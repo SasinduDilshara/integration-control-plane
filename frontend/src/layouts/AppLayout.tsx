@@ -33,8 +33,8 @@ import {
   Header,
   IconButton,
   NotificationPanel,
+  Box,
   Sidebar,
-  Stack,
   Tooltip,
   UserMenu,
   useAppShell,
@@ -42,9 +42,9 @@ import {
 } from '@wso2/oxygen-ui';
 import { useState } from 'react';
 import type { JSX } from 'react';
-import { useNavigate, Outlet, Link as NavLink } from 'react-router';
+import { useNavigate, Outlet, Link as NavLink, Link } from 'react-router';
 import Logo from '../components/Logo';
-import { BarChart3, Bell, Building, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Server, Shield, Sliders, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
+import { BarChart3, Bell, Building, ChevronDown, ChevronRight, Layers, LayoutDashboard, LogOut, ScrollText, Server, Shield, Sliders, User as UserIcon, X } from '@wso2/oxygen-ui-icons-react';
 import { useProjectByHandler, useProjects, useComponents } from '../api/queries';
 import { mockNotifications } from '../mock-data/mockNotifications';
 import { useScope, useResource, resourceUrl, broaden, narrow, sidebarItems, hasProject, hasComponent, type Resource } from '../nav';
@@ -62,6 +62,13 @@ const SIDEBAR_ICONS: Record<Resource, JSX.Element> = {
   environments: <Layers size={20} />,
   'access-control': <Shield size={20} />,
 };
+
+const SIDEBAR_CATEGORIES: { label: string; resources: Resource[] }[] = [
+  { label: '', resources: ['overview'] },
+  { label: 'Observability', resources: ['logs', 'loggers', 'metrics'] },
+  { label: 'Infrastructure', resources: ['runtimes', 'environments'] },
+  { label: 'Management', resources: ['access-control'] },
+];
 
 export default function AppLayout(): JSX.Element {
   const navigate = useNavigate();
@@ -144,6 +151,7 @@ export default function AppLayout(): JSX.Element {
               onChange={() => {}}
               size="small"
               sx={{ minWidth: 180 }}
+              IconComponent={() => null}
               SelectDisplayProps={{ 'aria-label': 'Select organization' }}
               renderValue={() => (
                 <>
@@ -162,7 +170,7 @@ export default function AppLayout(): JSX.Element {
               </ComplexSelect.MenuItem>
             </ComplexSelect>
             {hasProject(scope) && (
-              <Stack direction="row" alignItems="center" gap={0.5}>
+              <Box sx={{ position: 'relative', display: 'inline-flex' }}>
                 <ComplexSelect
                   value={scope.project}
                   onChange={(e) => {
@@ -172,6 +180,11 @@ export default function AppLayout(): JSX.Element {
                   }}
                   size="small"
                   sx={{ minWidth: 160 }}
+                  IconComponent={({ ownerState: _ownerState, ...props }) => (
+                    <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '3px', display: 'flex', pointerEvents: 'none' }}>
+                      <ChevronDown size={18} />
+                    </span>
+                  )}
                   SelectDisplayProps={{ 'aria-label': 'Select project' }}
                   renderValue={() => <ComplexSelect.MenuItem.Text primary={project?.name ?? scope.project} secondary="Project" />}
                   label="Projects">
@@ -184,17 +197,20 @@ export default function AppLayout(): JSX.Element {
                 <IconButton
                   size="small"
                   aria-label="Clear project"
-                  onClick={() => {
+                  sx={{ position: 'absolute', top: '3px', right: '3px', p: '1px' }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
                     const orgScope = { level: 'organizations' as const, org: scope.org };
                     const target = resource ?? 'overview';
                     navigate(resourceUrl(orgScope, canAccessResource(orgScope, target)));
                   }}>
-                  <X size={14} />
+                  <X size={16} />
                 </IconButton>
-              </Stack>
+              </Box>
             )}
             {hasComponent(scope) && (
-              <Stack direction="row" alignItems="center" gap={0.5}>
+              <Box sx={{ position: 'relative', display: 'inline-flex' }}>
                 <ComplexSelect
                   value={scope.component}
                   onChange={(e) => {
@@ -204,6 +220,11 @@ export default function AppLayout(): JSX.Element {
                   }}
                   size="small"
                   sx={{ minWidth: 160 }}
+                  IconComponent={({ ownerState: _ownerState, ...props }) => (
+                    <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '3px', display: 'flex', pointerEvents: 'none' }}>
+                      <ChevronDown size={18} />
+                    </span>
+                  )}
                   SelectDisplayProps={{ 'aria-label': 'Select integration' }}
                   renderValue={() => <ComplexSelect.MenuItem.Text primary={scope.component} secondary="Integration" />}
                   label="Integrations">
@@ -216,14 +237,17 @@ export default function AppLayout(): JSX.Element {
                 <IconButton
                   size="small"
                   aria-label="Clear integration"
-                  onClick={() => {
+                  sx={{ position: 'absolute', top: '3px', right: '3px', p: '1px' }}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
                     const projectScope = broaden(scope)!;
                     const target = resource ?? 'overview';
                     navigate(resourceUrl(projectScope, canAccessResource(projectScope, target)));
                   }}>
-                  <X size={14} />
+                  <X size={16} />
                 </IconButton>
-              </Stack>
+              </Box>
             )}
           </Header.Switchers>
           <Header.Spacer />
@@ -259,14 +283,21 @@ export default function AppLayout(): JSX.Element {
           onToggleExpand={actions.toggleMenu}
           sx={{ backgroundColor: 'background.acrylic', backdropFilter: 'blur(3px)' }}>
           <Sidebar.Nav>
-            <Sidebar.Category>
-              {items.map((item, index) => (
-                <Sidebar.Item key={`${item.resource}-${index}`} id={item.resource} link={<NavLink to={item.url} />}>
-                  <Sidebar.ItemIcon>{SIDEBAR_ICONS[item.resource]}</Sidebar.ItemIcon>
-                  <Sidebar.ItemLabel>{item.label}</Sidebar.ItemLabel>
-                </Sidebar.Item>
-              ))}
-            </Sidebar.Category>
+            {SIDEBAR_CATEGORIES.map(({ label, resources }) => {
+              const catItems = items.filter((item) => resources.includes(item.resource));
+              if (catItems.length === 0) return null;
+              return (
+                <Sidebar.Category key={label || 'main'}>
+                  {label && <Sidebar.CategoryLabel>{label}</Sidebar.CategoryLabel>}
+                  {catItems.map((item) => (
+                    <Sidebar.Item key={item.resource} id={item.resource} link={<Link to={item.url} />}>
+                      <Sidebar.ItemIcon>{SIDEBAR_ICONS[item.resource]}</Sidebar.ItemIcon>
+                      <Sidebar.ItemLabel>{item.label}</Sidebar.ItemLabel>
+                    </Sidebar.Item>
+                  ))}
+                </Sidebar.Category>
+              );
+            })}
           </Sidebar.Nav>
 
           <Sidebar.Footer sx={{ py: 0 }}>

@@ -552,7 +552,7 @@ export default function Environment({
     const runtimeId = '<Runtime ID>';
 
     if (componentType === 'BI') {
-      return `[ballerinax.wso2.controlplane]
+      return `[ballerinax.wso2.icp]
 runtime="${runtimeId}"
 integration="${componentHandler}"
 project="${projectHandler}"
