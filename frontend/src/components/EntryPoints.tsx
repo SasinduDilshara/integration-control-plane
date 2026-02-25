@@ -30,6 +30,7 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   InputAdornment,
   Snackbar,
@@ -265,49 +266,39 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
           {carbonApp && <Chip label={`C-App: ${carbonApp}`} size="small" variant="outlined" sx={{ bgcolor: '#e8eaf6', color: '#3949ab', fontSize: 11 }} />}
           {carbonApp && <Divider orientation="vertical" flexItem />}
           {showStatusToggle && (
-            <Stack direction="row" alignItems="center" gap={1}>
-              <Typography variant="body2" color="text.secondary">
-                Status
-              </Typography>
-              <Switch name="status" size="small" checked={statusEnabled} onChange={(e) => handleToggleStatus(e.target.checked)} disabled={updateArtifactStatus.isPending} aria-label="Enable status" />
-            </Stack>
+            <FormControlLabel
+              control={<Switch name="status" size="small" checked={statusEnabled} onChange={(e) => handleToggleStatus(e.target.checked)} disabled={updateArtifactStatus.isPending} />}
+              label="Status"
+              labelPlacement="start"
+              sx={{ m: 0, gap: 1 }}
+            />
           )}
           {showStatusToggle && showTracingToggle && <Divider orientation="vertical" flexItem />}
           {showTracingToggle && (
-            <Stack direction="row" alignItems="center" gap={1}>
-              <Typography variant="body2" color="text.secondary">
-                Tracing
-              </Typography>
-              <Switch size="small" checked={tracingEnabled} onChange={(e) => handleToggleTracing(e.target.checked)} disabled={updateTracingStatus.isPending} aria-label="Enable tracing" />
-            </Stack>
+            <FormControlLabel control={<Switch size="small" checked={tracingEnabled} onChange={(e) => handleToggleTracing(e.target.checked)} disabled={updateTracingStatus.isPending} />} label="Tracing" labelPlacement="start" sx={{ m: 0, gap: 1 }} />
           )}
           {showTracingToggle && showStatisticsToggle && <Divider orientation="vertical" flexItem />}
           {showStatisticsToggle && (
-            <Stack direction="row" alignItems="center" gap={1}>
-              <Typography variant="body2" color="text.secondary">
-                Statistics
-              </Typography>
-              <Switch size="small" checked={statisticsEnabled} onChange={(e) => handleToggleStatistics(e.target.checked)} disabled={updateStatisticsStatus.isPending} aria-label="Enable statistics" />
-            </Stack>
+            <FormControlLabel
+              control={<Switch size="small" checked={statisticsEnabled} onChange={(e) => handleToggleStatistics(e.target.checked)} disabled={updateStatisticsStatus.isPending} />}
+              label="Statistics"
+              labelPlacement="start"
+              sx={{ m: 0, gap: 1 }}
+            />
           )}
           {(showTracingToggle || showStatisticsToggle) && showListenerToggle && <Divider orientation="vertical" flexItem />}
           {showListenerToggle && (
-            <Stack direction="row" alignItems="center" gap={1}>
-              <Typography variant="body2" color="text.secondary">
-                State
-              </Typography>
-              <Switch size="small" checked={listenerEnabled} onChange={(e) => handleToggleListener(e.target.checked)} disabled={updateListenerState.isPending} aria-label="Enable listener" />
-            </Stack>
+            <FormControlLabel control={<Switch size="small" checked={listenerEnabled} onChange={(e) => handleToggleListener(e.target.checked)} disabled={updateListenerState.isPending} />} label="State" labelPlacement="start" sx={{ m: 0, gap: 1 }} />
           )}
           {showTaskToggle && (
             <>
               {hasPrecedingControls && <Divider orientation="vertical" flexItem />}
-              <Stack direction="row" alignItems="center" gap={1}>
-                <Typography variant="body2" color="text.secondary">
-                  Status
-                </Typography>
-                <Switch size="small" checked={statusEnabled} onChange={(e) => handleToggleStatus(e.target.checked)} disabled={updateArtifactStatus.isPending || !hasRuntimes} aria-label="Enable task" />
-              </Stack>
+              <FormControlLabel
+                control={<Switch size="small" checked={statusEnabled} onChange={(e) => handleToggleStatus(e.target.checked)} disabled={updateArtifactStatus.isPending || !hasRuntimes} />}
+                label="Status"
+                labelPlacement="start"
+                sx={{ m: 0, gap: 1 }}
+              />
             </>
           )}
           {showTaskTrigger && (
@@ -585,7 +576,7 @@ integration = "${componentHandler}"
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
+          <Typography variant="h5" component="h2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
             {env.name}
           </Typography>
           <Stack direction="row" alignItems="center" gap={1}>

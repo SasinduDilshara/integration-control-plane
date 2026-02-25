@@ -181,7 +181,7 @@ export default function AppLayout(): JSX.Element {
                   size="small"
                   sx={{ minWidth: 160 }}
                   IconComponent={({ ownerState: _ownerState, ...props }) => (
-                    <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '3px', display: 'flex', pointerEvents: 'none' }}>
+                    <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '6px', display: 'flex', pointerEvents: 'none' }}>
                       <ChevronDown size={18} />
                     </span>
                   )}
@@ -197,7 +197,7 @@ export default function AppLayout(): JSX.Element {
                 <IconButton
                   size="small"
                   aria-label="Clear project"
-                  sx={{ position: 'absolute', top: '3px', right: '3px', p: '1px' }}
+                  sx={{ position: 'absolute', top: '3px', right: '3px' }}
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -221,7 +221,7 @@ export default function AppLayout(): JSX.Element {
                   size="small"
                   sx={{ minWidth: 160 }}
                   IconComponent={({ ownerState: _ownerState, ...props }) => (
-                    <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '3px', display: 'flex', pointerEvents: 'none' }}>
+                    <span {...props} style={{ position: 'absolute', top: 'auto', bottom: '0', right: '6px', display: 'flex', pointerEvents: 'none' }}>
                       <ChevronDown size={18} />
                     </span>
                   )}
@@ -237,7 +237,7 @@ export default function AppLayout(): JSX.Element {
                 <IconButton
                   size="small"
                   aria-label="Clear integration"
-                  sx={{ position: 'absolute', top: '3px', right: '3px', p: '1px' }}
+                  sx={{ position: 'absolute', top: '3px', right: '3px' }}
                   onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -302,7 +302,7 @@ export default function AppLayout(): JSX.Element {
 
           <Sidebar.Footer sx={{ py: 0 }}>
             <Sidebar.Category sx={{ mb: 0 }}>
-              <Sidebar.Item id="expand" sx={{ minHeight: 0, py: 2 }}>
+              <Sidebar.Item id="expand" sx={{ minHeight: 0, py: '15px' }}>
                 <Sidebar.ItemIcon>
                   <ChevronRight size={20} style={{ transform: shell.sidebarCollapsed ? 'none' : 'rotate(180deg)' }} />
                 </Sidebar.ItemIcon>

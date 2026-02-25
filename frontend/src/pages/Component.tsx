@@ -59,9 +59,7 @@ export default function Component(scope: ComponentScope): JSX.Element {
         <PageContent>
           <Stack component="header" direction="row" alignItems="center" gap={2} sx={{ mb: 1 }}>
             <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{component.displayName?.[0]?.toUpperCase() ?? 'C'}</Avatar>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              {component.displayName ?? scope.component}
-            </Typography>
+            <Typography variant="h1">{component.displayName ?? scope.component}</Typography>
           </Stack>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 4, ml: 9 }}>
             {component.description || '+ Add Description'}

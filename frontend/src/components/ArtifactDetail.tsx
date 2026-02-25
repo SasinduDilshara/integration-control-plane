@@ -34,6 +34,7 @@ import {
   ListItemButton,
   ListItemIcon,
   ListItemText,
+  FormControlLabel,
   Stack,
   Switch,
   Tab,
@@ -247,35 +248,54 @@ function SelectedTypeArtifacts({ artifacts, artifactType, envId, componentId, qu
                   )}
                   {supportsToggle && (
                     <Grid size={{ xs: toggleColumnSize }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Status
-                      </Typography>
-                      <Switch
-                        name="status"
-                        size="small"
-                        checked={enabled}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleToggle(a, enabled);
-                        }}
-                        aria-label={`${enabled ? 'Disable' : 'Enable'} ${a.name}`}
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            name="status"
+                            size="small"
+                            checked={enabled}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggle(a, enabled);
+                            }}
+                          />
+                        }
+                        label={
+                          <Typography variant="caption" color="text.secondary">
+                            Status
+                          </Typography>
+                        }
+                        labelPlacement="top"
+                        sx={{ m: 0, alignItems: 'flex-start' }}
                       />
                     </Grid>
                   )}
                   {showStatistics && (
                     <Grid size={{ xs: toggleColumnSize }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Statistics
-                      </Typography>
-                      <Switch name="statistics" size="small" checked={statisticsEnabled} onClick={(e) => handleStatisticsToggle(a, statisticsEnabled, e)} aria-label={`${statisticsEnabled ? 'Disable' : 'Enable'} statistics for ${a.name}`} />
+                      <FormControlLabel
+                        control={<Switch name="statistics" size="small" checked={statisticsEnabled} onClick={(e) => handleStatisticsToggle(a, statisticsEnabled, e)} />}
+                        label={
+                          <Typography variant="caption" color="text.secondary">
+                            Statistics
+                          </Typography>
+                        }
+                        labelPlacement="top"
+                        sx={{ m: 0, alignItems: 'flex-start' }}
+                      />
                     </Grid>
                   )}
                   {showTracing && (
                     <Grid size={{ xs: toggleColumnSize }}>
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        Tracing
-                      </Typography>
-                      <Switch name="tracing" size="small" checked={tracingEnabled} onClick={(e) => handleTracingToggle(a, tracingEnabled, e)} aria-label={`${tracingEnabled ? 'Disable' : 'Enable'} tracing for ${a.name}`} />
+                      <FormControlLabel
+                        control={<Switch name="tracing" size="small" checked={tracingEnabled} onClick={(e) => handleTracingToggle(a, tracingEnabled, e)} />}
+                        label={
+                          <Typography variant="caption" color="text.secondary">
+                            Tracing
+                          </Typography>
+                        }
+                        labelPlacement="top"
+                        sx={{ m: 0, alignItems: 'flex-start' }}
+                      />
                     </Grid>
                   )}
                 </Grid>
