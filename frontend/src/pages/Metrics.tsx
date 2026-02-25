@@ -15,7 +15,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Button, Card, CardContent, Checkbox, CircularProgress, Grid, IconButton, ListItemText, MenuItem, PageContent, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography } from '@wso2/oxygen-ui';
+import { Button, Card, CardContent, Checkbox, Chip, CircularProgress, Grid, IconButton, ListItemText, MenuItem, PageContent, Select, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { LineChart } from '@wso2/oxygen-ui-charts-react';
 import { BarChart3, RefreshCw } from '@wso2/oxygen-ui-icons-react';
 import { useMemo, useState, type JSX } from 'react';
@@ -50,6 +50,8 @@ function avgNonZeroTimeSeries(ts: Record<string, number>): number {
 interface ApiSummary {
   name: string;
   deployment: string;
+  method: string;
+  serviceType: string;
   key: string;
   requestCount: number;
   avgResponseTime: number;
@@ -57,23 +59,51 @@ interface ApiSummary {
   entries: MetricEntry[];
 }
 
-// Derive Top APIs grouped by sublevel+deployment
+function apiDisplayLabel(api: ApiSummary): string {
+  const parts = [api.name];
+  if (api.deployment) parts.push(api.deployment);
+  if (api.method) parts.push(api.method);
+  return parts.length > 1 ? `${parts[0]} (${parts.slice(1).join(' · ')})` : parts[0];
+}
+
+function apiDisplayLabelWithType(api: ApiSummary, showType: boolean): string {
+  const base = apiDisplayLabel(api);
+  return showType ? `[${api.serviceType}] ${base}` : base;
+}
+
+// Derive Top APIs grouped by serviceType+sublevel+groupCtx
 function deriveApis(metrics: MetricEntry[]): ApiSummary[] {
-  const apiMap: Record<string, { successful: MetricEntry[]; failed: MetricEntry[] }> = {};
+  const apiMap: Record<string, { successful: MetricEntry[]; failed: MetricEntry[]; method: string; serviceType: string }> = {};
   for (const m of metrics) {
-    const key = `${m.tags.sublevel}\0${m.tags.deployment ?? m.tags.app_name ?? ''}`;
-    if (!apiMap[key]) apiMap[key] = { successful: [], failed: [] };
+    const isMI = m.tags.service_type === 'MI';
+    // For MI metrics, group by sublevel + method (e.g. "HelloWorld\0GET")
+    // For BI metrics, group by sublevel + deployment
+    const groupCtx = isMI ? (m.tags.method ?? '') : (m.tags.deployment ?? m.tags.app_name ?? '');
+    const key = `${m.tags.sublevel}\0${groupCtx}`;
+    if (!apiMap[key]) apiMap[key] = { successful: [], failed: [], method: m.tags.method ?? '', serviceType: m.tags.service_type ?? 'BI' };
     apiMap[key][m.tags.status === 'failed' ? 'failed' : 'successful'].push(m);
   }
   return Object.entries(apiMap)
-    .map(([key, { successful, failed }]) => {
+    .map(([key, { successful, failed, method, serviceType }]) => {
       const [name, deployment] = key.split('\0');
       const allEntries = [...successful, ...failed];
       const successReqs = successful.reduce((s, m) => s + sumTimeSeries(m.requests_total.timeSeriesData), 0);
       const failReqs = failed.reduce((s, m) => s + sumTimeSeries(m.requests_total.timeSeriesData), 0);
       const total = successReqs + failReqs;
       const avgMs = (successful.reduce((s, m) => s + avgNonZeroTimeSeries(m.response_time_seconds_avg.timeSeriesData), 0) / Math.max(successful.length, 1)) * 1000;
-      return { name, deployment, key, requestCount: total, avgResponseTime: avgMs, errorRate: total > 0 ? (failReqs / total) * 100 : 0, entries: allEntries };
+      // For MI, deployment holds the method (e.g. "GET"); for BI, it holds the deployment name
+      const isMI = serviceType === 'MI';
+      return {
+        name,
+        deployment: isMI ? '' : deployment,
+        method: isMI ? deployment : method,
+        serviceType,
+        key,
+        requestCount: total,
+        avgResponseTime: avgMs,
+        errorRate: total > 0 ? (failReqs / total) * 100 : 0,
+        entries: allEntries,
+      };
     })
     .sort((a, b) => b.requestCount - a.requestCount);
 }
@@ -129,8 +159,8 @@ function aggregate(metrics: MetricEntry[]) {
   return { requestsData, latencyData, totalRequests, errorCount, errorPercentage, latestP95 };
 }
 
-// Build per-API chart data: each selected API becomes a line, keyed by "sublevel (deployment)"
-function buildApiChartData(apis: ApiSummary[]) {
+// Build per-API chart data: each selected API becomes a line
+function buildApiChartData(apis: ApiSummary[], showType: boolean) {
   const allTimestamps = new Set<string>();
   for (const api of apis) {
     for (const entry of api.entries) {
@@ -141,7 +171,7 @@ function buildApiChartData(apis: ApiSummary[]) {
   const reqData = sorted.map((ts) => {
     const row: Record<string, string | number> = { label: formatTime(ts) };
     for (const api of apis) {
-      const key = `${api.name} (${api.deployment})`;
+      const key = apiDisplayLabelWithType(api, showType);
       row[key] = api.entries.reduce((s, e) => s + (e.requests_total.timeSeriesData[ts] ?? 0), 0);
     }
     return row;
@@ -149,7 +179,7 @@ function buildApiChartData(apis: ApiSummary[]) {
   const latData = sorted.map((ts) => {
     const row: Record<string, string | number> = { label: formatTime(ts) };
     for (const api of apis) {
-      const key = `${api.name} (${api.deployment})`;
+      const key = apiDisplayLabelWithType(api, showType);
       let sum = 0,
         count = 0;
       for (const e of api.entries) {
@@ -199,6 +229,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
   const [timeRange, setTimeRange] = useState('Past 1 hour');
   const [resolution, setResolution] = useState('1 Minute');
   const [integrationFilter, setIntegrationFilter] = useState('all');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
   const [selectedApiKeys, setSelectedApiKeys] = useState<string[]>([]);
 
   const effectiveEnvId = envFilter || environments[0]?.id || '';
@@ -220,7 +251,33 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
   }, [isComponent, componentId, effectiveEnvId, timeRange, resolution]);
 
   const { data: metricsData, isLoading, error, refetch } = useMetrics(metricsRequest);
-  const inboundMetrics = useMemo(() => metricsData?.inboundMetrics ?? [], [metricsData]);
+  const allInboundMetrics = useMemo(() => metricsData?.inboundMetrics ?? [], [metricsData]);
+  const outboundMetrics = useMemo(() => metricsData?.outboundMetrics ?? [], [metricsData]);
+
+  // Detect available service types (BI, MI, or both)
+  const availableServiceTypes = useMemo(() => {
+    const types = new Set<string>();
+    for (const m of allInboundMetrics) {
+      types.add(m.tags.service_type ?? 'BI');
+    }
+    for (const m of outboundMetrics) {
+      types.add(m.tags.service_type ?? 'BI');
+    }
+    return [...types].sort();
+  }, [allInboundMetrics, outboundMetrics]);
+
+  const hasMixedTypes = availableServiceTypes.length > 1;
+
+  // Apply service type filter
+  const inboundMetrics = useMemo(() => {
+    if (serviceTypeFilter === 'all') return allInboundMetrics;
+    return allInboundMetrics.filter((m) => (m.tags.service_type ?? 'BI') === serviceTypeFilter);
+  }, [allInboundMetrics, serviceTypeFilter]);
+
+  const filteredOutboundMetrics = useMemo(() => {
+    if (serviceTypeFilter === 'all') return outboundMetrics;
+    return outboundMetrics.filter((m) => (m.tags.service_type ?? 'BI') === serviceTypeFilter);
+  }, [outboundMetrics, serviceTypeFilter]);
 
   // Client-side integration filter (project-level only)
   const integrations = useMemo(() => {
@@ -239,6 +296,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
 
   const { requestsData, latencyData, totalRequests, errorCount, errorPercentage, latestP95 } = useMemo(() => aggregate(filteredMetrics), [filteredMetrics]);
   const apis = useMemo(() => deriveApis(filteredMetrics), [filteredMetrics]);
+  const outboundApis = useMemo(() => deriveApis(filteredOutboundMetrics), [filteredOutboundMetrics]);
   const top5 = apis.slice(0, 5);
 
   // Auto-select top APIs when data changes
@@ -247,8 +305,8 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
     return valid.length > 0 ? valid : top5.slice(0, 1);
   }, [apis, selectedApiKeys, top5]);
 
-  const { reqData: apiReqData, latData: apiLatData } = useMemo(() => buildApiChartData(effectiveSelectedApis), [effectiveSelectedApis]);
-  const apiLineKeys = effectiveSelectedApis.map((a) => `${a.name} (${a.deployment})`);
+  const { reqData: apiReqData, latData: apiLatData } = useMemo(() => buildApiChartData(effectiveSelectedApis, hasMixedTypes), [effectiveSelectedApis, hasMixedTypes]);
+  const apiLineKeys = effectiveSelectedApis.map((a) => apiDisplayLabelWithType(a, hasMixedTypes));
 
   const requestsChartData = useMemo(() => requestsData.map((d) => ({ ...d, label: formatTime(d.time) })), [requestsData]);
   const latencyChartData = useMemo(() => latencyData.map((d) => ({ ...d, label: formatTime(d.time) })), [latencyData]);
@@ -323,6 +381,16 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
             ))}
           </Select>
         )}
+        {!isComponent && hasMixedTypes && (
+          <Select value={serviceTypeFilter} onChange={(e) => setServiceTypeFilter(e.target.value as string)} size="small" sx={{ minWidth: 160 }} aria-label="Service Type">
+            <MenuItem value="all">All Types</MenuItem>
+            {availableServiceTypes.map((t) => (
+              <MenuItem key={t} value={t}>
+                {t === 'BI' ? 'Ballerina Integrator' : t === 'MI' ? 'Micro Integrator' : t}
+              </MenuItem>
+            ))}
+          </Select>
+        )}
       </Stack>
 
       {isLoading ? (
@@ -336,7 +404,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
             Retry
           </Button>
         </Stack>
-      ) : inboundMetrics.length === 0 ? (
+      ) : inboundMetrics.length === 0 && outboundMetrics.length === 0 ? (
         <EmptyListing icon={<BarChart3 size={48} />} title="No metrics data" description="No metrics available for the selected time range." />
       ) : (
         <>
@@ -415,7 +483,9 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
                       <TableHead>
                         <TableRow>
                           <TableCell>Rank</TableCell>
+                          {hasMixedTypes && <TableCell>Type</TableCell>}
                           <TableCell>API Name</TableCell>
+                          <TableCell>Method</TableCell>
                           <TableCell align="right">Request Count</TableCell>
                           <TableCell align="right">Avg Response Time (ms)</TableCell>
                           <TableCell align="right">Error Rate (%)</TableCell>
@@ -425,7 +495,18 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
                         {top5.map((api, i) => (
                           <TableRow key={api.key}>
                             <TableCell>{i + 1}</TableCell>
-                            <TableCell>{api.name}</TableCell>
+                            {hasMixedTypes && (
+                              <TableCell>
+                                <Chip
+                                  label={api.serviceType}
+                                  size="small"
+                                  color={api.serviceType === 'MI' ? 'primary' : 'secondary'}
+                                  variant="outlined"
+                                />
+                              </TableCell>
+                            )}
+                            <TableCell>{api.name}{api.deployment ? ` (${api.deployment})` : ''}</TableCell>
+                            <TableCell>{api.method || '\u2014'}</TableCell>
                             <TableCell align="right">{api.requestCount}</TableCell>
                             <TableCell align="right">{api.avgResponseTime.toFixed(2)}</TableCell>
                             <TableCell align="right">{api.errorRate.toFixed(2)}</TableCell>
@@ -451,7 +532,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
                 {apis.map((a) => (
                   <MenuItem key={a.key} value={a.key}>
                     <Checkbox checked={effectiveSelectedApis.some((s) => s.key === a.key)} size="small" />
-                    <ListItemText primary={`${a.name} (${a.deployment})`} />
+                    <ListItemText primary={apiDisplayLabelWithType(a, hasMixedTypes)} />
                   </MenuItem>
                 ))}
               </Select>
@@ -492,6 +573,49 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
                   </Card>
                 </Grid>
               </Grid>
+
+              {/* Outbound metrics (BI client remote calls) */}
+              {outboundApis.length > 0 && (
+                <Card variant="outlined" sx={{ mt: 3 }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      Outbound Calls (Client Remote Calls)
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow>
+                            <TableCell>Rank</TableCell>
+                            {hasMixedTypes && <TableCell>Type</TableCell>}
+                            <TableCell>Name</TableCell>
+                            <TableCell>Deployment</TableCell>
+                            <TableCell align="right">Request Count</TableCell>
+                            <TableCell align="right">Avg Response Time (ms)</TableCell>
+                            <TableCell align="right">Error Rate (%)</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {outboundApis.slice(0, 10).map((api, i) => (
+                            <TableRow key={api.key}>
+                              <TableCell>{i + 1}</TableCell>
+                              {hasMixedTypes && (
+                                <TableCell>
+                                  <Chip label={api.serviceType} size="small" color={api.serviceType === 'MI' ? 'primary' : 'secondary'} variant="outlined" />
+                                </TableCell>
+                              )}
+                              <TableCell>{api.name}</TableCell>
+                              <TableCell>{api.deployment || '\u2014'}</TableCell>
+                              <TableCell align="right">{api.requestCount}</TableCell>
+                              <TableCell align="right">{api.avgResponseTime.toFixed(2)}</TableCell>
+                              <TableCell align="right">{api.errorRate.toFixed(2)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </>
