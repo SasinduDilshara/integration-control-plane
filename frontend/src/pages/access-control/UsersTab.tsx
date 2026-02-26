@@ -421,17 +421,20 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                         <LogOut size={16} />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip title="Unlock Account">
-                      <IconButton
-                        size="small"
-                        aria-label="Unlock Account"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setUnlockingUserId(u.userId);
-                        }}>
-                        <LockOpen size={16} />
-                      </IconButton>
-                    </Tooltip>
+                    {/* Unlock is credential-store only; hide for OIDC users */}
+                    {!u.isOidcUser && (
+                      <Tooltip title="Unlock Account">
+                        <IconButton
+                          size="small"
+                          aria-label="Unlock Account"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUnlockingUserId(u.userId);
+                          }}>
+                          <LockOpen size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    )}
                     <Tooltip title="Edit">
                       <IconButton
                         size="small"
