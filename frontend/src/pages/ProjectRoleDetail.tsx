@@ -175,10 +175,12 @@ export default function ProjectRoleDetail(): JSX.Element {
       <PageTitle>
         <PageTitle.Header>Access Control</PageTitle.Header>
       </PageTitle>
-      <Tabs value={0} sx={{ mb: 3 }}>
-        <Tab label="Roles" />
-        <Tab label="Groups" onClick={() => navigate(projectAccessControlUrl(orgHandler, projectHandler, 'groups'))} />
-      </Tabs>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={0}>
+          <Tab label="Roles" />
+          <Tab label="Groups" onClick={() => navigate(projectAccessControlUrl(orgHandler, projectHandler, 'groups'))} />
+        </Tabs>
+      </Box>
       <Button startIcon={<ArrowLeft size={16} />} onClick={onBack} sx={{ mb: 2 }}>
         Back to Role List
       </Button>

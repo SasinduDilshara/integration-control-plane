@@ -24,11 +24,13 @@ import {
   TableRow,
   Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
   PageContent,
   PageTitle,
 } from '@wso2/oxygen-ui';
-import { ArrowLeft, ChevronDown, ChevronUp, Lock, Plus, Trash2, Users } from '@wso2/oxygen-ui-icons-react';
+import { ArrowLeft, ChevronDown, ChevronUp, Link2, Lock, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import { useState, useMemo, useCallback, type JSX } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import SearchField from '../components/SearchField';
@@ -180,7 +182,7 @@ export default function RoleDetail(): JSX.Element {
   const { data: allEnvironments = [] } = useAllEnvironments();
   const updateMutation = useUpdateRole(orgHandler);
   const removeMutation = useRemoveRoleFromGroup(orgHandler);
-  const [subTab, setSubTab] = useState(0);
+  const [subTab, setSubTab] = useState<'permissions' | 'groups'>('permissions');
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
   const [search, setSearch] = useState('');
   const [addingGroups, setAddingGroups] = useState(false);
@@ -222,23 +224,50 @@ export default function RoleDetail(): JSX.Element {
       <PageTitle>
         <PageTitle.Header>Access Control</PageTitle.Header>
       </PageTitle>
-      <Tabs value={1} sx={{ mb: 3 }}>
-        <Tab label="Users" onClick={() => navigate(orgAccessControlUrl(orgHandler, 'users'))} />
-        <Tab label="Roles" />
-        <Tab label="Groups" onClick={() => navigate(orgAccessControlUrl(orgHandler, 'groups'))} />
-      </Tabs>
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+        <Tabs value={1}>
+          <Tab label="Users" onClick={() => navigate(orgAccessControlUrl(orgHandler, 'users'))} />
+          <Tab label="Roles" />
+          <Tab label="Groups" onClick={() => navigate(orgAccessControlUrl(orgHandler, 'groups'))} />
+        </Tabs>
+      </Box>
       <Button startIcon={<ArrowLeft size={16} />} onClick={onBack} sx={{ mb: 2 }}>
         Back to Role List
       </Button>
-      <Typography variant="h6">Role : {role.roleName}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Description : {role.description}
-      </Typography>
-      <Tabs value={subTab} onChange={(_, v) => setSubTab(v)} sx={{ mb: 2 }}>
-        <Tab icon={<Lock size={16} />} iconPosition="start" label="Permissions" />
-        <Tab icon={<Users size={16} />} iconPosition="start" label="Groups" />
-      </Tabs>
-      {subTab === 0 && (
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+        <Stack>
+          <Typography variant="h6">Role : {role.roleName}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Description : {role.description}
+          </Typography>
+        </Stack>
+        {subTab === 'groups' && (
+          <Stack direction="row" gap={1}>
+            <SearchField value={search} onChange={setSearch} />
+            <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingGroups(true)}>
+              Add Group
+            </Button>
+          </Stack>
+        )}
+      </Stack>
+      <ToggleButtonGroup
+        exclusive
+        size="small"
+        value={subTab}
+        onChange={(_, v) => {
+          if (v !== null) setSubTab(v);
+        }}
+        sx={{ mb: 2 }}>
+        <ToggleButton value="permissions">
+          <Lock size={16} style={{ marginRight: 8 }} />
+          Permissions
+        </ToggleButton>
+        <ToggleButton value="groups">
+          <Link2 size={16} style={{ marginRight: 8 }} />
+          Groups
+        </ToggleButton>
+      </ToggleButtonGroup>
+      {subTab === 'permissions' && (
         <>
           <PermissionsEditor allPermissions={grouped} selectedIds={permIds} onChange={setSelectedIds} />
           {dirty && (
@@ -250,34 +279,36 @@ export default function RoleDetail(): JSX.Element {
           )}
         </>
       )}
-      {subTab === 1 && (
+      {subTab === 'groups' && (
         <>
-          <Stack direction="row" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
-            <SearchField value={search} onChange={setSearch} />
-            <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingGroups(true)}>
-              Add Group
-            </Button>
-          </Stack>
-          {loadingGroups ? (
-            <Loading />
-          ) : filteredGroups.length === 0 ? (
-            <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
-              No records to display
-            </Typography>
-          ) : (
-            <Table>
-              <TableHead>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Group Name</TableCell>
+                <TableCell>Description</TableCell>
+                <TableCell>Mapping Level</TableCell>
+                <TableCell align="center">Applicable Environment</TableCell>
+                <TableCell width={80}>Actions</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loadingGroups ? (
                 <TableRow>
-                  <TableCell>Group Name</TableCell>
-                  <TableCell>Mapping Level</TableCell>
-                  <TableCell align="center">Applicable Environment</TableCell>
-                  <TableCell width={80}>Actions</TableCell>
+                  <TableCell colSpan={5}>
+                    <Loading />
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredGroups.map((g) => (
+              ) : filteredGroups.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} align="center">
+                    No records to display
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredGroups.map((g) => (
                   <TableRow key={g.id}>
                     <TableCell>{g.groupName ?? g.groupId}</TableCell>
+                    <TableCell>{g.groupDescription}</TableCell>
                     <TableCell>
                       <Chip label={mappingLevel(g)} size="small" />
                     </TableCell>
@@ -290,10 +321,10 @@ export default function RoleDetail(): JSX.Element {
                       </IconButton>
                     </TableCell>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
           {addingGroups && <AssignRoleToGroupsDialog orgHandler={orgHandler} roleId={roleId} roleName={role.roleName} existingGroupIds={roleGroups.map((g) => g.groupId)} onClose={() => setAddingGroups(false)} />}
         </>
       )}

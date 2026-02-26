@@ -19,6 +19,7 @@
 import {
   Alert,
   Autocomplete,
+  Avatar,
   Box,
   Button,
   Chip,
@@ -33,18 +34,18 @@ import {
   Radio,
   RadioGroup,
   Stack,
-  Tab,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  Tabs,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from '@wso2/oxygen-ui';
-import { ArrowLeft, Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
+import { ArrowLeft, Lock, Pencil, Plus, Trash2, Users } from '@wso2/oxygen-ui-icons-react';
 import { useEffect, useState, type JSX } from 'react';
 import SearchField from '../../components/SearchField';
 import { useAccessControl } from '../../contexts/AccessControlContext';
@@ -54,7 +55,7 @@ import { useGroups, useCreateGroup, useDeleteGroup, useGroupRoles, useGroupUsers
 import { useAllEnvironments, useComponentByHandler } from '../../api/queries';
 import type { Group, Role } from '../../api/auth';
 import { Loading, FormDialog } from './shared';
-import { useFiltered, mappingLevel, envLabel } from './utils';
+import { useFiltered, mappingLevel, envLabel, getUserInitial } from './utils';
 
 function AddToGroupDialog<T>({
   title,
@@ -239,7 +240,7 @@ function GroupDetailView({
   const { data: allEnvironments = [] } = useAllEnvironments();
   const removeRoleMutation = useRemoveRoleFromGroup(orgHandler);
   const removeUserMutation = useRemoveUserFromGroup(orgHandler);
-  const [subTab, setSubTab] = useState(showUsers ? 0 : 1);
+  const [subTab, setSubTab] = useState<'users' | 'roles'>(showUsers ? 'users' : 'roles');
   const [search, setSearch] = useState('');
   const [addingRoles, setAddingRoles] = useState(false);
   const [addingUsers, setAddingUsers] = useState(false);
@@ -253,53 +254,87 @@ function GroupDetailView({
       <Button startIcon={<ArrowLeft size={16} />} onClick={onBack} sx={{ mb: 2 }}>
         Back to Group List
       </Button>
-      <Typography variant="h6">Group : {group.groupName}</Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Description : {group.description}
-      </Typography>
-      {showUsers ? (
-        <Tabs
-          value={subTab}
-          onChange={(_, v) => {
-            setSubTab(v);
-            setSearch('');
-          }}
-          sx={{ mb: 2 }}>
-          <Tab label="Users" />
-          <Tab label="Roles" />
-        </Tabs>
-      ) : (
-        <Typography variant="subtitle1" sx={{ mb: 2 }}>
-          Roles
-        </Typography>
-      )}
-      {subTab === 0 && showUsers && (
-        <>
-          <Stack direction="row" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
-            <SearchField value={search} onChange={setSearch} />
+      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
+        <Stack>
+          <Typography variant="h6">Group : {group.groupName}</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Description : {group.description}
+          </Typography>
+        </Stack>
+        <Stack direction="row" gap={1}>
+          <SearchField value={search} onChange={setSearch} />
+          {subTab === 'users' && showUsers && (
             <Authorized permissions={Permissions.USER_MANAGE_GROUPS}>
               <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingUsers(true)}>
                 Add Users
               </Button>
             </Authorized>
-          </Stack>
-          {loadingUsers ? (
-            <Loading />
-          ) : (
-            <Table>
-              <TableHead>
+          )}
+          {(subTab === 'roles' || !showUsers) && (
+            <Authorized permissions={roleModifyPerms}>
+              <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingRoles(true)}>
+                Add Roles
+              </Button>
+            </Authorized>
+          )}
+        </Stack>
+      </Stack>
+      {showUsers && (
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={subTab}
+          onChange={(_, v) => {
+            if (v !== null) {
+              setSubTab(v);
+              setSearch('');
+            }
+          }}
+          sx={{ mb: 2 }}>
+          <ToggleButton value="users">
+            <Users size={16} style={{ marginRight: 8 }} />
+            Users
+          </ToggleButton>
+          <ToggleButton value="roles">
+            <Lock size={16} style={{ marginRight: 8 }} />
+            Roles
+          </ToggleButton>
+        </ToggleButtonGroup>
+      )}
+      {subTab === 'users' && showUsers && (
+        <>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>User</TableCell>
+                <TableCell>Username</TableCell>
+                <Authorized permissions={Permissions.USER_MANAGE_GROUPS}>
+                  <TableCell align="right">Action</TableCell>
+                </Authorized>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loadingUsers ? (
                 <TableRow>
-                  <TableCell>User</TableCell>
-                  <TableCell>Username</TableCell>
-                  <Authorized permissions={Permissions.USER_MANAGE_GROUPS}>
-                    <TableCell align="right">Action</TableCell>
-                  </Authorized>
+                  <TableCell colSpan={3}>
+                    <Loading />
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredUsers.map((u) => (
+              ) : filteredUsers.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={3} align="center">
+                    No records to display
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredUsers.map((u) => (
                   <TableRow key={u.userId}>
-                    <TableCell>{u.displayName}</TableCell>
+                    <TableCell>
+                      <Stack direction="row" alignItems="center" gap={1}>
+                        <Avatar sx={{ width: 32, height: 32, fontSize: 14 }}>{getUserInitial(u)}</Avatar>
+                        {u.displayName}
+                      </Stack>
+                    </TableCell>
                     <TableCell>{u.username}</TableCell>
                     <Authorized permissions={Permissions.USER_MANAGE_GROUPS}>
                       <TableCell align="right">
@@ -309,10 +344,10 @@ function GroupDetailView({
                       </TableCell>
                     </Authorized>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
           {addingUsers && <AddUsersToGroupDialog orgHandler={orgHandler} groupId={group.groupId} existingUserIds={groupUsers.map((u) => u.userId)} onClose={() => setAddingUsers(false)} />}
           {removingUser && (
             <Dialog open onClose={() => setRemovingUser(null)} maxWidth="sm" fullWidth>
@@ -347,32 +382,34 @@ function GroupDetailView({
           )}
         </>
       )}
-      {((showUsers && subTab === 1) || !showUsers) && (
+      {(subTab === 'roles' || !showUsers) && (
         <>
-          <Stack direction="row" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
-            <SearchField value={search} onChange={setSearch} />
-            <Authorized permissions={roleModifyPerms}>
-              <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingRoles(true)}>
-                Add Roles
-              </Button>
-            </Authorized>
-          </Stack>
-          {loadingRoles ? (
-            <Loading />
-          ) : (
-            <Table>
-              <TableHead>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Role Name</TableCell>
+                <TableCell align="center">Mapping Level</TableCell>
+                <TableCell align="center">Applicable Environment</TableCell>
+                <Authorized permissions={roleModifyPerms}>
+                  <TableCell align="right">Action</TableCell>
+                </Authorized>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loadingRoles ? (
                 <TableRow>
-                  <TableCell>Role Name</TableCell>
-                  <TableCell align="center">Mapping Level</TableCell>
-                  <TableCell align="center">Applicable Environment</TableCell>
-                  <Authorized permissions={roleModifyPerms}>
-                    <TableCell align="right">Action</TableCell>
-                  </Authorized>
+                  <TableCell colSpan={4}>
+                    <Loading />
+                  </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredRoles.map((r) => (
+              ) : filteredRoles.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} align="center">
+                    No records to display
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredRoles.map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>{r.roleName}</TableCell>
                     <TableCell align="center">
@@ -395,10 +432,10 @@ function GroupDetailView({
                       </TableCell>
                     </Authorized>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+                ))
+              )}
+            </TableBody>
+          </Table>
           {addingRoles && <AddRolesToGroupDialog orgHandler={orgHandler} projectId={projectId} componentId={componentId} groupId={group.groupId} existingRoleIds={groupRoles.map((r) => r.roleId)} onClose={() => setAddingRoles(false)} />}
           {removingRole && (
             <Dialog open onClose={() => setRemovingRole(null)} maxWidth="sm" fullWidth>
