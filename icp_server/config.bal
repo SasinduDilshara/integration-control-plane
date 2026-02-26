@@ -28,10 +28,10 @@ configurable int defaultOpensearchAdaptorPort = 9449;
 configurable string serverHost = "0.0.0.0";
 configurable string organization = "WSO2 Inc.";
 
-configurable string keystorePath = check file:joinPath("..", "conf", "security", "ballerinaKeystore.p12");
-configurable string keystorePassword = "ballerina";
-configurable string truststorePath = check file:joinPath("..", "conf", "security", "ballerinaTruststore.p12");
-configurable string truststorePassword = "ballerina";
+configurable string keystorePath = check file:joinPath("..", "conf", "security", "wso2carbon.jks");
+configurable string keystorePassword = "wso2carbon";
+configurable string truststorePath = check file:joinPath("..", "conf", "security", "client-truststore.jks");
+configurable string truststorePassword = "wso2carbon";
 
 configurable int schedulerIntervalSeconds = 600;
 configurable int refreshTokenCleanupIntervalSeconds = 86400; // 24 hours (in seconds)
