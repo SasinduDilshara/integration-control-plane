@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { JSX } from 'react';
 import { Alert, Box, Button, CircularProgress, Divider, IconButton, InputAdornment, InputLabel, OutlinedInput, Typography } from '@wso2/oxygen-ui';
 import { Eye, EyeOff } from '@wso2/oxygen-ui-icons-react';
@@ -29,9 +29,9 @@ function friendlyLoginError(err: unknown, isSso = false): string {
   const status = (err as Record<string, unknown>)?.status as number | undefined;
 
   if (status === 401 || message.includes('invalid credentials') || message.includes('unauthorized')) return 'Incorrect username or password. Please try again.';
+  if (status === 429 || message.includes('too many') || message.includes('rate limit')) return 'Account temporarily locked due to too many failed attempts.';
   if (status === 403 || message.includes('locked') || message.includes('disabled') || message.includes('forbidden')) return 'Your account has been locked or disabled. Please contact your administrator.';
   if (status === 404 || message.includes('not found')) return 'Account not found. Please check your username and try again.';
-  if (status === 429 || message.includes('too many') || message.includes('rate limit')) return 'Too many sign-in attempts. Please wait a moment and try again.';
   if (message.includes('failed to fetch') || message.includes('networkerror') || err instanceof TypeError) return 'Unable to connect to the server. Please check your connection and try again.';
   if ((status && status >= 500) || message.includes('internal') || message.includes('server error')) return 'Something went wrong on our end. Please try again later.';
   if (isSso) return 'Single sign-on is currently unavailable. Please try again later or use username and password.';
@@ -48,6 +48,14 @@ export default function LoginForm(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+
+  const isLockedOut = lockoutSeconds > 0;
+  useEffect(() => {
+    if (!isLockedOut) return;
+    const id = setInterval(() => setLockoutSeconds((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [isLockedOut]);
 
   const handleClickShowPassword = () => setShowPassword((show) => !show);
 
@@ -79,6 +87,8 @@ export default function LoginForm(): JSX.Element {
       navigate(resourceUrl({ level: 'organizations', org: 'default' }, 'overview'));
     } catch (err) {
       setError(friendlyLoginError(err));
+      const retry = (err as { retryAfterSeconds?: number }).retryAfterSeconds;
+      if (retry && retry > 0) setLockoutSeconds(retry);
     } finally {
       setLoading(false);
     }
@@ -93,6 +103,7 @@ export default function LoginForm(): JSX.Element {
       {error && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
+          {isLockedOut && ` Try again in ${lockoutSeconds}s.`}
         </Alert>
       )}
 
@@ -129,9 +140,9 @@ export default function LoginForm(): JSX.Element {
           type="submit"
           fullWidth
           sx={{ mt: 1, bgcolor: '#1e1e1e', '&:hover': { bgcolor: '#333' }, textTransform: 'none', py: 1.2 }}
-          disabled={loading}
+          disabled={loading || isLockedOut}
           startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}>
-          {loading ? 'Signing In...' : 'Login'}
+          {isLockedOut ? `Locked (${lockoutSeconds}s)` : loading ? 'Signing In...' : 'Login'}
         </Button>
 
         <Divider sx={{ my: 0.5 }}>OR</Divider>

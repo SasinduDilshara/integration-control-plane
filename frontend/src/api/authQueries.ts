@@ -34,6 +34,12 @@ export function useRevokeUserTokens(orgHandler: string) {
   });
 }
 
+export function useUnlockAccount(orgHandler: string) {
+  return useMutation({
+    mutationFn: (userId: string) => authPost<{ message: string }>(`/orgs/${orgHandler}/users/${userId}/unlock-account`, {}),
+  });
+}
+
 export function useUsers(orgHandler: string) {
   return useQuery({
     queryKey: ['users', orgHandler],

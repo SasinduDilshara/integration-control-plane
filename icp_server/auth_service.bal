@@ -35,7 +35,7 @@ final readonly & jwt:IssuerSignatureConfig jwtSignatureConfig;
 }
 service /auth on httpListener {
 
-    isolated resource function post login(types:Credentials credentials, http:Request req) returns http:Ok|http:Unauthorized|http:InternalServerError|error {
+    isolated resource function post login(types:Credentials credentials, http:Request req) returns http:Ok|http:Unauthorized|http:TooManyRequests|http:InternalServerError|error {
         log:printInfo("Login attempt for user", username = credentials.username);
         // Call the authentication backend to verify credentials
         http:Response|error authResponse = authBackendClient->post("/authenticate", credentials);
@@ -45,7 +45,22 @@ service /auth on httpListener {
             return utils:createInternalServerError("Authentication service unavailable");
         }
 
-        // Check status code before parsing response
+        if authResponse.statusCode == 429 {
+            log:printWarn("Account locked out by auth backend", username = credentials.username);
+            json|error lockoutPayload = authResponse.getJsonPayload();
+            if lockoutPayload is error {
+                log:printError("Failed to read lockout response payload", lockoutPayload);
+                return utils:createInternalServerError("Authentication service error");
+            }
+            int retryAfterSeconds = 0;
+            json|error ras = lockoutPayload.retryAfterSeconds;
+            if ras is int { retryAfterSeconds = ras; }
+            return <http:TooManyRequests>{
+                headers: {"Retry-After": retryAfterSeconds.toString()},
+                body: lockoutPayload
+            };
+        }
+
         if authResponse.statusCode == http:STATUS_UNAUTHORIZED {
             log:printError("Authentication failed for user", username = credentials.username);
             return utils:createUnauthorizedError("Invalid credentials");
@@ -2927,6 +2942,72 @@ service /auth on httpListener {
                 permissionNames: permissionNames
             }
         };
+    }
+
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: resolvedDefaultJwtHMACSecret
+                    }
+                }
+            }
+        ]
+    }
+    isolated resource function post orgs/[string orgHandle]/users/[string userId]/unlock\-account(http:Request req) returns http:Ok|http:Unauthorized|http:Forbidden|http:NotFound|http:InternalServerError|error {
+        log:printInfo("Admin unlock account requested", orgHandle = orgHandle, targetUserId = userId);
+
+        types:UserContextV2|error userContext = extractUserContextFromRequest(req);
+        if userContext is error {
+            return utils:createUnauthorizedError("Invalid or missing authentication token");
+        }
+        types:AccessScope orgScope = {orgUuid: storage:DEFAULT_ORG_ID};
+        boolean|error hasPermission = auth:hasPermission(userContext.userId, auth:PERMISSION_USER_MANAGE_USERS, orgScope);
+        if hasPermission is error {
+            log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
+            return utils:createInternalServerError("Error checking permissions");
+        }
+        if !hasPermission {
+            return <http:Forbidden>{body: {message: "Insufficient permissions to unlock accounts"}};
+        }
+
+        types:User|error targetUser = storage:getUserDetailsById(userId);
+        if targetUser is sql:NoRowsError {
+            log:printDebug("Unlock: user not found in main DB", userId = userId);
+            return <http:NotFound>{
+                body: {
+                    message: "User not found"
+                }
+            };
+        }
+        if targetUser is error {
+            log:printError("Unlock: DB error looking up user", 'error = targetUser, userId = userId);
+            return utils:createInternalServerError("Error looking up user");
+        }
+
+        http:Response|error authResponse = authBackendClient->post("/unlock-account", {username: targetUser.username});
+        if authResponse is error {
+            log:printError("Error calling auth backend for account unlock", authResponse);
+            return utils:createInternalServerError("Account unlock service unavailable");
+        }
+        if authResponse.statusCode == http:STATUS_NOT_FOUND {
+            log:printError("User not found in auth backend for unlock", statusCode = authResponse.statusCode);
+            return <http:NotFound>{
+                body: {
+                    message: "User not found in auth backend"
+                }
+            };
+        }
+        if authResponse.statusCode != http:STATUS_OK {
+            log:printError("Unexpected status from auth backend for unlock", statusCode = authResponse.statusCode);
+            return utils:createInternalServerError("Account unlock failed");
+        }
+
+        log:printInfo("Account unlocked by admin", targetUserId = userId, targetUsername = targetUser.username, adminUserId = userContext.userId);
+        return <http:Ok>{body: {message: "Account unlocked"}};
     }
 }
 

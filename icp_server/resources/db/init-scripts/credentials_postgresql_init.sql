@@ -38,3 +38,25 @@ VALUES (
         'System Administrator',
         '$2a$12$ZbcSg6botbwvmQV3/wBAfEozQoOn+5V7F8s/5evMUNb7L6FgCmFaEQ=='
     );
+
+-- ============================================================================
+-- USER ATTRIBUTES (EAV key-value store per user)
+-- Inspired by UM_USER_ATTRIBUTE from WSO2 MI user store schema.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS user_attributes (
+    id BIGSERIAL PRIMARY KEY,
+    user_id CHAR(36) NOT NULL,
+    attr_name VARCHAR(255) NOT NULL,
+    attr_value VARCHAR(1024),
+    profile_id VARCHAR(255) NOT NULL DEFAULT 'default',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_user_attributes_user FOREIGN KEY (user_id)
+        REFERENCES user_credentials (user_id) ON DELETE CASCADE,
+    CONSTRAINT uk_user_attr_profile UNIQUE (user_id, attr_name, profile_id)
+);
+
+CREATE INDEX idx_ua_user_id ON user_attributes(user_id);
+CREATE INDEX idx_ua_attr_name ON user_attributes(attr_name);
+CREATE INDEX idx_ua_user_attr ON user_attributes(user_id, attr_name);
