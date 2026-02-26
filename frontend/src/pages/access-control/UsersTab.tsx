@@ -17,14 +17,14 @@
  */
 
 import { Alert, Autocomplete, Avatar, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
-import { ArrowLeft, Key, LogOut, Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
+import { ArrowLeft, Key, LockOpen, LogOut, Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import { useState, useCallback, useEffect, useRef, type JSX } from 'react';
 import SearchField from '../../components/SearchField';
 import { useAuth } from '../../auth/AuthContext';
 import { useAccessControl } from '../../contexts/AccessControlContext';
 import { Permissions } from '../../constants/permissions';
 import Authorized from '../../components/Authorized';
-import { useUsers, useCreateUser, useDeleteUser, useGroups, useUpdateUserGroups, useRemoveUserFromGroup, useResetPassword, useRevokeUserTokens } from '../../api/authQueries';
+import { useUsers, useCreateUser, useDeleteUser, useGroups, useUpdateUserGroups, useRemoveUserFromGroup, useResetPassword, useRevokeUserTokens, useUnlockAccount } from '../../api/authQueries';
 import type { User, Group } from '../../api/auth';
 import { Loading, FormDialog } from './shared';
 import { useFiltered, getUserInitial } from './utils';
@@ -301,12 +301,14 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
   const deleteMutation = useDeleteUser(orgHandler);
   const resetPasswordMutation = useResetPassword(orgHandler);
   const revokeTokensMutation = useRevokeUserTokens(orgHandler);
+  const unlockMutation = useUnlockAccount(orgHandler);
   const [search, setSearch] = useState('');
   const [creating, setCreating] = useState(false);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [resettingUserId, setResettingUserId] = useState<string | null>(null);
   const [revokingUserId, setRevokingUserId] = useState<string | null>(null);
+  const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
   const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null);
   const [newUsername, setNewUsername] = useState<string | null>(null);
   const [tableAlert, setTableAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -417,6 +419,17 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                           setRevokingUserId(u.userId);
                         }}>
                         <LogOut size={16} />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip title="Unlock Account">
+                      <IconButton
+                        size="small"
+                        aria-label="Unlock Account"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUnlockingUserId(u.userId);
+                        }}>
+                        <LockOpen size={16} />
                       </IconButton>
                     </Tooltip>
                     <Tooltip title="Edit">
@@ -553,6 +566,26 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                     })
                   }>
                   Revoke Sessions
+                </Button>
+              </DialogActions>
+            </Dialog>
+          ) : null;
+        })()}
+      {unlockingUserId &&
+        (() => {
+          const u = users?.find((x) => x.userId === unlockingUserId);
+          return u ? (
+            <Dialog open onClose={() => setUnlockingUserId(null)} maxWidth="xs" fullWidth>
+              <DialogTitle>Unlock Account</DialogTitle>
+              <DialogContent>
+                <Typography>
+                  Unlock the account for <strong>{u.displayName}</strong> ({u.username})? This will clear any active lockout and allow the user to log in immediately.
+                </Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setUnlockingUserId(null)}>Cancel</Button>
+                <Button variant="contained" disabled={unlockMutation.isPending} onClick={() => unlockMutation.mutate(u.userId, { onSuccess: () => setUnlockingUserId(null) })}>
+                  Unlock
                 </Button>
               </DialogActions>
             </Dialog>

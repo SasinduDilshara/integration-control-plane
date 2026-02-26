@@ -67,8 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }): JSX.Element
     });
     if (!res.ok) {
       const body = await res.text();
-      const err: Error & { status?: number } = new Error(body || `Login failed (${res.status})`);
+      const err: Error & { status?: number; retryAfterSeconds?: number } = new Error(body || `Login failed (${res.status})`);
       err.status = res.status;
+      if (res.status === 429) {
+        try { err.retryAfterSeconds = JSON.parse(body).retryAfterSeconds; } catch { /* ignore */ }
+      }
       throw err;
     }
     const data: { userId: string; token: string; expiresIn: number; refreshToken: string; refreshTokenExpiresIn: number; username: string; displayName: string; permissions: string[]; isOidcUser: boolean; requirePasswordChange?: boolean } = await res.json();
