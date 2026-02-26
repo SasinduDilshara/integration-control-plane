@@ -344,9 +344,9 @@ service / on defaultAuthServiceListener {
     }
 }
 
-const int LOCKOUT_THRESHOLD = 3;
-const int LOCKOUT_BASE_MINUTES = 1;
-const int LOCKOUT_MAX_MINUTES = 2;
+configurable int lockoutThreshold = 5;
+configurable int lockoutBaseMinutes = 15;
+configurable int lockoutMaxMinutes = 60;
 
 isolated function parseIntOrZero(string? s) returns int {
     if s is () { return 0; }
@@ -355,9 +355,9 @@ isolated function parseIntOrZero(string? s) returns int {
 }
 
 isolated function lockoutRetryAfterSeconds(int failedAttempts, string? lastFailedAt, time:Utc now) returns int {
-    if failedAttempts < LOCKOUT_THRESHOLD || lastFailedAt is () { return 0; }
-    int tier = failedAttempts / LOCKOUT_THRESHOLD - 1;
-    int lockoutSeconds = int:min(LOCKOUT_BASE_MINUTES * (1 << tier), LOCKOUT_MAX_MINUTES) * 60;
+    if failedAttempts < lockoutThreshold || lastFailedAt is () { return 0; }
+    int tier = failedAttempts / lockoutThreshold - 1;
+    int lockoutSeconds = int:min(lockoutBaseMinutes * (1 << tier), lockoutMaxMinutes) * 60;
     time:Utc|error lastFailed = time:utcFromString(lastFailedAt);
     if lastFailed is error { return 0; }
     int remaining = lockoutSeconds - <int>time:utcDiffSeconds(now, lastFailed);
