@@ -30,6 +30,9 @@ type PasswordHash record {|
     string? salt;
 |};
 
+const string FAILED_LOGIN_ATTEMPTS = "failedLoginAttempts";
+const string LAST_FAILED_LOGIN_AT = "lastFailedLoginAt";
+
 configurable int authServicePort = 9447;
 configurable string authServiceHost = "0.0.0.0";
 configurable string passwordHashingAlgorithm = "bcrypt";
@@ -41,6 +44,11 @@ configurable int credentialsDbPort = 5432;
 configurable string credentialsDbName = "credentials_db";
 configurable string credentialsDbUser = "icp_user";
 configurable string credentialsDbPassword = "icp_password";
+
+configurable int lockoutThreshold = 5;
+configurable int lockoutBaseMinutes = 15;
+configurable int lockoutMaxMinutes = 60;
+
 
 // Initialized in init() with resolved (decrypted) credentials
 final storage:DatabaseConnectionManager credentialsDbManager;
@@ -94,13 +102,11 @@ service / on defaultAuthServiceListener {
             return utils:createInternalServerError("Authentication service unavailable");
         }
 
-        // SELECT FOR UPDATE serialises the read-check-write cycle per user,
-        // preventing concurrent failed logins from undercounting attempts.
-        http:Ok|http:Unauthorized|http:TooManyRequests authResult;
-
         transaction {
-            int failedAttempts = parseIntOrZero(check getUserAttrForUpdate(credentials.userId, "failedLoginAttempts"));
-            string? lastFailedAt = check getUserAttr(credentials.userId, "lastFailedLoginAt");
+            http:Ok|http:Unauthorized|http:TooManyRequests authResult;
+            check lockUserCredentialsRow(credentials.userId);
+            int failedAttempts = parseIntOrZero(check getUserAttr(credentials.userId, FAILED_LOGIN_ATTEMPTS));
+            string? lastFailedAt = check getUserAttr(credentials.userId, LAST_FAILED_LOGIN_AT);
             int retryAfter = lockoutRetryAfterSeconds(failedAttempts, lastFailedAt, time:utcNow());
             log:printDebug("Lockout state", userId = credentials.userId, failedAttempts = failedAttempts, retryAfterSeconds = retryAfter);
 
@@ -137,12 +143,12 @@ service / on defaultAuthServiceListener {
                 }
                 check commit;
             }
+            return authResult;
         } on fail error e {
             log:printError("Transaction error during authentication", 'error = e);
             return utils:createInternalServerError("Authentication service unavailable");
         }
 
-        return authResult;
     }
 
     resource function post unlock\-account(record {string username;} request) returns http:Ok|http:BadRequest|http:InternalServerError|error {
@@ -344,10 +350,6 @@ service / on defaultAuthServiceListener {
     }
 }
 
-configurable int lockoutThreshold = 5;
-configurable int lockoutBaseMinutes = 15;
-configurable int lockoutMaxMinutes = 60;
-
 isolated function parseIntOrZero(string? s) returns int {
     if s is () { return 0; }
     int|error n = int:fromString(s);
@@ -355,7 +357,10 @@ isolated function parseIntOrZero(string? s) returns int {
 }
 
 isolated function lockoutRetryAfterSeconds(int failedAttempts, string? lastFailedAt, time:Utc now) returns int {
-    if failedAttempts < lockoutThreshold || lastFailedAt is () { return 0; }
+    if lockoutThreshold <= 0 || failedAttempts < lockoutThreshold || lastFailedAt is () {
+        // No lockout
+         return 0;
+    }
     int tier = failedAttempts / lockoutThreshold - 1;
     int lockoutSeconds = int:min(lockoutBaseMinutes * (1 << tier), lockoutMaxMinutes) * 60;
     time:Utc|error lastFailed = time:utcFromString(lastFailedAt);
@@ -378,20 +383,14 @@ isolated function getUserAttr(string userId, string attrName) returns string?|er
     return row.attr_value;
 }
 
-// Same as getUserAttr but acquires a row-level lock (FOR UPDATE) so that
-// concurrent transactions on the same row block until this transaction commits.
-isolated function getUserAttrForUpdate(string userId, string attrName) returns string?|error {
-    record {string attr_value;}|sql:Error row = credentialsDbClient->queryRow(
-        `SELECT attr_value FROM user_attributes
-         WHERE user_id = ${userId} AND attr_name = ${attrName} AND profile_id = 'default'
-         FOR UPDATE`
+isolated function lockUserCredentialsRow(string userId) returns error? {
+    record {|int val;|}|sql:Error row = credentialsDbClient->queryRow(
+        `SELECT 1 as val FROM user_credentials WHERE user_id = ${userId} FOR UPDATE`
     );
-    if row is sql:NoRowsError { return (); }
     if row is sql:Error {
-        log:printError("Error reading user attribute for update", row, userId = userId, attrName = attrName);
+        log:printError("Failed to lock user_credentials row", row, userId = userId);
         return row;
     }
-    return row.attr_value;
 }
 
 isolated function upsertUserAttr(string userId, string attrName, string attrValue) returns error? {
@@ -408,15 +407,15 @@ isolated function clearLockoutAttrs(string userId) returns error? {
     log:printDebug("Clearing lockout attributes", userId = userId);
     _ = check credentialsDbClient->execute(
         `DELETE FROM user_attributes
-         WHERE user_id = ${userId} AND attr_name IN ('failedLoginAttempts', 'lastFailedLoginAt')`
+         WHERE user_id = ${userId} AND attr_name IN (${FAILED_LOGIN_ATTEMPTS}, ${LAST_FAILED_LOGIN_AT})`
     );
 }
 
 isolated function recordFailedLogin(string userId, int currentFailedAttempts) returns error? {
     string now = time:utcToString(time:utcNow());
     log:printDebug("Recording failed login", userId = userId, newCount = currentFailedAttempts + 1, timestamp = now);
-    check upsertUserAttr(userId, "failedLoginAttempts", (currentFailedAttempts + 1).toString());
-    check upsertUserAttr(userId, "lastFailedLoginAt", now);
+    check upsertUserAttr(userId, FAILED_LOGIN_ATTEMPTS, (currentFailedAttempts + 1).toString());
+    check upsertUserAttr(userId, LAST_FAILED_LOGIN_AT, now);
 }
 
 isolated function getUserCredentialsById(string userId) returns types:UserCredentials|error {
