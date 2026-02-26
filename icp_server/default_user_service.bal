@@ -94,46 +94,55 @@ service / on defaultAuthServiceListener {
             return utils:createInternalServerError("Authentication service unavailable");
         }
 
-        int failedAttempts = parseIntOrZero(check getUserAttr(credentials.userId, "failedLoginAttempts"));
-        log:printDebug("Lockout state", userId = credentials.userId, failedAttempts = failedAttempts);
+        // SELECT FOR UPDATE serialises the read-check-write cycle per user,
+        // preventing concurrent failed logins from undercounting attempts.
+        http:Ok|http:Unauthorized|http:TooManyRequests authResult;
 
-        if failedAttempts >= LOCKOUT_THRESHOLD {
+        transaction {
+            int failedAttempts = parseIntOrZero(check getUserAttrForUpdate(credentials.userId, "failedLoginAttempts"));
             string? lastFailedAt = check getUserAttr(credentials.userId, "lastFailedLoginAt");
             int retryAfter = lockoutRetryAfterSeconds(failedAttempts, lastFailedAt, time:utcNow());
+            log:printDebug("Lockout state", userId = credentials.userId, failedAttempts = failedAttempts, retryAfterSeconds = retryAfter);
+
             if retryAfter > 0 {
-                log:printDebug("Account locked", userId = credentials.userId, retryAfterSeconds = retryAfter, failedAttempts = failedAttempts);
-                return <http:TooManyRequests>{
+                // Account is locked — no writes needed, just release the lock
+                authResult = <http:TooManyRequests>{
                     headers: {"Retry-After": retryAfter.toString()},
                     body: {message: "Account temporarily locked due to too many failed login attempts", retryAfterSeconds: retryAfter}
                 };
+                rollback;
+            } else {
+                boolean|error matches = verifyPassword(request.password, credentials.passwordHash, credentials.passwordSalt);
+                if matches is error {
+                    log:printError("Password verification failed", matches, userId = credentials.userId);
+                    authResult = utils:createUnauthorizedError("Invalid credentials");
+                } else if !matches {
+                    log:printDebug("Invalid password", username = request.username, failedAttempts = failedAttempts + 1);
+                    check recordFailedLogin(credentials.userId, failedAttempts);
+                    authResult = utils:createUnauthorizedError("Invalid credentials");
+                } else {
+                    if failedAttempts > 0 {
+                        log:printDebug("Clearing lockout attrs on successful login", userId = credentials.userId, previousFailedAttempts = failedAttempts);
+                        check clearLockoutAttrs(credentials.userId);
+                    }
+                    log:printInfo("User authenticated successfully", username = credentials.username);
+                    authResult = <http:Ok>{
+                        body: {
+                            authenticated: true,
+                            userId: credentials.userId,
+                            displayName: credentials.displayName,
+                            timestamp: time:utcToString(time:utcNow())
+                        }
+                    };
+                }
+                check commit;
             }
-            log:printDebug("Lockout expired, allowing attempt", userId = credentials.userId, failedAttempts = failedAttempts);
+        } on fail error e {
+            log:printError("Transaction error during authentication", 'error = e);
+            return utils:createInternalServerError("Authentication service unavailable");
         }
 
-        boolean|error matches = verifyPassword(request.password, credentials.passwordHash, credentials.passwordSalt);
-        if matches is error {
-            log:printError("Password verification failed", matches, userId = credentials.userId);
-            return utils:createUnauthorizedError("Invalid credentials");
-        }
-        if !matches {
-            log:printDebug("Invalid password", username = request.username, failedAttempts = failedAttempts + 1);
-            check recordFailedLogin(credentials.userId, failedAttempts);
-            return utils:createUnauthorizedError("Invalid credentials");
-        }
-
-        if failedAttempts > 0 {
-            log:printDebug("Clearing lockout attrs on successful login", userId = credentials.userId, previousFailedAttempts = failedAttempts);
-            check clearLockoutAttrs(credentials.userId);
-        }
-        log:printInfo("User authenticated successfully", username = credentials.username);
-        return <http:Ok>{
-            body: {
-                authenticated: true,
-                userId: credentials.userId,
-                displayName: credentials.displayName,
-                timestamp: time:utcToString(time:utcNow())
-            }
-        };
+        return authResult;
     }
 
     resource function post unlock\-account(record {string username;} request) returns http:Ok|http:BadRequest|http:InternalServerError|error {
@@ -364,6 +373,22 @@ isolated function getUserAttr(string userId, string attrName) returns string?|er
     if row is sql:NoRowsError { return (); }
     if row is sql:Error {
         log:printError("Error reading user attribute", row, userId = userId, attrName = attrName);
+        return row;
+    }
+    return row.attr_value;
+}
+
+// Same as getUserAttr but acquires a row-level lock (FOR UPDATE) so that
+// concurrent transactions on the same row block until this transaction commits.
+isolated function getUserAttrForUpdate(string userId, string attrName) returns string?|error {
+    record {string attr_value;}|sql:Error row = credentialsDbClient->queryRow(
+        `SELECT attr_value FROM user_attributes
+         WHERE user_id = ${userId} AND attr_name = ${attrName} AND profile_id = 'default'
+         FOR UPDATE`
+    );
+    if row is sql:NoRowsError { return (); }
+    if row is sql:Error {
+        log:printError("Error reading user attribute for update", row, userId = userId, attrName = attrName);
         return row;
     }
     return row.attr_value;
