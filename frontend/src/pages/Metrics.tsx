@@ -79,13 +79,14 @@ function deriveApis(metrics: MetricEntry[]): ApiSummary[] {
     // For MI metrics, group by sublevel + method (e.g. "HelloWorld\0GET")
     // For BI metrics, group by sublevel + deployment
     const groupCtx = isMI ? (m.tags.method ?? '') : (m.tags.deployment ?? m.tags.app_name ?? '');
-    const key = `${m.tags.sublevel}\0${groupCtx}`;
-    if (!apiMap[key]) apiMap[key] = { successful: [], failed: [], method: m.tags.method ?? '', serviceType: m.tags.service_type ?? 'BI' };
+    const serviceType = m.tags.service_type ?? 'BI';
+    const key = `${serviceType}\0${m.tags.sublevel}\0${groupCtx}`;
+    if (!apiMap[key]) apiMap[key] = { successful: [], failed: [], method: m.tags.method ?? '', serviceType };
     apiMap[key][m.tags.status === 'failed' ? 'failed' : 'successful'].push(m);
   }
   return Object.entries(apiMap)
     .map(([key, { successful, failed, method, serviceType }]) => {
-      const [name, deployment] = key.split('\0');
+      const [, name, deployment] = key.split('\0');
       const allEntries = [...successful, ...failed];
       const successReqs = successful.reduce((s, m) => s + sumTimeSeries(m.requests_total.timeSeriesData), 0);
       const failReqs = failed.reduce((s, m) => s + sumTimeSeries(m.requests_total.timeSeriesData), 0);
@@ -270,14 +271,15 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
 
   // Apply service type filter
   const inboundMetrics = useMemo(() => {
-    if (serviceTypeFilter === 'all') return allInboundMetrics;
+    // if (serviceTypeFilter === 'all') return allInboundMetrics;
+    if (!hasMixedTypes || serviceTypeFilter === 'all') return allInboundMetrics;
     return allInboundMetrics.filter((m) => (m.tags.service_type ?? 'BI') === serviceTypeFilter);
-  }, [allInboundMetrics, serviceTypeFilter]);
+  }, [allInboundMetrics, serviceTypeFilter, hasMixedTypes]);
 
   const filteredOutboundMetrics = useMemo(() => {
-    if (serviceTypeFilter === 'all') return outboundMetrics;
+    if (!hasMixedTypes || serviceTypeFilter === 'all') return outboundMetrics;
     return outboundMetrics.filter((m) => (m.tags.service_type ?? 'BI') === serviceTypeFilter);
-  }, [outboundMetrics, serviceTypeFilter]);
+  }, [outboundMetrics, serviceTypeFilter, hasMixedTypes]);
 
   // Client-side integration filter (project-level only)
   const integrations = useMemo(() => {
@@ -404,7 +406,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
             Retry
           </Button>
         </Stack>
-      ) : inboundMetrics.length === 0 && outboundMetrics.length === 0 ? (
+      ) : inboundMetrics.length === 0 && filteredOutboundMetrics.length === 0 ? (
         <EmptyListing icon={<BarChart3 size={48} />} title="No metrics data" description="No metrics available for the selected time range." />
       ) : (
         <>
