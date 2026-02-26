@@ -103,7 +103,8 @@ jobs:
           echo "Release version: ${VERSION}"
 
           # Auto-detect if this is a pre-release based on version string
-          if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
+          # Any version with a hyphen (prerelease suffix) is considered a pre-release per semver
+          if [[ "$VERSION" =~ - ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
             echo "Detected pre-release version"
           else
