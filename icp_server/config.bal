@@ -106,6 +106,7 @@ configurable map<string> secrets = {};
 // Any configurable that can be encrypted should first be resolved here.
 // Initialized by decrypting (if value is "$secret{alias}") or returned as-is.
 // All code outside config.bal must use these resolved variables.
+final string resolvedKeystorePassword = check resolveSecret(keystorePassword);
 final string resolvedTruststorePassword = check resolveSecret(truststorePassword);
 final string resolvedDefaultJwtHMACSecret = check resolveSecret(defaultJwtHMACSecret);
 final string resolvedUserServiceJwtHMACSecret = check resolveSecret(userServiceJwtHMACSecret);
