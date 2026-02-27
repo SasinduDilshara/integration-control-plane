@@ -1,4 +1,5 @@
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -51,6 +52,7 @@ function AssignRoleToGroupsDialog({
   roleName,
   existingGroupIds,
   onClose,
+  onAssigned,
 }: {
   orgHandler: string;
   projectId: string;
@@ -59,6 +61,7 @@ function AssignRoleToGroupsDialog({
   roleName: string;
   existingGroupIds: string[];
   onClose: () => void;
+  onAssigned?: () => void;
 }) {
   const { data: allGroups = [] } = useGroups(orgHandler, projectId, componentId);
   const { data: allEnvironments = [] } = useAllEnvironments();
@@ -88,6 +91,7 @@ function AssignRoleToGroupsDialog({
     const failures = results.filter((r) => !r.success);
 
     if (failures.length === 0) {
+      onAssigned?.();
       onClose();
     } else {
       const failedGroups = failures.map((f) => f.groupName).join(', ');
@@ -103,9 +107,9 @@ function AssignRoleToGroupsDialog({
           Select groups to assign the role &quot;{roleName}&quot; to
         </Typography>
         {errorMsg && (
-          <Typography variant="body2" color="error" sx={{ mb: 2 }}>
+          <Alert severity="error" onClose={() => setErrorMsg('')} sx={{ mb: 2 }}>
             {errorMsg}
-          </Typography>
+          </Alert>
         )}
         <Stack spacing={2}>
           <Autocomplete
@@ -170,6 +174,7 @@ export default function ComponentRoleDetail(): JSX.Element {
   const [search, setSearch] = useState('');
   const [addingGroups, setAddingGroups] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState<RoleGroupMapping | null>(null);
+  const [pageAlert, setPageAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const getSearchStr = useCallback((g: RoleGroupMapping) => (g.groupName ?? '') + (g.groupId ?? ''), []);
   const filteredGroups = useMemo(() => {
@@ -184,7 +189,20 @@ export default function ComponentRoleDetail(): JSX.Element {
   };
   const confirmDelete = () => {
     if (deletingGroup) {
-      removeMutation.mutate({ groupId: deletingGroup.groupId, mappingId: deletingGroup.id }, { onSuccess: () => setDeletingGroup(null) });
+      const name = deletingGroup.groupName ?? deletingGroup.groupId;
+      removeMutation.mutate(
+        { groupId: deletingGroup.groupId, mappingId: deletingGroup.id },
+        {
+          onSuccess: () => {
+            setDeletingGroup(null);
+            setPageAlert({ type: 'success', message: `Group '${name}' removed from role successfully.` });
+          },
+          onError: (error) => {
+            setDeletingGroup(null);
+            setPageAlert({ type: 'error', message: (error as Error).message ?? 'Failed to remove group from role. Please try again.' });
+          },
+        },
+      );
     }
   };
 
@@ -226,6 +244,11 @@ export default function ComponentRoleDetail(): JSX.Element {
         Description : {role.description}
       </Typography>
 
+      {pageAlert && (
+        <Alert severity={pageAlert.type} onClose={() => setPageAlert(null)} sx={{ mb: 2 }}>
+          {pageAlert.message}
+        </Alert>
+      )}
       <Stack direction="row" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
         <SearchField value={search} onChange={setSearch} />
         <Authorized permissions={roleModifyPerms}>
@@ -291,7 +314,16 @@ export default function ComponentRoleDetail(): JSX.Element {
       </Table>
 
       {addingGroups && componentId && (
-        <AssignRoleToGroupsDialog orgHandler={orgHandler} projectId={projectId} componentId={componentId} roleId={roleId} roleName={role.roleName} existingGroupIds={roleGroups.map((g) => g.groupId)} onClose={() => setAddingGroups(false)} />
+        <AssignRoleToGroupsDialog
+          orgHandler={orgHandler}
+          projectId={projectId}
+          componentId={componentId}
+          roleId={roleId}
+          roleName={role.roleName}
+          existingGroupIds={roleGroups.map((g) => g.groupId)}
+          onClose={() => setAddingGroups(false)}
+          onAssigned={() => setPageAlert({ type: 'success', message: 'Role assigned to groups successfully.' })}
+        />
       )}
 
       {deletingGroup && (

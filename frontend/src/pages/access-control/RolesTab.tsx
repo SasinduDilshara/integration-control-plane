@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@wso2/oxygen-ui';
+import { Alert, Box, Button, Checkbox, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, FormControlLabel, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import { useState, type JSX } from 'react';
 import { useNavigate } from 'react-router';
@@ -24,7 +24,7 @@ import SearchField from '../../components/SearchField';
 import { useAccessControl } from '../../contexts/AccessControlContext';
 import { Permissions } from '../../constants/permissions';
 import { orgRoleDetailUrl, projectRoleDetailUrl, componentRoleDetailUrl } from '../../paths';
-import { useRoles, useAllPermissions, useCreateRole, useDeleteRole } from '../../api/authQueries';
+import { useRoles, useAllPermissions, useCreateRole, useDeleteRole, useRoleGroups, useUsers } from '../../api/authQueries';
 import { useComponentByHandler } from '../../api/queries';
 import type { Permission, Role } from '../../api/auth';
 import { Loading, FormDialog } from './shared';
@@ -106,6 +106,14 @@ function CreateRoleDialog({ allPermissions, onClose, onSubmit }: { allPermission
   );
 }
 
+function RoleUserCount({ orgHandler, roleId, projectId, componentId }: { orgHandler: string; roleId: string; projectId?: string; componentId?: string }) {
+  const { data: roleGroups = [], isLoading: loadingGroups } = useRoleGroups(orgHandler, roleId, projectId, componentId);
+  const { data: users = [], isLoading: loadingUsers } = useUsers(orgHandler);
+  if (loadingGroups || loadingUsers) return <>—</>;
+  const roleGroupIds = new Set(roleGroups.map((g) => g.groupId));
+  return <>{users.filter((u) => u.groups.some((g) => roleGroupIds.has(g.groupId))).length}</>;
+}
+
 export function RolesTab({ orgHandler, projectId, projectHandler, componentHandler, readOnly }: { orgHandler: string; projectId?: string; projectHandler?: string; componentHandler?: string; readOnly?: boolean }): JSX.Element {
   const navigate = useNavigate();
   const { hasOrgPermission } = useAccessControl();
@@ -150,13 +158,14 @@ export function RolesTab({ orgHandler, projectId, projectHandler, componentHandl
           <TableRow>
             <TableCell>Role Name</TableCell>
             <TableCell>Description</TableCell>
+            <TableCell>Assigned Users</TableCell>
             <TableCell align="right">Action</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {filtered.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={3} align="center">
+              <TableCell colSpan={4} align="center">
                 No records to display
               </TableCell>
             </TableRow>
@@ -164,42 +173,49 @@ export function RolesTab({ orgHandler, projectId, projectHandler, componentHandl
             filtered.map((r) => (
               <TableRow
                 key={r.roleId}
-              hover
-              sx={{ cursor: 'pointer' }}
-              tabIndex={0}
-              aria-label={`View details for ${r.roleName}`}
-              onClick={() => navigate(getRoleDetailUrl(r.roleId))}
-              onKeyDown={(e) => {
-                if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                  if (e.key === ' ') e.preventDefault();
-                  navigate(getRoleDetailUrl(r.roleId));
-                }
-              }}>
-              <TableCell>{r.roleName}</TableCell>
-              <TableCell>{r.description}</TableCell>
-              <TableCell align="right">
-                <IconButton
-                  size="small"
-                  aria-label={`Edit ${r.roleName}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
+                hover
+                sx={{ cursor: 'pointer' }}
+                tabIndex={0}
+                aria-label={`View details for ${r.roleName}`}
+                onClick={() => navigate(getRoleDetailUrl(r.roleId))}
+                onKeyDown={(e) => {
+                  if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                    if (e.key === ' ') e.preventDefault();
                     navigate(getRoleDetailUrl(r.roleId));
-                  }}>
-                  <Pencil size={16} />
-                </IconButton>
-                {!effectiveReadOnly && (
-                  <IconButton
-                    size="small"
-                    aria-label={`Delete ${r.roleName}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeletingRole(r);
-                    }}>
-                    <Trash2 size={16} />
-                  </IconButton>
-                )}
-              </TableCell>
-            </TableRow>
+                  }
+                }}>
+                <TableCell>{r.roleName}</TableCell>
+                <TableCell>{r.description}</TableCell>
+                <TableCell>
+                  <RoleUserCount orgHandler={orgHandler} roleId={r.roleId} projectId={projectId} componentId={componentId} />
+                </TableCell>
+                <TableCell align="right">
+                  <Tooltip title="Edit">
+                    <IconButton
+                      size="small"
+                      aria-label={`Edit ${r.roleName}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(getRoleDetailUrl(r.roleId));
+                      }}>
+                      <Pencil size={16} />
+                    </IconButton>
+                  </Tooltip>
+                  {!effectiveReadOnly && (
+                    <Tooltip title="Delete">
+                      <IconButton
+                        size="small"
+                        aria-label={`Delete ${r.roleName}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeletingRole(r);
+                        }}>
+                        <Trash2 size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                </TableCell>
+              </TableRow>
             ))
           )}
         </TableBody>

@@ -1,4 +1,5 @@
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -26,6 +27,7 @@ import {
   TextField,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
   PageContent,
   PageTitle,
@@ -93,30 +95,36 @@ function PermissionsEditor({ allPermissions, selectedIds, onChange }: { allPermi
   );
 }
 
-function AssignRoleToGroupsDialog({ orgHandler, roleId, roleName, existingGroupIds, onClose }: { orgHandler: string; roleId: string; roleName: string; existingGroupIds: string[]; onClose: () => void }) {
+function AssignRoleToGroupsDialog({ orgHandler, roleId, roleName, existingGroupIds, onClose, onAssigned }: { orgHandler: string; roleId: string; roleName: string; existingGroupIds: string[]; onClose: () => void; onAssigned?: () => void }) {
   const { data: allGroups = [] } = useGroups(orgHandler);
   const { data: allEnvironments = [] } = useAllEnvironments();
   const mutation = useAddRolesToGroup(orgHandler);
   const [selected, setSelected] = useState<Group[]>([]);
   const [envMode, setEnvMode] = useState<'all' | 'selected'>('all');
   const [selectedEnvs, setSelectedEnvs] = useState<string[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
   const available = allGroups.filter((g) => !existingGroupIds.includes(g.groupId));
   const pending = mutation.isPending;
-  const assign = () => {
+  const assign = async () => {
     if (envMode === 'selected' && selectedEnvs.length === 0) {
       return;
     }
-    let remaining = selected.length;
+    setErrorMsg('');
     const envUuid = envMode === 'selected' && selectedEnvs.length > 0 ? selectedEnvs[0] : undefined;
-    for (const g of selected) {
-      mutation.mutate(
-        { groupId: g.groupId, roleIds: [roleId], envUuid },
-        {
-          onSuccess: () => {
-            if (--remaining === 0) onClose();
-          },
-        },
-      );
+    const results = await Promise.all(
+      selected.map((g) =>
+        mutation.mutateAsync({ groupId: g.groupId, roleIds: [roleId], envUuid }).then(
+          () => ({ success: true, groupName: g.groupName }),
+          (error) => ({ success: false, groupName: g.groupName, error }),
+        ),
+      ),
+    );
+    const failures = results.filter((r) => !r.success);
+    if (failures.length === 0) {
+      onAssigned?.();
+      onClose();
+    } else {
+      setErrorMsg(`Failed to assign role to: ${failures.map((f) => f.groupName).join(', ')}`);
     }
   };
   return (
@@ -126,6 +134,11 @@ function AssignRoleToGroupsDialog({ orgHandler, roleId, roleName, existingGroupI
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Select groups to assign the role &quot;{roleName}&quot; to
         </Typography>
+        {errorMsg && (
+          <Alert severity="error" onClose={() => setErrorMsg('')} sx={{ mb: 2 }}>
+            {errorMsg}
+          </Alert>
+        )}
         <Stack spacing={2}>
           <Autocomplete
             multiple
@@ -187,6 +200,7 @@ export default function RoleDetail(): JSX.Element {
   const [search, setSearch] = useState('');
   const [addingGroups, setAddingGroups] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState<RoleGroupMapping | null>(null);
+  const [pageAlert, setPageAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const permIds = useMemo(() => selectedIds ?? (role ? new Set(role.permissions.map((p) => p.permissionId)) : new Set<string>()), [role, selectedIds]);
   const grouped = allPermsData?.groupedByDomain ?? {};
   const getSearchStr = useCallback((g: RoleGroupMapping) => (g.groupName ?? '') + (g.groupId ?? ''), []);
@@ -201,7 +215,20 @@ export default function RoleDetail(): JSX.Element {
   };
   const confirmDelete = () => {
     if (deletingGroup) {
-      removeMutation.mutate({ groupId: deletingGroup.groupId, mappingId: deletingGroup.id }, { onSuccess: () => setDeletingGroup(null) });
+      const name = deletingGroup.groupName ?? deletingGroup.groupId;
+      removeMutation.mutate(
+        { groupId: deletingGroup.groupId, mappingId: deletingGroup.id },
+        {
+          onSuccess: () => {
+            setDeletingGroup(null);
+            setPageAlert({ type: 'success', message: `Group '${name}' removed from role successfully.` });
+          },
+          onError: (error) => {
+            setDeletingGroup(null);
+            setPageAlert({ type: 'error', message: (error as Error).message ?? 'Failed to remove group from role. Please try again.' });
+          },
+        },
+      );
     }
   };
 
@@ -255,7 +282,10 @@ export default function RoleDetail(): JSX.Element {
         size="small"
         value={subTab}
         onChange={(_, v) => {
-          if (v !== null) setSubTab(v);
+          if (v !== null) {
+            setSubTab(v);
+            setPageAlert(null);
+          }
         }}
         sx={{ mb: 2 }}>
         <ToggleButton value="permissions">
@@ -267,12 +297,31 @@ export default function RoleDetail(): JSX.Element {
           Groups
         </ToggleButton>
       </ToggleButtonGroup>
+      {pageAlert && (
+        <Alert severity={pageAlert.type} onClose={() => setPageAlert(null)} sx={{ mb: 2 }}>
+          {pageAlert.message}
+        </Alert>
+      )}
       {subTab === 'permissions' && (
         <>
           <PermissionsEditor allPermissions={grouped} selectedIds={permIds} onChange={setSelectedIds} />
           {dirty && (
             <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-              <Button variant="contained" disabled={updateMutation.isPending} onClick={() => updateMutation.mutate({ roleId, roleName: role.roleName, description: role.description, permissionIds: [...permIds] }, { onSuccess: () => setSelectedIds(null) })}>
+              <Button
+                variant="contained"
+                disabled={updateMutation.isPending}
+                onClick={() =>
+                  updateMutation.mutate(
+                    { roleId, roleName: role.roleName, description: role.description, permissionIds: [...permIds] },
+                    {
+                      onSuccess: () => {
+                        setSelectedIds(null);
+                        setPageAlert({ type: 'success', message: 'Permissions saved successfully.' });
+                      },
+                      onError: (error) => setPageAlert({ type: 'error', message: (error as Error).message ?? 'Failed to save permissions. Please try again.' }),
+                    },
+                  )
+                }>
                 Save Permissions
               </Button>
             </Stack>
@@ -316,16 +365,27 @@ export default function RoleDetail(): JSX.Element {
                       <Chip label={envLabel(g, allEnvironments)} size="small" />
                     </TableCell>
                     <TableCell>
-                      <IconButton size="small" aria-label={`Remove ${g.groupName ?? g.groupId} from role`} onClick={() => handleDeleteGroup(g)} disabled={removeMutation.isPending}>
-                        <Trash2 size={16} />
-                      </IconButton>
+                      <Tooltip title="Remove">
+                        <IconButton size="small" aria-label={`Remove ${g.groupName ?? g.groupId} from role`} onClick={() => handleDeleteGroup(g)} disabled={removeMutation.isPending}>
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
-          {addingGroups && <AssignRoleToGroupsDialog orgHandler={orgHandler} roleId={roleId} roleName={role.roleName} existingGroupIds={roleGroups.map((g) => g.groupId)} onClose={() => setAddingGroups(false)} />}
+          {addingGroups && (
+            <AssignRoleToGroupsDialog
+              orgHandler={orgHandler}
+              roleId={roleId}
+              roleName={role.roleName}
+              existingGroupIds={roleGroups.map((g) => g.groupId)}
+              onClose={() => setAddingGroups(false)}
+              onAssigned={() => setPageAlert({ type: 'success', message: 'Role assigned to groups successfully.' })}
+            />
+          )}
         </>
       )}
 

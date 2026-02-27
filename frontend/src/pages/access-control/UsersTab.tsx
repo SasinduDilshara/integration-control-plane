@@ -97,7 +97,7 @@ function CreateUserDialog({ onClose, onSubmit }: { onClose: () => void; onSubmit
   );
 }
 
-function AssignGroupsDialog({ orgHandler, user, onClose }: { orgHandler: string; user: User; onClose: () => void }) {
+function AssignGroupsDialog({ orgHandler, user, onClose, onAssigned }: { orgHandler: string; user: User; onClose: () => void; onAssigned?: () => void }) {
   const { data: allGroups = [] } = useGroups(orgHandler);
   const mutation = useUpdateUserGroups(orgHandler);
   const [selected, setSelected] = useState<Group[]>([]);
@@ -113,7 +113,10 @@ function AssignGroupsDialog({ orgHandler, user, onClose }: { orgHandler: string;
         mutation.mutate(
           { userId: user.userId, groupIds: [...user.groups.map((g) => g.groupId), ...selected.map((g) => g.groupId)] },
           {
-            onSuccess: onClose,
+            onSuccess: () => {
+              onAssigned?.();
+              onClose();
+            },
             onError: (errorObj) => setError(errorObj?.message ?? 'Failed to assign groups. Please try again.'),
           },
         )
@@ -137,7 +140,7 @@ function AssignGroupsDialog({ orgHandler, user, onClose }: { orgHandler: string;
   );
 }
 
-function UserDetailView({ orgHandler, user, onBack, setTableAlert }: { orgHandler: string; user: User; onBack: () => void; setTableAlert: (alert: { type: 'success' | 'error'; message: string }) => void }) {
+function UserDetailView({ orgHandler, user, onBack }: { orgHandler: string; user: User; onBack: () => void }) {
   const { username: currentUsername } = useAuth();
   const { hasOrgPermission } = useAccessControl();
   const canManageUsers = hasOrgPermission(Permissions.USER_MANAGE_USERS);
@@ -146,6 +149,7 @@ function UserDetailView({ orgHandler, user, onBack, setTableAlert }: { orgHandle
   const [search, setSearch] = useState('');
   const [assigning, setAssigning] = useState(false);
   const [removingGroupId, setRemovingGroupId] = useState<string | null>(null);
+  const [viewAlert, setViewAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const getSearchStr = useCallback((g: User['groups'][number]) => `${g.groupName} ${g.groupDescription}`, []);
   const filtered = useFiltered(user.groups, search, getSearchStr);
   const removingGroup = removingGroupId ? user.groups.find((g) => g.groupId === removingGroupId) : null;
@@ -156,7 +160,7 @@ function UserDetailView({ orgHandler, user, onBack, setTableAlert }: { orgHandle
         Back to Users List
       </Button>
       <Stack direction="row" alignItems="center" gap={2} sx={{ mb: 3 }}>
-        <Avatar sx={{ width: 48, height: 48 }}>{getUserInitial(user)}</Avatar>
+        <Avatar sx={{ width: 56, height: 56, fontSize: 24, bgcolor: 'text.primary', color: 'background.paper' }}>{getUserInitial(user)}</Avatar>
         <Stack>
           <Typography variant="h6">{user.displayName}</Typography>
           <Typography variant="body2" color="text.secondary">
@@ -174,6 +178,11 @@ function UserDetailView({ orgHandler, user, onBack, setTableAlert }: { orgHandle
           </Authorized>
         )}
       </Stack>
+      {viewAlert && (
+        <Alert severity={viewAlert.type} onClose={() => setViewAlert(null)} sx={{ mb: 2 }}>
+          {viewAlert.message}
+        </Alert>
+      )}
       <Table>
         <TableHead>
           <TableRow>
@@ -201,9 +210,11 @@ function UserDetailView({ orgHandler, user, onBack, setTableAlert }: { orgHandle
                 {!isSelf && (
                   <Authorized permissions={Permissions.USER_MANAGE_USERS}>
                     <TableCell align="right">
-                      <IconButton size="small" aria-label={`Remove ${g.groupName} group`} onClick={() => setRemovingGroupId(g.groupId)}>
-                        <Trash2 size={16} />
-                      </IconButton>
+                      <Tooltip title="Remove">
+                        <IconButton size="small" aria-label={`Remove ${g.groupName} group`} onClick={() => setRemovingGroupId(g.groupId)}>
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </Tooltip>
                     </TableCell>
                   </Authorized>
                 )}
@@ -212,7 +223,7 @@ function UserDetailView({ orgHandler, user, onBack, setTableAlert }: { orgHandle
           )}
         </TableBody>
       </Table>
-      {assigning && <AssignGroupsDialog orgHandler={orgHandler} user={user} onClose={() => setAssigning(false)} />}
+      {assigning && <AssignGroupsDialog orgHandler={orgHandler} user={user} onClose={() => setAssigning(false)} onAssigned={() => setViewAlert({ type: 'success', message: 'Groups assigned successfully.' })} />}
       {removingGroup && (
         <Dialog open onClose={() => setRemovingGroupId(null)} maxWidth="xs" fullWidth>
           <DialogTitle>Remove Group</DialogTitle>
@@ -231,10 +242,13 @@ function UserDetailView({ orgHandler, user, onBack, setTableAlert }: { orgHandle
                 removeUserMutation.mutate(
                   { groupId: removingGroup.groupId, userId: user.userId },
                   {
-                    onSuccess: () => setRemovingGroupId(null),
+                    onSuccess: () => {
+                      setRemovingGroupId(null);
+                      setViewAlert({ type: 'success', message: 'Group removed successfully.' });
+                    },
                     onError: (error) => {
                       setRemovingGroupId(null);
-                      setTableAlert({ type: 'error', message: error?.message ?? 'Failed to remove user from group. Please try again.' });
+                      setViewAlert({ type: 'error', message: error?.message ?? 'Failed to remove user from group. Please try again.' });
                     },
                   },
                 )
@@ -330,7 +344,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
 
   if (isLoading) return <Loading />;
   if (viewingUser) {
-    return <UserDetailView orgHandler={orgHandler} user={viewingUser} onBack={() => setViewingUserId(null)} setTableAlert={setTableAlert} />;
+    return <UserDetailView orgHandler={orgHandler} user={viewingUser} onBack={() => setViewingUserId(null)} />;
   }
   return (
     <>
@@ -379,10 +393,14 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                     '@media (prefers-reduced-motion: reduce)': { outline: '2px solid', outlineColor: 'warning.main' },
                   }),
                 }}
-                onClick={() => setViewingUserId(u.userId)}
+                onClick={() => {
+                  setTableAlert(null);
+                  setViewingUserId(u.userId);
+                }}
                 onKeyDown={(e) => {
                   if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                     e.preventDefault();
+                    setTableAlert(null);
                     setViewingUserId(u.userId);
                   }
                 }}>
@@ -393,15 +411,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                   </Stack>
                 </TableCell>
                 <TableCell>{u.username}</TableCell>
-                <TableCell>
-                  {u.groupCount > 0 ? (
-                    u.groups.map((g) => <Chip key={g.groupId} label={g.groupName} size="small" sx={{ mr: 0.5 }} />)
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      No groups
-                    </Typography>
-                  )}
-                </TableCell>
+                <TableCell>{u.groupCount > 0 ? u.groups.map((g) => <Chip key={g.groupId} label={g.groupName} size="small" sx={{ mr: 0.5 }} />) : <>—</>}</TableCell>
                 <TableCell align="right">
                   {!u.isSuperAdmin && (
                     <Authorized permissions={Permissions.USER_MANAGE_USERS}>
@@ -448,6 +458,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                           aria-label="Edit user"
                           onClick={(e) => {
                             e.stopPropagation();
+                            setTableAlert(null);
                             setViewingUserId(u.userId);
                           }}>
                           <Pencil size={16} />
