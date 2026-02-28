@@ -1,4 +1,5 @@
 import {
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -35,6 +36,7 @@ import SearchField from '../components/SearchField';
 import { useRoleDetail, useRoleGroups, useGroups, useAddRolesToGroup, useRemoveRoleFromGroup } from '../api/authQueries';
 import { Permissions, ALL_ROLE_MODIFY_PERMISSIONS } from '../constants/permissions';
 import Authorized from '../components/Authorized';
+import { useAccessControl } from '../contexts/AccessControlContext';
 import type { RoleGroupMapping, Group } from '../api/auth';
 import { useAllEnvironments, useProjectByHandler } from '../api/queries';
 import { projectAccessControlUrl } from '../paths';
@@ -43,31 +45,53 @@ function Loading() {
   return <CircularProgress sx={{ display: 'block', mx: 'auto', py: 8 }} />;
 }
 
-function AssignRoleToGroupsDialog({ orgHandler, projectId, roleId, roleName, existingGroupIds, onClose }: { orgHandler: string; projectId: string; roleId: string; roleName: string; existingGroupIds: string[]; onClose: () => void }) {
+function AssignRoleToGroupsDialog({
+  orgHandler,
+  projectId,
+  roleId,
+  roleName,
+  existingGroupIds,
+  onClose,
+  onAssigned,
+}: {
+  orgHandler: string;
+  projectId: string;
+  roleId: string;
+  roleName: string;
+  existingGroupIds: string[];
+  onClose: () => void;
+  onAssigned?: () => void;
+}) {
   const { data: allGroups = [] } = useGroups(orgHandler, projectId);
   const { data: allEnvironments = [] } = useAllEnvironments();
   const mutation = useAddRolesToGroup(orgHandler, projectId);
   const [selected, setSelected] = useState<Group[]>([]);
   const [envMode, setEnvMode] = useState<'all' | 'selected'>('all');
   const [selectedEnvs, setSelectedEnvs] = useState<string[]>([]);
+  const [errorMsg, setErrorMsg] = useState('');
   const available = allGroups.filter((g) => !existingGroupIds.includes(g.groupId));
   const pending = mutation.isPending;
 
-  const assign = () => {
+  const assign = async () => {
     if (envMode === 'selected' && selectedEnvs.length === 0) {
       return;
     }
-    let remaining = selected.length;
+    setErrorMsg('');
     const envUuid = envMode === 'selected' && selectedEnvs.length > 0 ? selectedEnvs[0] : undefined;
-    for (const g of selected) {
-      mutation.mutate(
-        { groupId: g.groupId, roleIds: [roleId], envUuid },
-        {
-          onSuccess: () => {
-            if (--remaining === 0) onClose();
-          },
-        },
-      );
+    const results = await Promise.all(
+      selected.map((g) =>
+        mutation.mutateAsync({ groupId: g.groupId, roleIds: [roleId], envUuid }).then(
+          () => ({ success: true, groupName: g.groupName }),
+          (error) => ({ success: false, groupName: g.groupName, error }),
+        ),
+      ),
+    );
+    const failures = results.filter((r) => !r.success);
+    if (failures.length === 0) {
+      onAssigned?.();
+      onClose();
+    } else {
+      setErrorMsg(`Failed to assign role to: ${failures.map((f) => f.groupName).join(', ')}`);
     }
   };
 
@@ -78,6 +102,11 @@ function AssignRoleToGroupsDialog({ orgHandler, projectId, roleId, roleName, exi
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Select groups to assign the role &quot;{roleName}&quot; to
         </Typography>
+        {errorMsg && (
+          <Alert severity="error" onClose={() => setErrorMsg('')} sx={{ mb: 2 }}>
+            {errorMsg}
+          </Alert>
+        )}
         <Stack spacing={2}>
           <Autocomplete
             multiple
@@ -128,9 +157,11 @@ const envLabel = (m: { envUuid?: string | null }, environments: { id: string; na
 export default function ProjectRoleDetail(): JSX.Element {
   const { orgHandler = 'default', projectHandler = '', roleId = '' } = useParams();
   const navigate = useNavigate();
+  const { hasAnyPermission } = useAccessControl();
   const { data: projectData, isLoading: loadingProject } = useProjectByHandler(projectHandler);
   const projectId = projectData?.id ?? '';
   const roleModifyPerms = [...ALL_ROLE_MODIFY_PERMISSIONS, Permissions.PROJECT_EDIT, Permissions.PROJECT_MANAGE];
+  const colSpan = hasAnyPermission(roleModifyPerms, projectId || undefined) ? 4 : 3;
 
   const { data: role, isLoading: loadingRole } = useRoleDetail(orgHandler, roleId, projectId);
   const { data: roleGroups = [], isLoading: loadingGroups } = useRoleGroups(orgHandler, roleId, projectId);
@@ -139,6 +170,7 @@ export default function ProjectRoleDetail(): JSX.Element {
   const [search, setSearch] = useState('');
   const [addingGroups, setAddingGroups] = useState(false);
   const [deletingGroup, setDeletingGroup] = useState<RoleGroupMapping | null>(null);
+  const [pageAlert, setPageAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const getSearchStr = useCallback((g: RoleGroupMapping) => (g.groupName ?? '') + (g.groupId ?? ''), []);
   const filteredGroups = useMemo(() => {
@@ -153,7 +185,20 @@ export default function ProjectRoleDetail(): JSX.Element {
   };
   const confirmDelete = () => {
     if (deletingGroup) {
-      removeMutation.mutate({ groupId: deletingGroup.groupId, mappingId: deletingGroup.id }, { onSuccess: () => setDeletingGroup(null) });
+      const name = deletingGroup.groupName ?? deletingGroup.groupId;
+      removeMutation.mutate(
+        { groupId: deletingGroup.groupId, mappingId: deletingGroup.id },
+        {
+          onSuccess: () => {
+            setDeletingGroup(null);
+            setPageAlert({ type: 'success', message: `Group '${name}' removed from role successfully.` });
+          },
+          onError: (error) => {
+            setDeletingGroup(null);
+            setPageAlert({ type: 'error', message: (error as Error).message ?? 'Failed to remove group from role. Please try again.' });
+          },
+        },
+      );
     }
   };
 
@@ -189,6 +234,11 @@ export default function ProjectRoleDetail(): JSX.Element {
         Description : {role.description}
       </Typography>
 
+      {pageAlert && (
+        <Alert severity={pageAlert.type} onClose={() => setPageAlert(null)} sx={{ mb: 2 }}>
+          {pageAlert.message}
+        </Alert>
+      )}
       <Stack direction="row" justifyContent="flex-end" gap={1} sx={{ mb: 2 }}>
         <SearchField value={search} onChange={setSearch} />
         <Authorized permissions={roleModifyPerms}>
@@ -198,26 +248,32 @@ export default function ProjectRoleDetail(): JSX.Element {
         </Authorized>
       </Stack>
 
-      {loadingGroups ? (
-        <Loading />
-      ) : filteredGroups.length === 0 ? (
-        <Typography color="text.secondary" align="center" sx={{ py: 4 }}>
-          No records to display
-        </Typography>
-      ) : (
-        <Table>
-          <TableHead>
+      <Table>
+        <TableHead>
+          <TableRow>
+            <TableCell>Group Name</TableCell>
+            <TableCell>Mapping Level</TableCell>
+            <TableCell align="center">Applicable Environment</TableCell>
+            <Authorized permissions={roleModifyPerms}>
+              <TableCell width={80}>Actions</TableCell>
+            </Authorized>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {loadingGroups ? (
             <TableRow>
-              <TableCell>Group Name</TableCell>
-              <TableCell>Mapping Level</TableCell>
-              <TableCell align="center">Applicable Environment</TableCell>
-              <Authorized permissions={roleModifyPerms}>
-                <TableCell width={80}>Actions</TableCell>
-              </Authorized>
+              <TableCell colSpan={colSpan}>
+                <Loading />
+              </TableCell>
             </TableRow>
-          </TableHead>
-          <TableBody>
-            {filteredGroups.map((g) => (
+          ) : filteredGroups.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={4} align="center">
+                No records to display
+              </TableCell>
+            </TableRow>
+          ) : (
+            filteredGroups.map((g) => (
               <TableRow key={g.id}>
                 <TableCell>{g.groupName ?? g.groupId}</TableCell>
                 <TableCell>
@@ -228,7 +284,7 @@ export default function ProjectRoleDetail(): JSX.Element {
                 </TableCell>
                 <Authorized permissions={roleModifyPerms}>
                   <TableCell>
-                    <Tooltip title={!g.projectUuid ? 'Org-level mapping' : ''} placement="right">
+                    <Tooltip title={!g.projectUuid ? 'Org-level mapping' : ''}>
                       <span style={{ display: 'inline-flex' }}>
                         <IconButton
                           size="small"
@@ -242,12 +298,22 @@ export default function ProjectRoleDetail(): JSX.Element {
                   </TableCell>
                 </Authorized>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
+            ))
+          )}
+        </TableBody>
+      </Table>
 
-      {addingGroups && <AssignRoleToGroupsDialog orgHandler={orgHandler} projectId={projectId} roleId={roleId} roleName={role.roleName} existingGroupIds={roleGroups.map((g) => g.groupId)} onClose={() => setAddingGroups(false)} />}
+      {addingGroups && (
+        <AssignRoleToGroupsDialog
+          orgHandler={orgHandler}
+          projectId={projectId}
+          roleId={roleId}
+          roleName={role.roleName}
+          existingGroupIds={roleGroups.map((g) => g.groupId)}
+          onClose={() => setAddingGroups(false)}
+          onAssigned={() => setPageAlert({ type: 'success', message: 'Role assigned to groups successfully.' })}
+        />
+      )}
 
       {deletingGroup && (
         <Dialog open onClose={() => setDeletingGroup(null)} maxWidth="sm" fullWidth>
