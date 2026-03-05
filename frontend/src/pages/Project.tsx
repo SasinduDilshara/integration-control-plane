@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Alert, Avatar, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Grid, IconButton, ListingTable, PageContent, Stack, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
+import { Alert, Avatar, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Grid, IconButton, ListingTable, PageContent, Stack, TablePagination, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { Plus, PlugZap, RefreshCw, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import EmptyListing from '../components/EmptyListing';
 import IntegrationTypesCard from '../components/IntegrationTypesCard';
@@ -86,8 +86,13 @@ function IntegrationsTable({
 }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [deleting, setDeleting] = useState<GqlComponent | null>(null);
-  const filtered = components.filter((c) => !query || c.displayName.toLowerCase().includes(query.toLowerCase()));
+  const filtered = components.filter((c) => !query || c.displayName.toLowerCase().includes(query.trim().toLowerCase()));
+  const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
+  const safePage = Math.min(page, maxPage);
+  const paginated = filtered.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
   return (
     <section>
@@ -130,7 +135,7 @@ function IntegrationsTable({
               </ListingTable.Row>
             </ListingTable.Head>
             <ListingTable.Body>
-              {filtered.map((c) => (
+              {paginated.map((c) => (
                 <ListingTable.Row key={c.id} variant="card" sx={{ cursor: 'pointer' }} onClick={() => onSelect(c.handler)}>
                   <ListingTable.Cell>
                     <Stack direction="row" alignItems="center" gap={1.5}>
@@ -170,6 +175,21 @@ function IntegrationsTable({
             </ListingTable.Body>
           </ListingTable>
         </ListingTable.Container>
+      )}
+      {filtered.length > 10 && (
+        <TablePagination
+          component="div"
+          count={filtered.length}
+          page={safePage}
+          onPageChange={(_, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[10, 20, 50]}
+          sx={{ mt: 1 }}
+        />
       )}
 
       {deleting && <DeleteDialog component={deleting} scope={scope} projectId={projectId} onClose={() => setDeleting(null)} />}

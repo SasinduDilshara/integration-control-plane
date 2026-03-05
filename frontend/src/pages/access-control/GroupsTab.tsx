@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip } from '@wso2/oxygen-ui';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Tooltip } from '@wso2/oxygen-ui';
 import { Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import { useEffect, useState, type JSX } from 'react';
 import { useNavigate, useLocation } from 'react-router';
@@ -53,9 +53,14 @@ export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }:
   const { data: groups, isLoading } = useGroups(orgHandler, projectId, componentId);
   const deleteMutation = useDeleteGroup(orgHandler);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [deletingGroup, setDeletingGroup] = useState<Group | null>(null);
   const [tableAlert, setTableAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const filtered = useFiltered(groups ?? [], search, (g) => `${g.groupName} ${g.description ?? ''}`);
+  const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
+  const safePage = Math.min(page, maxPage);
+  const paginated = filtered.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
   useEffect(() => {
     const state = location.state as { created?: boolean; name?: string } | null;
@@ -99,7 +104,7 @@ export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }:
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((g) => (
+            paginated.map((g) => (
               <TableRow
                 key={g.groupId}
                 hover
@@ -152,6 +157,18 @@ export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }:
           )}
         </TableBody>
       </Table>
+      <TablePagination
+        component="div"
+        count={filtered.length}
+        page={safePage}
+        onPageChange={(_, p) => setPage(p)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[5, 10, 25, 50]}
+      />
       {deletingGroup && (
         <Dialog open onClose={() => setDeletingGroup(null)} maxWidth="sm" fullWidth>
           <DialogTitle>Delete Group</DialogTitle>

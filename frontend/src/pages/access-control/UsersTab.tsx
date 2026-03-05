@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography } from '@wso2/oxygen-ui';
+import { Alert, Button, Chip, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { Key, LockOpen, LogOut, Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import { useState, useCallback, useEffect, type JSX } from 'react';
 import { useNavigate, useLocation } from 'react-router';
@@ -91,8 +91,13 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
   const [unlockingUserId, setUnlockingUserId] = useState<string | null>(null);
   const [resetPasswordResult, setResetPasswordResult] = useState<{ username: string; password: string } | null>(null);
   const [tableAlert, setTableAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const getSearchStr = useCallback((u: User) => `${u.username} ${u.displayName}`, []);
   const filtered = useFiltered(users ?? [], search, getSearchStr);
+  const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
+  const safePage = Math.min(page, maxPage);
+  const paginated = filtered.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
   useEffect(() => {
     const state = location.state as { created?: boolean; name?: string } | null;
@@ -135,7 +140,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((u) => (
+            paginated.map((u) => (
               <TableRow
                 key={u.userId}
                 tabIndex={0}
@@ -227,6 +232,18 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
           )}
         </TableBody>
       </Table>
+      <TablePagination
+        component="div"
+        count={filtered.length}
+        page={safePage}
+        onPageChange={(_, p) => setPage(p)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[5, 10, 25, 50]}
+      />
       {deletingUserId &&
         (() => {
           const u = users?.find((x) => x.userId === deletingUserId);

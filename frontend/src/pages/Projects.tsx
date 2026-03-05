@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Avatar, Button, Card, CardContent, Grid, IconButton, PageContent, PageTitle, Stack, ToggleButton, ToggleButtonGroup, Typography, CircularProgress } from '@wso2/oxygen-ui';
+import { Avatar, Button, Card, CardContent, CircularProgress, Grid, IconButton, PageContent, PageTitle, Stack, TablePagination, ToggleButton, ToggleButtonGroup, Typography } from '@wso2/oxygen-ui';
 import { Clock, Folder, LayoutGrid, List, Plus, RefreshCw, Settings } from '@wso2/oxygen-ui-icons-react';
 import SearchField from '../components/SearchField';
 import { useNavigate } from 'react-router';
@@ -60,11 +60,16 @@ export default function Projects(scope: OrgScope): JSX.Element {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const { hasOrgPermission } = useAccessControl();
   const canCreateProject = hasOrgPermission(Permissions.PROJECT_MANAGE);
   const { data: projects, isLoading, refetch } = useProjects();
 
-  const filtered = (projects ?? []).filter((p) => !query || p.name.toLowerCase().includes(query.toLowerCase()));
+  const filtered = (projects ?? []).filter((p) => !query || p.name.toLowerCase().includes(query.trim().toLowerCase()));
+  const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
+  const safePage = Math.min(page, maxPage);
+  const paginated = filtered.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
   return (
     <PageContent>
@@ -110,13 +115,30 @@ export default function Projects(scope: OrgScope): JSX.Element {
           onAction={() => navigate(newProjectUrl(scope))}
         />
       ) : (
-        <Grid container spacing={2}>
-          {filtered.map((p) => (
-            <Grid key={p.id} size={{ xs: 12, sm: 6, md: 4 }}>
-              <ProjectCard project={p} onClick={() => navigate(resourceUrl(narrow(scope, p.handler), 'overview'))} />
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <Grid container spacing={2}>
+            {paginated.map((p) => (
+              <Grid key={p.id} size={{ xs: 12, sm: 6, md: 4 }}>
+                <ProjectCard project={p} onClick={() => navigate(resourceUrl(narrow(scope, p.handler), 'overview'))} />
+              </Grid>
+            ))}
+          </Grid>
+          {filtered.length > 10 && (
+            <TablePagination
+              component="div"
+              count={filtered.length}
+              page={safePage}
+              onPageChange={(_, p) => setPage(p)}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[10, 20, 50]}
+              sx={{ mt: 2 }}
+            />
+          )}
+        </>
       )}
     </PageContent>
   );

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip } from '@wso2/oxygen-ui';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, IconButton, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, Tooltip } from '@wso2/oxygen-ui';
 import { Pencil, Plus, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import { useState, useEffect, type JSX } from 'react';
 import { useNavigate, useLocation } from 'react-router';
@@ -49,9 +49,14 @@ export function RolesTab({ orgHandler, projectId, projectHandler, componentHandl
   const { data: roles, isLoading } = useRoles(orgHandler, projectId, componentId);
   const deleteMutation = useDeleteRole(orgHandler);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [deletingRole, setDeletingRole] = useState<Role | null>(null);
   const [tableAlert, setTableAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const filtered = useFiltered(roles ?? [], search, (r) => `${r.roleName} ${r.description}`);
+  const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
+  const safePage = Math.min(page, maxPage);
+  const paginated = filtered.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
   useEffect(() => {
     const state = location.state as { created?: boolean; name?: string } | null;
@@ -100,7 +105,7 @@ export function RolesTab({ orgHandler, projectId, projectHandler, componentHandl
               </TableCell>
             </TableRow>
           ) : (
-            filtered.map((r) => (
+            paginated.map((r) => (
               <TableRow
                 key={r.roleId}
                 hover
@@ -150,6 +155,18 @@ export function RolesTab({ orgHandler, projectId, projectHandler, componentHandl
           )}
         </TableBody>
       </Table>
+      <TablePagination
+        component="div"
+        count={filtered.length}
+        page={safePage}
+        onPageChange={(_, p) => setPage(p)}
+        rowsPerPage={rowsPerPage}
+        onRowsPerPageChange={(e) => {
+          setRowsPerPage(parseInt(e.target.value, 10));
+          setPage(0);
+        }}
+        rowsPerPageOptions={[5, 10, 25, 50]}
+      />
       {deletingRole && (
         <Dialog open onClose={() => setDeletingRole(null)} maxWidth="sm" fullWidth>
           <DialogTitle>Delete Role</DialogTitle>
