@@ -15,7 +15,6 @@
 // under the License.
 
 import icp_server.types as types;
-import icp_server.utils;
 
 import ballerina/log;
 import ballerina/sql;
@@ -337,8 +336,7 @@ public isolated function resolveComponentEnvJwtSecret(string componentId, string
         return records[0].jwt_hmac_secret;
     }
 
-    log:printDebug(string `No component-environment JWT secret found for component '${componentId}' + environment '${environmentId}', using global default`);
-    return check utils:resolveConfig(runtimeJwtHMACSecret, secrets);
+    return error(string `No JWT secret provisioned for component '${componentId}' in environment '${environmentId}'. Generate component environment secret for this pair first.`);
 }
 
 // Resolve the JWT HMAC secret for a given runtime ID.
@@ -366,33 +364,48 @@ public isolated function resolveRuntimeJwtSecretByRuntimeId(string runtimeId) re
         }
     }
 
-    log:printDebug(string `No component-environment JWT secret found for runtime '${runtimeId}', using global default`);
-    return check utils:resolveConfig(runtimeJwtHMACSecret, secrets);
+    return error(string `No JWT secret provisioned for runtime '${runtimeId}'. Generate component environment secret for the corresponding component+environment pair first.`);
 }
 
 // Generate (or rotate) the JWT HMAC secret for a component+environment pair.
 // Two UUIDs are concatenated to produce a 72-character secret — well above
 // the 32-character minimum required for HS256 signing.
-// Idempotent: re-running overwrites any existing secret for the same pair (rotation).
-// NOTE: The ON CONFLICT clause uses PostgreSQL/H2 syntax. For MySQL use
-//       INSERT ... ON DUPLICATE KEY UPDATE; for MSSQL use MERGE.
+// Idempotent: re-running rotates (overwrites) any existing secret for the same pair.
+// Uses a database-agnostic INSERT-then-UPDATE pattern compatible with
+// PostgreSQL, MySQL, MSSQL, and H2.
 public isolated function generateComponentEnvironmentSecret(string componentId, string environmentId) returns string|error {
     string jwtHmacSecret = uuid:createRandomUuid() + uuid:createRandomUuid();
 
-    sql:ExecutionResult|sql:Error result = dbClient->execute(`
+    sql:ExecutionResult|sql:Error insertResult = dbClient->execute(`
         INSERT INTO component_environment_secrets (component_id, environment_id, jwt_hmac_secret)
         VALUES (${componentId}, ${environmentId}, ${jwtHmacSecret})
-        ON CONFLICT (component_id, environment_id)
-        DO UPDATE SET jwt_hmac_secret = ${jwtHmacSecret}, updated_at = CURRENT_TIMESTAMP
     `);
 
-    if result is sql:Error {
-        log:printError(string `Failed to upsert JWT secret for component ${componentId} + environment ${environmentId}`, 'error = result);
-        return error("An unexpected error occurred while generating the component-environment JWT secret.", result);
+    if insertResult is sql:ExecutionResult {
+        log:printInfo(string `Generated new JWT HMAC secret for component: ${componentId}, environment: ${environmentId}`);
+        return jwtHmacSecret;
     }
 
-    log:printInfo(string `Generated JWT HMAC secret for component: ${componentId}, environment: ${environmentId}`);
-    return jwtHmacSecret;
+    // Row already exists — rotate the secret with an UPDATE
+    if classifySqlError(insertResult) == DUPLICATE_KEY {
+        sql:ExecutionResult|sql:Error updateResult = dbClient->execute(`
+            UPDATE component_environment_secrets
+            SET jwt_hmac_secret = ${jwtHmacSecret}, updated_at = CURRENT_TIMESTAMP
+            WHERE component_id = ${componentId}
+              AND environment_id = ${environmentId}
+        `);
+
+        if updateResult is sql:Error {
+            log:printError(string `Failed to rotate JWT secret for component ${componentId} + environment ${environmentId}`, 'error = updateResult);
+            return error("An unexpected error occurred while rotating the component-environment JWT secret.", updateResult);
+        }
+
+        log:printInfo(string `Rotated JWT HMAC secret for component: ${componentId}, environment: ${environmentId}`);
+        return jwtHmacSecret;
+    }
+
+    log:printError(string `Failed to generate JWT secret for component ${componentId} + environment ${environmentId}`, 'error = insertResult);
+    return error("An unexpected error occurred while generating the component-environment JWT secret.", insertResult);
 }
 
 // Get all environment IDs where a component has runtimes
