@@ -33,7 +33,7 @@ export default function EmptyListing({ icon, title, description, showAction, act
   return (
     <Box sx={{ textAlign: 'center', py: 8 }}>
       <Box sx={{ opacity: 0.3, mb: 2 }}>{icon}</Box>
-      <Typography variant="h6" gutterBottom>
+      <Typography variant="h6" component="h2" gutterBottom>
         {title}
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

@@ -328,9 +328,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
   return (
     <PageContent>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Metrics
-        </Typography>
+        <Typography variant="h1">Metrics</Typography>
         <Tooltip title="Refresh">
           <IconButton size="small" onClick={() => refetch()} disabled={!metricsRequest}>
             <RefreshCw size={18} />
@@ -340,7 +338,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
 
       <Stack direction="row" gap={2} sx={{ mb: 3 }} flexWrap="wrap" alignItems="center">
         {environments.length > 0 && (
-          <Select value={effectiveEnvId} onChange={(e) => setEnvFilter(e.target.value as string)} size="small" sx={{ minWidth: 140 }} aria-label="Environment">
+          <Select value={effectiveEnvId} onChange={(e) => setEnvFilter(e.target.value as string)} size="small" sx={{ minWidth: 140 }} inputProps={{ 'aria-label': 'Environment' }}>
             {environments.map((e) => (
               <MenuItem key={e.id} value={e.id}>
                 {e.name}
@@ -348,14 +346,14 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
             ))}
           </Select>
         )}
-        <Select value={timeRange} onChange={(e) => setTimeRange(e.target.value as string)} size="small" sx={{ minWidth: 160 }} aria-label="Time range">
+        <Select value={timeRange} onChange={(e) => setTimeRange(e.target.value as string)} size="small" sx={{ minWidth: 160 }} inputProps={{ 'aria-label': 'Time range' }}>
           {Object.keys(TIME_RANGES).map((k) => (
             <MenuItem key={k} value={k}>
               {k}
             </MenuItem>
           ))}
         </Select>
-        <Select value={resolution} onChange={(e) => setResolution(e.target.value as string)} size="small" sx={{ minWidth: 140 }} aria-label="Resolution">
+        <Select value={resolution} onChange={(e) => setResolution(e.target.value as string)} size="small" sx={{ minWidth: 140 }} inputProps={{ 'aria-label': 'Resolution' }}>
           {Object.keys(RESOLUTIONS).map((k) => (
             <MenuItem key={k} value={k}>
               Resolution: {k}
@@ -363,7 +361,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
           ))}
         </Select>
         {!isComponent && components.length > 0 && (
-          <Select value={integrationFilter} onChange={(e) => setIntegrationFilter(e.target.value as string)} size="small" sx={{ minWidth: 160 }} aria-label="Integration">
+          <Select value={integrationFilter} onChange={(e) => setIntegrationFilter(e.target.value as string)} size="small" sx={{ minWidth: 160 }} inputProps={{ 'aria-label': 'Integration' }}>
             <MenuItem value="all">All Integrations</MenuItem>
             {components.map((c) => (
               <MenuItem key={c.id} value={c.id}>
@@ -502,7 +500,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
                 onChange={(e) => setSelectedApiKeys(e.target.value as string[])}
                 size="small"
                 sx={{ minWidth: 200, mb: 2 }}
-                aria-label="API selection"
+                inputProps={{ 'aria-label': 'API selection' }}
                 renderValue={(selected) => ((selected as string[]).length === apis.length ? 'All APIs' : `APIs: ${(selected as string[]).length} selected`)}>
                 {apis.map((a) => (
                   <MenuItem key={a.key} value={a.key}>
