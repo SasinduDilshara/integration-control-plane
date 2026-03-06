@@ -81,9 +81,9 @@ export function ServiceResources({ artifact }: TabProps) {
           return (
             <Box key={i} sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : '#e8f5e9'), p: 1.5, borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
               {methods.map((method, idx) => (
-                <Chip key={idx} label={method.toUpperCase()} size="small" sx={{ bgcolor: '#4caf50', color: (theme) => theme.palette.text.primary, fontWeight: 700 }} />
+                <Chip key={idx} label={method.toUpperCase()} size="small" sx={{ bgcolor: '#4caf50', color: 'white', fontWeight: 700 }} />
               ))}
-              <Typography variant="body2" sx={{ fontFamily: 'monospace', color: (theme) => theme.palette.text.primary }}>
+              <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>
                 {basePath}
                 {r.url ?? ''}
               </Typography>
