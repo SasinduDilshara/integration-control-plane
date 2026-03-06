@@ -900,6 +900,10 @@ service /graphql on graphqlListener {
         if input.componentName.trim().length() == 0 {
             return error("Component name cannot be empty");
         }
+        // Enforces this upper bound to fit the cluster index limit in MSSQL 
+        if input.componentName.length() > 432 {
+            return error("Component name must not exceed 432 characters");
+        }
 
         // Phase 1: Pre-validate all runtimes and permissions (no side-effects)
         ValidatedRuntime[] validatedRuntimes = [];

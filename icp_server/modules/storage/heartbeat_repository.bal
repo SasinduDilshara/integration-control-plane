@@ -614,22 +614,34 @@ isolated function getArtifactDetailsByTypeAndName(string runtimeId, string artif
 
     // Build SELECT clause: include tracing/statistics columns only for tables that have them.
     // MSSQL requires [statistics] as it is a reserved keyword.
+    // MSSQL uses TOP 1 immediately after SELECT; other dialects use LIMIT 1 at the end.
     string statisticsCol = isMSSQL() ? "[statistics]" : "statistics";
+    string topClause = isMSSQL() ? "TOP 1 " : "";
     string selectClause;
     if metadata.hasTracing && metadata.hasStatistics {
-        selectClause = string `SELECT artifact_id, ${metadata.stateColumn} AS state, tracing, ${statisticsCol} FROM ${metadata.tableName}`;
+        selectClause = string `SELECT ${topClause}artifact_id, ${metadata.stateColumn} AS state, tracing, ${statisticsCol} FROM ${metadata.tableName}`;
     } else if metadata.hasTracing {
-        selectClause = string `SELECT artifact_id, ${metadata.stateColumn} AS state, tracing FROM ${metadata.tableName}`;
+        selectClause = string `SELECT ${topClause}artifact_id, ${metadata.stateColumn} AS state, tracing FROM ${metadata.tableName}`;
     } else {
-        selectClause = string `SELECT artifact_id, ${metadata.stateColumn} AS state FROM ${metadata.tableName}`;
+        selectClause = string `SELECT ${topClause}artifact_id, ${metadata.stateColumn} AS state FROM ${metadata.tableName}`;
     }
 
-    sql:ParameterizedQuery query = sql:queryConcat(
-            sqlQueryFromString(selectClause),
-            ` WHERE runtime_id = ${runtimeId} AND `,
-            sqlQueryFromString(metadata.nameColumn),
-            ` = ${artifactName} LIMIT 1`
-    );
+    sql:ParameterizedQuery query;
+    if isMSSQL() {
+        query = sql:queryConcat(
+                sqlQueryFromString(selectClause),
+                ` WHERE runtime_id = ${runtimeId} AND `,
+                sqlQueryFromString(metadata.nameColumn),
+                ` = ${artifactName}`
+        );
+    } else {
+        query = sql:queryConcat(
+                sqlQueryFromString(selectClause),
+                ` WHERE runtime_id = ${runtimeId} AND `,
+                sqlQueryFromString(metadata.nameColumn),
+                ` = ${artifactName} LIMIT 1`
+        );
+    }
 
     stream<types:ArtifactQueryResult, sql:Error?> resultStream = dbClient->query(query);
     types:ArtifactQueryResult[] results = check from types:ArtifactQueryResult state in resultStream
