@@ -215,7 +215,7 @@ export default function Environments(scope: OrgScope | ProjectScope): JSX.Elemen
                       </Stack>
                     </TableCell>
                     <TableCell>{env.description}</TableCell>
-                    <TableCell>{env.critical ? 'Critical Environment' : 'Non-Critical Environment'}</TableCell>
+                    <TableCell>{env.critical ? 'Critical' : 'Non-Critical'}</TableCell>
                     <TableCell>
                       <Stack direction="row" alignItems="center" gap={0.5}>
                         <Clock size={14} />

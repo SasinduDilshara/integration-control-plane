@@ -282,11 +282,9 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
   return (
     <PageContent>
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>
-          Runtime Logs
-        </Typography>
+        <Typography variant="h1">Runtime Logs</Typography>
         {!hasComponent(scope) && (
-          <Select value={integrationFilter} onChange={(e) => setIntegrationFilter(e.target.value as string)} size="small" sx={{ minWidth: 200 }} aria-label="Integration">
+          <Select value={integrationFilter} onChange={(e) => setIntegrationFilter(e.target.value as string)} size="small" sx={{ minWidth: 200 }} inputProps={{ 'aria-label': 'Integration' }}>
             <MenuItem value="all">All Integrations</MenuItem>
             {allComponents.map((c) => (
               <MenuItem key={c.id} value={c.id}>
@@ -314,7 +312,7 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
             }}
             size="small"
             sx={{ minWidth: 160 }}
-            aria-label="Environment">
+            inputProps={{ 'aria-label': 'Environment' }}>
             {environments.map((e) => (
               <MenuItem key={e.id} value={e.id}>
                 <Checkbox checked={envFilter.includes(e.id)} size="small" sx={{ p: 0, mr: 1 }} />
@@ -336,7 +334,7 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
           }}
           size="small"
           sx={{ minWidth: 120 }}
-          aria-label="Log level">
+          inputProps={{ 'aria-label': 'Log level' }}>
           {LOG_LEVELS.map((l) => (
             <MenuItem key={l} value={l}>
               <Checkbox checked={levelFilter.includes(l)} size="small" sx={{ p: 0, mr: 1 }} />
@@ -358,7 +356,7 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
             }}
             size="small"
             sx={{ minWidth: 160 }}
-            aria-label="Time range">
+            inputProps={{ 'aria-label': 'Time range' }}>
             {TIME_PRESETS.map((p) => (
               <MenuItem key={p.label} value={p.label}>
                 {p.label}
@@ -375,7 +373,7 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
           )}
         </Stack>
 
-        <Select value={sortDir} onChange={(e) => setSortDir(e.target.value as 'asc' | 'desc')} size="small" sx={{ minWidth: 120 }} aria-label="Sort direction">
+        <Select value={sortDir} onChange={(e) => setSortDir(e.target.value as 'asc' | 'desc')} size="small" sx={{ minWidth: 120 }} inputProps={{ 'aria-label': 'Sort direction' }}>
           <MenuItem value="desc">Newest first</MenuItem>
           <MenuItem value="asc">Oldest first</MenuItem>
         </Select>
