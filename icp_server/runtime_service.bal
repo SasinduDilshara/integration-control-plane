@@ -51,10 +51,15 @@ service /icp on httpListener {
         do {
             types:Heartbeat heartbeat = check heartbeatJson.cloneWithType(types:Heartbeat);
 
+            // heartbeat.component and heartbeat.environment carry handler/name strings
+            // as written in the runtime's Config.toml (integration = "<handler>",
+            // environment = "<name>").  component_environment_secrets is keyed by UUID,
+            // so resolve both names to their canonical IDs before the secret lookup.
+            string componentId = check storage:getComponentIdByName(heartbeat.component);
+            string environmentId = check storage:getEnvironmentIdByName(heartbeat.environment);
+
             // Resolve the HMAC secret for this component+environment pair and validate the bearer JWT.
-            // heartbeat.component and heartbeat.environment carry the UUIDs written directly to the
-            // runtimes table, so no extra name-to-ID lookup is needed.
-            string jwtSecret = check storage:resolveComponentEnvJwtSecret(heartbeat.component, heartbeat.environment);
+            string jwtSecret = check storage:resolveComponentEnvJwtSecret(componentId, environmentId);
             http:Unauthorized? authResult = validateRuntimeJwt(request, jwtSecret);
             if authResult is http:Unauthorized {
                 log:printWarn(string `Heartbeat rejected — invalid JWT for component: ${heartbeat.component}, environment: ${heartbeat.environment}`);
