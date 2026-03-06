@@ -41,7 +41,7 @@ export function ArtifactApiDefinition({ artifact }: TabProps) {
   return (
     <Stack gap={1}>
       {items.map((r, i) => (
-        <Box key={i} sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : '#e8f5e9', p: 1.5, borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+        <Box key={i} sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : '#e8f5e9'), p: 1.5, borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Chip label={(r.methods ?? 'GET').toString().toUpperCase()} size="small" sx={{ bgcolor: '#4caf50', color: 'white', fontWeight: 700 }} />
           <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>
             {r.path ?? context}
@@ -79,7 +79,7 @@ export function ServiceResources({ artifact }: TabProps) {
           const raw = r.methods ?? [];
           const methods = Array.isArray(raw) ? raw : [String(raw)];
           return (
-            <Box key={i} sx={{ bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : '#e8f5e9', p: 1.5, borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <Box key={i} sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : '#e8f5e9'), p: 1.5, borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
               {methods.map((method, idx) => (
                 <Chip key={idx} label={method.toUpperCase()} size="small" sx={{ bgcolor: '#4caf50', color: (theme) => theme.palette.text.primary, fontWeight: 700 }} />
               ))}

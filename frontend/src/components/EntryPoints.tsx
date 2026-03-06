@@ -630,7 +630,7 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
             <Box
               component="pre"
               sx={{
-                bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100',
+                bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : 'grey.100'),
                 color: (theme) => theme.palette.text.primary,
                 p: 2,
                 borderRadius: 1,
