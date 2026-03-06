@@ -1,8 +1,9 @@
+import icp_server.auth;
+
 import ballerina/http;
-import ballerina/test;
 import ballerina/io;
 import ballerina/jwt;
-import icp_server.auth;
+import ballerina/test;
 
 // =============================================================================
 // Environment GraphQL Tests
@@ -20,23 +21,23 @@ string envNonProdToken = "";
 // JWT configuration
 final readonly & jwt:IssuerSignatureConfig envTestJwtConfig = {
     algorithm: jwt:HS256,
-    config: defaultJwtHMACSecret
+    config: resolvedFrontendJwtHMACSecret
 };
 
 @test:BeforeSuite
 function setupEnvironmentTests() returns error? {
     // Generate token for admin user with full environment management
     envAdminToken = check generateV2Token(
-        "550e8400-e29b-41d4-a716-446655440000",
-        "envadmin",
-        [auth:PERMISSION_ENVIRONMENT_MANAGE, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_INTEGRATION_VIEW]
+            "550e8400-e29b-41d4-a716-446655440000",
+            "envadmin",
+            [auth:PERMISSION_ENVIRONMENT_MANAGE, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_INTEGRATION_VIEW]
     );
 
     // Generate token for non-prod only user
     envNonProdToken = check generateV2Token(
-        "770e8400-e29b-41d4-a716-446655440001",
-        "envnonprod",
-        [auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_INTEGRATION_VIEW]
+            "770e8400-e29b-41d4-a716-446655440001",
+            "envnonprod",
+            [auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_INTEGRATION_VIEW]
     );
 }
 
@@ -69,7 +70,7 @@ function testGetEnvironmentsOrgLevel() returns error? {
     json data = check responsePayload.data;
     json environmentsJson = check data.environments;
     json[] environments = check environmentsJson.ensureType();
-    
+
     io:println("Org admin sees environments count: ", environments.length());
 
     // Verify at least some environments are returned (depends on test data)
@@ -114,7 +115,7 @@ function testGetEnvironmentsProjectLevel() returns error? {
     json data = check responsePayload.data;
     json environmentsJson = check data.environments;
     json[] environments = check environmentsJson.ensureType();
-    
+
     io:println("Project admin sees environments count: ", environments.length());
 }
 
@@ -264,8 +265,8 @@ function testCreateEnvironmentProdDenied() returns error? {
     json errorMsgJson = check firstError.message;
     string errorMsg = errorMsgJson.toString();
     io:println("Error message: ", errorMsg);
-    test:assertTrue(errorMsg.includes("Access denied") || errorMsg.includes("insufficient permissions"), 
-        "Error should mention access denied or insufficient permissions");
+    test:assertTrue(errorMsg.includes("Access denied") || errorMsg.includes("insufficient permissions"),
+            "Error should mention access denied or insufficient permissions");
 }
 
 @test:Config {
@@ -474,8 +475,8 @@ function testUpdateEnvironmentProductionStatusDenied() returns error? {
     json errorMsgJson = check firstError.message;
     string errorMsg = errorMsgJson.toString();
     io:println("Error message: ", errorMsg);
-    test:assertTrue(errorMsg.includes("Access denied") || errorMsg.includes("insufficient permissions"), 
-        "Error should mention access denied or insufficient permissions");
+    test:assertTrue(errorMsg.includes("Access denied") || errorMsg.includes("insufficient permissions"),
+            "Error should mention access denied or insufficient permissions");
 
     // Clean up - delete the environment with full manager
     string deleteMutation = string `

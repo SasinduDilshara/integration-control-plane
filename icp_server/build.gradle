@@ -235,7 +235,7 @@ task initH2CredentialsDatabase {
     
     doLast {
         logger.quiet('╔════════════════════════════════════════╗')
-        logger.quiet('║  Initializing Credentials H2 DB...    ║')
+        logger.quiet('║  Initializing Credentials H2 DB...     ║')
         logger.quiet('╚════════════════════════════════════════╝')
         
         def credentialsInitScript = file('resources/db/init-scripts/credentials_h2_init.sql')

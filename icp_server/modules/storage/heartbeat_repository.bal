@@ -724,6 +724,9 @@ isolated function upsertRuntime(types:Heartbeat heartbeat) returns boolean|error
     string runtimeHostname = heartbeat.runtimeHostname ?: "";
     string runtimePort = heartbeat.runtimePort ?: "";
 
+    // By the time this function is called, validateHeartbeatData has already resolved
+    // heartbeat.component / .environment / .project from handler names to UUIDs in-place,
+    // so they can be used directly as FK values.
     sql:ExecutionResult|error insertRes = dbClient->execute(`
         INSERT INTO runtimes (
             runtime_id, name, runtime_type, status, version,

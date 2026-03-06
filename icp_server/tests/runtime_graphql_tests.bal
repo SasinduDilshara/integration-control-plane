@@ -14,10 +14,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.auth;
+
 import ballerina/http;
 import ballerina/jwt;
 import ballerina/test;
-import icp_server.auth;
 
 // GraphQL endpoint for runtime queries (using test port from Config.toml)
 const string GRAPHQL_URL = "http://localhost:9446/graphql";
@@ -40,7 +41,7 @@ string integrationViewerToken = "";
 // JWT configuration for runtime tests
 final readonly & jwt:IssuerSignatureConfig runtimeTestJwtConfig = {
     algorithm: jwt:HS256,
-    config: defaultJwtHMACSecret
+    config: resolvedFrontendJwtHMACSecret
 };
 
 // =============================================================================
@@ -51,23 +52,23 @@ final readonly & jwt:IssuerSignatureConfig runtimeTestJwtConfig = {
 function setupRuntimeTests() returns error? {
     // Generate token for orgdev (org-level Developer - can view all, edit non-prod)
     orgDevToken = check generateV2Token(
-        "770e8400-e29b-41d4-a716-446655440001",
-        "orgdev",
-        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_PROJECT_VIEW]
+            "770e8400-e29b-41d4-a716-446655440001",
+            "orgdev",
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_PROJECT_VIEW]
     );
 
     // Generate token for projectadmin (project-level Admin - full access to Project 1)
     project1AdminToken = check generateV2Token(
-        "770e8400-e29b-41d4-a716-446655440002",
-        "projectadmin",
-        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_PROJECT_MANAGE]
+            "770e8400-e29b-41d4-a716-446655440002",
+            "projectadmin",
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_PROJECT_MANAGE]
     );
 
     // Generate token for integrationviewer (integration-level - view Component 1 only)
     integrationViewerToken = check generateV2Token(
-        "770e8400-e29b-41d4-a716-446655440003",
-        "integrationviewer",
-        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_PROJECT_VIEW]
+            "770e8400-e29b-41d4-a716-446655440003",
+            "integrationviewer",
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_PROJECT_VIEW]
     );
 }
 
@@ -168,7 +169,7 @@ function testGetRuntimesProjectLevel() returns error? {
 
     // Should see runtimes for component 1 (which is in Project 1)
     test:assertTrue(runtimes.length() > 0, "Project admin should see runtimes for their project's components");
-    
+
     // Keep the original check for reference - though it's less relevant now
     boolean hasRuntime4 = false;
     foreach json runtime in runtimes {

@@ -85,7 +85,7 @@ isolated function contextInit(http:RequestContext reqCtx, http:Request request) 
                 issuer: frontendJwtIssuer,
                 audience: frontendJwtAudience,
                 signatureConfig: {
-                    secret: resolvedDefaultJwtHMACSecret
+                    secret: resolvedFrontendJwtHMACSecret
                 }
             }
         }
@@ -1960,6 +1960,42 @@ service /graphql on graphqlListener {
         };
     }
 
+    // Get (or provision on first call) the JWT HMAC secret for a component+environment pair.
+    // Safe to call every time the "Configure Runtime" dialog opens — returns the existing
+    // secret when already provisioned, generates a new one only when none exists yet.
+    isolated remote function generateComponentEnvironmentJwtSecret(
+            graphql:Context context, string componentId, string environmentId
+    ) returns string|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        string projectId = check storage:getProjectIdByComponentId(componentId);
+        types:AccessScope scope = auth:buildScopeFromContext(projectId, integrationId = componentId, envId = environmentId);
+
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+            return error("Insufficient permissions to view or provision this component's JWT secret");
+        }
+
+        return check storage:getOrGenerateComponentEnvironmentSecret(componentId, environmentId);
+    }
+
+    // Rotate (replace) the JWT HMAC secret for a component+environment pair.
+    // All runtimes for this component+environment must be reconfigured with the new secret.
+    isolated remote function rotateComponentEnvironmentJwtSecret(
+            graphql:Context context, string componentId, string environmentId
+    ) returns string|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        string projectId = check storage:getProjectIdByComponentId(componentId);
+        types:AccessScope scope = auth:buildScopeFromContext(projectId, integrationId = componentId, envId = environmentId);
+
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+            return error("Insufficient permissions to rotate this component's JWT secret");
+        }
+
+        log:printInfo(string `JWT secret rotation requested for component: ${componentId}, environment: ${environmentId}`, userId = userContext.userId);
+        return check storage:generateComponentEnvironmentSecret(componentId, environmentId);
+    }
+
     // Mutation to trigger a task
     isolated remote function triggerArtifact(graphql:Context context, types:ArtifactTriggerInput input) returns types:ArtifactTriggerResponse|error {
         types:UserContextV2 userContext = check extractUserContext(context);
@@ -2147,7 +2183,7 @@ service /graphql on graphqlListener {
             return error("Failed to create management API client");
         }
         // Generate an HMAC JWT (same mechanism as heartbeat) to call the ICP internal API
-        string hmacToken = check storage:issueRuntimeHmacToken();
+        string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
         // Fetch artifact source via ICP Internal API (/icp/artifacts)
         string artifactPath = string `${ICP_ARTIFACTS_PATH}?type=${artifactType}&name=${artifactName}`;
@@ -2271,7 +2307,7 @@ service /graphql on graphqlListener {
         }
 
         // Generate an HMAC JWT to call the ICP internal API
-        string hmacToken = check storage:issueRuntimeHmacToken();
+        string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
         http:Response|error wsdlResponse = mgmtClient->get(artifactPath, {
             "Authorization": string `Bearer ${hmacToken}`,
@@ -2371,7 +2407,7 @@ service /graphql on graphqlListener {
         }
 
         // Generate an HMAC JWT (same mechanism as heartbeat) to call the ICP internal API
-        string hmacToken = check storage:issueRuntimeHmacToken();
+        string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
         // Fetch local entry via ICP Internal API (/icp/artifacts/local-entry)
         string artifactPath = string `${ICP_ARTIFACTS_PATH}/local-entry?name=${entryName}`;
@@ -2460,7 +2496,7 @@ service /graphql on graphqlListener {
             return error("Failed to create management API client");
         }
 
-        string hmacToken = check storage:issueRuntimeHmacToken();
+        string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
         string artifactPath = string `${ICP_ARTIFACTS_PATH}/inbound/parameters?name=${inboundName}`;
         log:printDebug("Sending ICP internal API inbound parameters request",
                 runtimeId = runtime.runtimeId,
@@ -2594,7 +2630,7 @@ service /graphql on graphqlListener {
         }
 
         // Generate an HMAC JWT (same mechanism as heartbeat) to call the ICP internal API
-        string hmacToken = check storage:issueRuntimeHmacToken();
+        string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
         // Fetch parameters via ICP Internal API (/icp/artifacts/parameters)
         string artifactPath = string `${ICP_ARTIFACTS_PATH}/parameters?type=${artifactType}&name=${artifactName}`;

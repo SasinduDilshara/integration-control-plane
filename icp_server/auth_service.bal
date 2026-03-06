@@ -54,7 +54,9 @@ service /auth on httpListener {
             }
             int retryAfterSeconds = 0;
             json|error ras = lockoutPayload.retryAfterSeconds;
-            if ras is int { retryAfterSeconds = ras; }
+            if ras is int {
+                retryAfterSeconds = ras;
+            }
             return <http:TooManyRequests>{
                 headers: {"Retry-After": retryAfterSeconds.toString()},
                 body: lockoutPayload
@@ -164,12 +166,12 @@ service /auth on httpListener {
 
         // Store refresh token in database
         error? storeResult = storage:storeRefreshToken(
-            tokenId,
-            userId,
-            tokenHash,
-            refreshTokenExpiryTime,
-            userAgent,
-            ipAddress
+                tokenId,
+                userId,
+                tokenHash,
+                refreshTokenExpiryTime,
+                userAgent,
+                ipAddress
         );
 
         if storeResult is error {
@@ -308,12 +310,12 @@ service /auth on httpListener {
 
         // Store refresh token in database
         error? storeResult = storage:storeRefreshToken(
-            tokenId,
-            userDetails.userId,
-            tokenHash,
-            refreshTokenExpiryTime,
-            userAgent,
-            ipAddress
+                tokenId,
+                userDetails.userId,
+                tokenHash,
+                refreshTokenExpiryTime,
+                userAgent,
+                ipAddress
         );
 
         if storeResult is error {
@@ -347,7 +349,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -414,7 +416,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -486,7 +488,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -642,12 +644,12 @@ service /auth on httpListener {
 
         // Store new refresh token
         error? storeResult = storage:storeRefreshToken(
-            newTokenId,
-            userDetails.userId,
-            newTokenHash,
-            refreshTokenExpiryTime,
-            userAgent,
-            ipAddress
+                newTokenId,
+                userDetails.userId,
+                newTokenHash,
+                refreshTokenExpiryTime,
+                userAgent,
+                ipAddress
         );
 
         if storeResult is error {
@@ -681,7 +683,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -787,7 +789,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -801,7 +803,7 @@ service /auth on httpListener {
         if userContext is error {
             return utils:createUnauthorizedError("Invalid or missing authentication token");
         }
-        
+
         // Build scope based on provided parameters
         types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
         if projectId is string {
@@ -810,7 +812,7 @@ service /auth on httpListener {
         if integrationId is string {
             scope.integrationUuid = integrationId;
         }
-        
+
         boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope);
         if hasPermission is error {
             log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
@@ -854,7 +856,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -925,7 +927,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -978,7 +980,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1041,7 +1043,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1107,7 +1109,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1197,7 +1199,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1271,7 +1273,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1331,7 +1333,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1464,7 +1466,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1525,7 +1527,7 @@ service /auth on httpListener {
             // Project-level scope
             string projectUuid = <string>input.projectUuid;
             scope.projectUuid = projectUuid;
-        } 
+        }
 
         string[] permissionsList = [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS];
         if scope.integrationUuid is string {
@@ -1533,18 +1535,18 @@ service /auth on httpListener {
         } else if scope.projectUuid is string {
             permissionsList.push(auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE);
         }
-        boolean|error canAssign = auth:hasAnyPermission(userContext.userId, 
-            permissionsList, 
-            scope
+        boolean|error canAssign = auth:hasAnyPermission(userContext.userId,
+                permissionsList,
+                scope
         );
         if canAssign is error {
             log:printError("Error checking project scope permissions", canAssign, userId = userContext.userId);
             return utils:createInternalServerError("Error checking permissions");
         }
-        
+
         if !canAssign {
-            log:printWarn("User lacks permission to assign roles at this scope", 
-                userId = userContext.userId, projectUuid = input.projectUuid ?: "N/A", integrationUuid = input.integrationUuid ?: "N/A");
+            log:printWarn("User lacks permission to assign roles at this scope",
+                    userId = userContext.userId, projectUuid = input.projectUuid ?: "N/A", integrationUuid = input.integrationUuid ?: "N/A");
             return <http:Forbidden>{
                 body: {
                     message: "You do not have permission to assign roles at this scope"
@@ -1619,7 +1621,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1627,7 +1629,7 @@ service /auth on httpListener {
     }
     resource function delete orgs/[string orgHandle]/groups/[string groupId]/roles/[int mappingId](http:Request req)
             returns http:Ok|http:NotFound|http:Forbidden|http:InternalServerError|http:Unauthorized|error {
-        
+
         log:printInfo("Removing role from group", orgHandle = orgHandle, groupId = groupId, mappingId = mappingId);
 
         // Extract user context for granular permission checks
@@ -1661,10 +1663,10 @@ service /auth on httpListener {
 
         // Verify the mapping belongs to the specified group
         if mapping.groupId != groupId {
-            log:printWarn("Mapping does not belong to specified group", 
-                mappingId = mappingId, 
-                mappingGroupId = mapping.groupId, 
-                requestedGroupId = groupId);
+            log:printWarn("Mapping does not belong to specified group",
+                    mappingId = mappingId,
+                    mappingGroupId = mapping.groupId,
+                    requestedGroupId = groupId);
             return <http:NotFound>{
                 body: {
                     message: string `Group-role mapping ${mappingId} does not belong to group ${groupId}`
@@ -1685,27 +1687,27 @@ service /auth on httpListener {
             // Project-level scope
             string projectUuid = <string>mapping.projectUuid;
             scope.projectUuid = projectUuid;
-        } 
+        }
 
         string[] permissionsList = [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS];
         if scope.integrationUuid is string {
             permissionsList.push(auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE);
-        } 
+        }
         if scope.projectUuid is string {
             permissionsList.push(auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE);
         }
-        boolean|error canAssign = auth:hasAnyPermission(userContext.userId, 
-            permissionsList, 
-            scope
+        boolean|error canAssign = auth:hasAnyPermission(userContext.userId,
+                permissionsList,
+                scope
         );
         if canAssign is error {
             log:printError("Error checking project scope permissions", canAssign, userId = userContext.userId);
             return utils:createInternalServerError("Error checking permissions");
         }
-        
+
         if !canAssign {
-            log:printWarn("User lacks permission to remove roles at this scope", 
-                userId = userContext.userId, projectUuid = mapping.projectUuid ?: "N/A", integrationUuid = mapping.integrationUuid ?: "N/A");
+            log:printWarn("User lacks permission to remove roles at this scope",
+                    userId = userContext.userId, projectUuid = mapping.projectUuid ?: "N/A", integrationUuid = mapping.integrationUuid ?: "N/A");
             return <http:Forbidden>{
                 body: {
                     message: "You do not have permission to remove roles at this scope"
@@ -1739,7 +1741,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1755,7 +1757,7 @@ service /auth on httpListener {
         if userContext is error {
             return utils:createUnauthorizedError("Invalid or missing authentication token");
         }
-        
+
         // Build scope based on provided parameters
         types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
         if projectId is string {
@@ -1764,7 +1766,7 @@ service /auth on httpListener {
         if integrationId is string {
             scope.integrationUuid = integrationId;
         }
-        
+
         boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_USER_MANAGE_USERS, auth:PERMISSION_USER_UPDATE_USERS, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope);
         if hasPermission is error {
             log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
@@ -1848,7 +1850,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1903,7 +1905,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1919,7 +1921,7 @@ service /auth on httpListener {
         if userContext is error {
             return utils:createUnauthorizedError("Invalid or missing authentication token");
         }
-        
+
         // Verify the requesting user is fetching their own details
         if userContext.userId != userId {
             log:printWarn("User attempted to fetch another user's details", requestingUserId = userContext.userId, targetUserId = userId);
@@ -1956,7 +1958,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -1990,12 +1992,13 @@ service /auth on httpListener {
         string username = check payload.username;
         string password = check payload.password;
         string displayName = check payload.displayName;
-        
+
         // Handle optional groupIds array
         string[] groupIds = [];
         json|error groupIdsField = payload.groupIds;
         if groupIdsField is json[] {
-            groupIds = from var id in groupIdsField select id.toString();
+            groupIds = from var id in groupIdsField
+                select id.toString();
         }
 
         // Validate required fields
@@ -2065,7 +2068,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2134,7 +2137,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2227,7 +2230,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2291,7 +2294,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2305,7 +2308,7 @@ service /auth on httpListener {
         if userContext is error {
             return utils:createUnauthorizedError("Invalid or missing authentication token");
         }
-        
+
         // Build scope based on provided parameters
         types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
         if projectId is string {
@@ -2314,7 +2317,7 @@ service /auth on httpListener {
         if integrationId is string {
             scope.integrationUuid = integrationId;
         }
-        
+
         boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope);
         if hasPermission is error {
             log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
@@ -2358,7 +2361,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2442,7 +2445,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2456,7 +2459,7 @@ service /auth on httpListener {
         if userContext is error {
             return utils:createUnauthorizedError("Invalid or missing authentication token");
         }
-        
+
         // Build scope based on provided parameters
         types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
         if projectId is string {
@@ -2465,7 +2468,7 @@ service /auth on httpListener {
         if integrationId is string {
             scope.integrationUuid = integrationId;
         }
-        
+
         boolean|error hasPermission = auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_USER_UPDATE_GROUP_ROLES, auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope);
         if hasPermission is error {
             log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
@@ -2522,7 +2525,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2634,7 +2637,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2696,7 +2699,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
@@ -2710,7 +2713,7 @@ service /auth on httpListener {
         if userContext is error {
             return utils:createUnauthorizedError("Invalid or missing authentication token");
         }
-        
+
         // Build scope based on provided parameters
         types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
         if projectId is string {
@@ -2719,13 +2722,19 @@ service /auth on httpListener {
         if integrationId is string {
             scope.integrationUuid = integrationId;
         }
-        
+
         boolean|error hasPermission = auth:hasAnyPermission(
-            userContext.userId,
-            [auth:PERMISSION_USER_MANAGE_ROLES, auth:PERMISSION_USER_MANAGE_GROUPS, auth:PERMISSION_USER_UPDATE_GROUP_ROLES,
-             auth:PERMISSION_PROJECT_EDIT, auth:PERMISSION_PROJECT_MANAGE,
-             auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE],
-            scope
+                userContext.userId,
+                [
+                    auth:PERMISSION_USER_MANAGE_ROLES,
+                    auth:PERMISSION_USER_MANAGE_GROUPS,
+                    auth:PERMISSION_USER_UPDATE_GROUP_ROLES,
+                    auth:PERMISSION_PROJECT_EDIT,
+                    auth:PERMISSION_PROJECT_MANAGE,
+                    auth:PERMISSION_INTEGRATION_EDIT,
+                    auth:PERMISSION_INTEGRATION_MANAGE
+                ],
+                scope
         );
         if hasPermission is error {
             log:printError("Error checking permissions", hasPermission, userId = userContext.userId);
@@ -2810,7 +2819,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
                 // No specific scopes required - all authenticated users can see available permissions
@@ -2857,24 +2866,24 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }
         ]
     }
     isolated resource function get orgs/[string orgHandle]/users/[string userId]/permissions(
-        http:Request req,
-        string? projectId = (),
-        string? integrationId = (),
-        string? environmentId = ()
+            http:Request req,
+            string? projectId = (),
+            string? integrationId = (),
+            string? environmentId = ()
     ) returns http:Ok|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Fetching effective permissions for user",
-            orgHandle = orgHandle,
-            userId = userId,
-            projectId = projectId,
-            integrationId = integrationId,
-            environmentId = environmentId
+                orgHandle = orgHandle,
+                userId = userId,
+                projectId = projectId,
+                integrationId = integrationId,
+                environmentId = environmentId
         );
 
         // Extract user context from token to verify access
@@ -2895,8 +2904,8 @@ service /auth on httpListener {
             }
             if !hasAdminAccess {
                 log:printWarn("User attempted to fetch permissions for another user without admin privileges",
-                    requestingUserId = userContext.userId,
-                    targetUserId = userId
+                        requestingUserId = userContext.userId,
+                        targetUserId = userId
                 );
                 return <http:Forbidden>{
                     body: {
@@ -2951,7 +2960,7 @@ service /auth on httpListener {
                     issuer: frontendJwtIssuer,
                     audience: frontendJwtAudience,
                     signatureConfig: {
-                        secret: resolvedDefaultJwtHMACSecret
+                        secret: resolvedFrontendJwtHMACSecret
                     }
                 }
             }

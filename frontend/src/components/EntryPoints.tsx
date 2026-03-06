@@ -41,14 +41,16 @@ import {
   Tooltip,
   Typography,
 } from '@wso2/oxygen-ui';
-import { RefreshCw, ListFilter, LayoutGrid, Settings, Copy, Check, Play } from '@wso2/oxygen-ui-icons-react';
+import { RefreshCw, ListFilter, LayoutGrid, Settings, Copy, Check, Play, ShieldAlert } from '@wso2/oxygen-ui-icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useArtifacts, useRefreshEnvironmentArtifacts, type GqlArtifact, type GqlEnvironment } from '../api/queries';
 import { useUpdateArtifactTracingStatus, useUpdateArtifactStatisticsStatus } from '../api/artifactToggleMutations';
-import { useUpdateArtifactStatus, useUpdateListenerState, useTriggerTask } from '../api/mutations';
+import { useUpdateArtifactStatus, useUpdateListenerState, useTriggerTask, useGenerateComponentEnvironmentJwtSecret, useRotateComponentEnvironmentJwtSecret } from '../api/mutations';
 import { ArtifactApiDefinition, ServiceResources, AutomationExecutions, ProxyApiReference } from './ArtifactTabs';
 import { ArtifactTypeSelector } from './ArtifactDetail';
+import Authorized from './Authorized';
+import { Permissions } from '../constants/permissions';
 import { ENTRY_POINT_CONFIG, ENTRY_POINT_DETAIL_TABS, type SelectedArtifact, type TabProps } from './artifact-config';
 
 function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArtifact; onOpenDrawerTab: (tab: string) => void }) {
@@ -528,6 +530,26 @@ export default function Environment({
   const [viewMode, setViewMode] = useState<'entryPoints' | 'allArtifacts'>('entryPoints');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false);
+
+  const generateSecretMutation = useGenerateComponentEnvironmentJwtSecret();
+  const rotateSecretMutation = useRotateComponentEnvironmentJwtSecret();
+
+  // The currently displayed secret — updated by both generate and rotate.
+  const activeSecret = rotateSecretMutation.data ?? generateSecretMutation.data ?? '';
+  const secretLoading = generateSecretMutation.isPending || rotateSecretMutation.isPending;
+  const secretError = generateSecretMutation.error?.message ?? rotateSecretMutation.error?.message ?? null;
+
+  const handleOpenConfigDialog = () => {
+    setConfigDialogOpen(true);
+    // Fetch existing secret (or provision one if this is the first time).
+    generateSecretMutation.mutate({ componentId, environmentId: env.id });
+  };
+
+  const handleRotateSecret = () => {
+    setRotateConfirmOpen(false);
+    rotateSecretMutation.mutate({ componentId, environmentId: env.id });
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -538,8 +560,8 @@ export default function Environment({
     }
   };
 
-  const generateTomlConfig = () => {
-    // Generate a runtime ID placeholder - in production, this should come from actual runtime data
+  const generateTomlConfig = (secret: string) => {
+    // Runtime ID is not yet known until the runtime first registers.
     const runtimeId = '<Runtime ID>';
 
     if (componentType === 'BI') {
@@ -549,7 +571,7 @@ integration="${componentHandler}"
 project="${projectHandler}"
 environment="${env.name}"
 heartbeatInterval=10
-# serverUrl="https://localhost:9445"`;
+runtimeJwtHMACSecret="${secret || '<generating…>'}"\n# serverUrl="https://localhost:9445"`;
     } else {
       // MI
       return `[icp_config]
@@ -558,13 +580,13 @@ runtime = "${runtimeId}"
 environment = "${env.name}"
 project = "${projectHandler}"
 integration = "${componentHandler}"
-# icp_url = "https://icp-server:9443"`;
+runtimeJwtHMACSecret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"`;
     }
   };
 
   const handleCopyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(generateTomlConfig());
+      await navigator.clipboard.writeText(generateTomlConfig(activeSecret));
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
     } catch (err) {
@@ -589,15 +611,22 @@ integration = "${componentHandler}"
                 }}
               />
             </IconButton>
-            <Button variant="contained" startIcon={<Settings size={16} />} onClick={() => setConfigDialogOpen(true)}>
-              Configure Runtime
-            </Button>
+            <Authorized permissions={Permissions.INTEGRATION_MANAGE}>
+              <Button variant="contained" startIcon={<Settings size={16} />} onClick={handleOpenConfigDialog}>
+                Configure Runtime
+              </Button>
+            </Authorized>
           </Stack>
         </Stack>
         <Dialog open={configDialogOpen} onClose={() => setConfigDialogOpen(false)} maxWidth="sm" fullWidth>
           <DialogTitle>Configure Runtime - {env.name}</DialogTitle>
           <DialogContent>
             <DialogContentText sx={{ mb: 2 }}>Add the following configuration to your runtime's {componentType === 'BI' ? 'Config.toml' : 'deployment.toml'} file:</DialogContentText>
+            {secretError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {secretError}
+              </Alert>
+            )}
             <Box
               component="pre"
               sx={{
@@ -609,15 +638,46 @@ integration = "${componentHandler}"
                 fontSize: 13,
                 border: '1px solid',
                 borderColor: 'divider',
+                opacity: secretLoading ? 0.5 : 1,
+                transition: 'opacity 0.2s',
               }}>
-              {generateTomlConfig()}
+              {secretLoading ? 'Loading configuration…' : generateTomlConfig(activeSecret)}
             </Box>
+            <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ mt: 1 }}>
+              <Authorized permissions={Permissions.INTEGRATION_MANAGE}>
+                <Tooltip title="Generate a new secret. Existing runtimes must be restarted with the new value.">
+                  <span>
+                    <Button size="small" color="error" variant="outlined" startIcon={<ShieldAlert size={14} />} disabled={secretLoading} onClick={() => setRotateConfirmOpen(true)}>
+                      Rotate Secret
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Authorized>
+            </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setConfigDialogOpen(false)}>Cancel</Button>
-            <Button variant="contained" startIcon={copySuccess ? <Check size={16} /> : <Copy size={16} />} onClick={handleCopyToClipboard}>
+            <Button onClick={() => setConfigDialogOpen(false)}>Close</Button>
+            <Button variant="contained" startIcon={copySuccess ? <Check size={16} /> : <Copy size={16} />} onClick={handleCopyToClipboard} disabled={secretLoading || !activeSecret}>
               {copySuccess ? 'Copied!' : 'Copy to Clipboard'}
             </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Rotate-secret confirmation dialog */}
+        <Dialog open={rotateConfirmOpen} onClose={() => setRotateConfirmOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle>Rotate JWT Secret?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              This will generate a new HMAC secret for <strong>{env.name}</strong>. Any running runtimes will stop authenticating until they are restarted with the new <code>runtimeJwtHMACSecret</code> value.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setRotateConfirmOpen(false)}>Cancel</Button>
+            <Authorized permissions={Permissions.INTEGRATION_MANAGE}>
+              <Button variant="contained" color="error" startIcon={<ShieldAlert size={16} />} onClick={handleRotateSecret} disabled={rotateSecretMutation.isPending}>
+                {rotateSecretMutation.isPending ? 'Rotating…' : 'Rotate'}
+              </Button>
+            </Authorized>
           </DialogActions>
         </Dialog>
         <Divider sx={{ my: 2 }} />

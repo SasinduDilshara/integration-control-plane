@@ -14,10 +14,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import icp_server.auth;
+
 import ballerina/http;
 import ballerina/jwt;
 import ballerina/test;
-import icp_server.auth;
 
 // HTTP client for testing - matches configuration from auth_tests.bal
 const string AUTH_SERVICE_URL = "https://localhost:9445";
@@ -34,7 +35,7 @@ final http:Client testAuthClient = check new (AUTH_SERVICE_URL,
 // JWT configuration for test token generation
 final readonly & jwt:IssuerSignatureConfig testJwtConfig = {
     algorithm: jwt:HS256,
-    config: defaultJwtHMACSecret
+    config: resolvedFrontendJwtHMACSecret
 };
 
 // Shared test tokens - generated once in BeforeSuite and reused
@@ -47,39 +48,39 @@ public string projectAdminToken = "";
 function initializeTestTokens() returns error? {
     // Generate admin token (super admin with full access)
     adminToken = check generateV2Token(
-        "550e8400-e29b-41d4-a716-446655440000", 
-        "admin", 
-        [
-            auth:PERMISSION_INTEGRATION_VIEW,
-            auth:PERMISSION_INTEGRATION_EDIT,
-            auth:PERMISSION_INTEGRATION_MANAGE,
-            auth:PERMISSION_ENVIRONMENT_MANAGE,
-            auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD,
-            auth:PERMISSION_PROJECT_VIEW,
-            auth:PERMISSION_PROJECT_EDIT,
-            auth:PERMISSION_PROJECT_MANAGE,
-            auth:PERMISSION_OBSERVABILITY_VIEW_LOGS,
-            auth:PERMISSION_OBSERVABILITY_VIEW_INSIGHTS,
-            auth:PERMISSION_USER_MANAGE_USERS,
-            auth:PERMISSION_USER_UPDATE_USERS,
-            auth:PERMISSION_USER_MANAGE_GROUPS,
-            auth:PERMISSION_USER_MANAGE_ROLES,
-            auth:PERMISSION_USER_UPDATE_GROUP_ROLES
-        ]
+            "550e8400-e29b-41d4-a716-446655440000",
+            "admin",
+            [
+                auth:PERMISSION_INTEGRATION_VIEW,
+                auth:PERMISSION_INTEGRATION_EDIT,
+                auth:PERMISSION_INTEGRATION_MANAGE,
+                auth:PERMISSION_ENVIRONMENT_MANAGE,
+                auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD,
+                auth:PERMISSION_PROJECT_VIEW,
+                auth:PERMISSION_PROJECT_EDIT,
+                auth:PERMISSION_PROJECT_MANAGE,
+                auth:PERMISSION_OBSERVABILITY_VIEW_LOGS,
+                auth:PERMISSION_OBSERVABILITY_VIEW_INSIGHTS,
+                auth:PERMISSION_USER_MANAGE_USERS,
+                auth:PERMISSION_USER_UPDATE_USERS,
+                auth:PERMISSION_USER_MANAGE_GROUPS,
+                auth:PERMISSION_USER_MANAGE_ROLES,
+                auth:PERMISSION_USER_UPDATE_GROUP_ROLES
+            ]
     );
-    
+
     // Generate regular user token (test user with some roles)
     regularUserToken = check generateV2Token(
-        "770e8400-e29b-41d4-a716-446655440001",
-        "orgdev",
-        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_PROJECT_VIEW]
+            "770e8400-e29b-41d4-a716-446655440001",
+            "orgdev",
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_PROJECT_VIEW]
     );
-    
+
     // Generate project admin token (admin in project-1 only)
     projectAdminToken = check generateV2Token(
-        "770e8400-e29b-41d4-a716-446655440002",
-        "projectadmin",
-        [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_PROJECT_MANAGE]
+            "770e8400-e29b-41d4-a716-446655440002",
+            "projectadmin",
+            [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE, auth:PERMISSION_PROJECT_VIEW, auth:PERMISSION_PROJECT_MANAGE]
     );
 }
 
@@ -102,7 +103,7 @@ public function generateExpiredToken(string userId, string username) returns str
             "isProjectAuthor": false
         }
     };
-    
+
     return jwt:issue(issuerConfig);
 }
 
@@ -126,13 +127,13 @@ public function getAuthenticatedToken(string username, string password) returns 
         username: username,
         password: password
     };
-    
+
     http:Response response = check testAuthClient->post("/auth/login", loginRequest);
-    
+
     if response.statusCode != 200 {
         return error(string `Login failed with status ${response.statusCode}`);
     }
-    
+
     json responseBody = check response.getJsonPayload();
     json token = check responseBody.token;
     return check token.ensureType();

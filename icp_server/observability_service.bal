@@ -49,7 +49,7 @@ listener http:Listener observabilityListener = new (observabilityServerPort,
                 issuer: frontendJwtIssuer,
                 audience: frontendJwtAudience,
                 signatureConfig: {
-                    secret: resolvedDefaultobservabilityJwtHMACSecret
+                    secret: resolvedObservabilityJwtHMACSecret
                 }
             }
         }
@@ -69,10 +69,12 @@ service /icp/observability on observabilityListener {
         log:printInfo("Received log request: " + logRequest.toString());
 
         // Transform ICPLogEntryRequest to LogEntryRequest by resolving component/environment filters to runtime IDs
-        string[] runtimeIdList = check resolveRuntimeIds({componentId: logRequest.componentId,
-                                                          componentIdList: logRequest.componentIdList,
-                                                          environmentId: logRequest.environmentId,
-                                                          environmentList: logRequest.environmentList});
+        string[] runtimeIdList = check resolveRuntimeIds({
+                                                             componentId: logRequest.componentId,
+                                                             componentIdList: logRequest.componentIdList,
+                                                             environmentId: logRequest.environmentId,
+                                                             environmentList: logRequest.environmentList
+                                                         });
 
         // If component/environment filters were provided but no runtimes found, return empty result
         boolean hasFilters = logRequest.componentId is string ||
@@ -90,7 +92,7 @@ service /icp/observability on observabilityListener {
 
         // Resolve runtime types to request
         types:LogIndexRuntimeType componentType = check resolveComponentTypes(runtimeIdList);
-        log:printDebug("Resolved component type: " + componentType.toString() + " for log filtering");  
+        log:printDebug("Resolved component type: " + componentType.toString() + " for log filtering");
 
         // Construct LogEntryRequest with resolved runtime IDs and copy other filter fields
         types:LogEntryRequest adaptorRequest = {
@@ -112,14 +114,16 @@ service /icp/observability on observabilityListener {
     }
 
     resource function post metrics(http:Request request, types:ICPMetricEntryRequest metricRequest) returns types:MetricEntriesResponse|error {
-        
+
         log:printInfo("Received metric request: " + metricRequest.toString());
 
         // Transform ICPMetricEntryRequest to MetricEntryRequest by resolving component/environment filters to runtime IDs
-        string[] runtimeIdList = check resolveRuntimeIds({componentId: metricRequest.componentId,
-                                                          componentIdList: metricRequest.componentIdList,
-                                                          environmentId: metricRequest.environmentId,
-                                                          environmentList: metricRequest.environmentList});
+        string[] runtimeIdList = check resolveRuntimeIds({
+                                                             componentId: metricRequest.componentId,
+                                                             componentIdList: metricRequest.componentIdList,
+                                                             environmentId: metricRequest.environmentId,
+                                                             environmentList: metricRequest.environmentList
+                                                         });
 
         // If component/environment filters were provided but no runtimes found, return empty result
         boolean hasFilters = metricRequest.componentId is string ||
@@ -156,7 +160,7 @@ service /icp/observability on observabilityListener {
 }
 
 // Resolve component/environment filters to runtime IDs by querying the storage layer
-isolated function resolveRuntimeIds(types:IntegrationDetails integrationDetails) returns string[]|error { 
+isolated function resolveRuntimeIds(types:IntegrationDetails integrationDetails) returns string[]|error {
     string[] runtimeIds = [];
 
     // Build list of component IDs to query
@@ -230,7 +234,7 @@ isolated function resolveComponentTypes(string[] runtimeIdList) returns types:Lo
     }
     if hasBIRuntime {
         return "BI";
-    }else if hasMIRuntime {
+    } else if hasMIRuntime {
         return "MI";
     } else {
         string errorMsg = "Could not resolve component types for filtering logs";

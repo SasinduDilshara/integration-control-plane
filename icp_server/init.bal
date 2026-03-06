@@ -44,7 +44,7 @@ function init() returns error? {
     // Initialize JWT signature config used throughout auth_service.bal
     jwtSignatureConfig = {
         algorithm: jwt:HS256,
-        config: resolvedDefaultJwtHMACSecret
+        config: resolvedFrontendJwtHMACSecret
     };
 
     // Initialize OpenSearch client using resolved credentials
