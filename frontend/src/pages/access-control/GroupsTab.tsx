@@ -145,6 +145,7 @@ export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }:
                       <Tooltip title="Delete">
                         <IconButton
                           size="small"
+                          color="error"
                           aria-label={`Delete ${g.groupName}`}
                           onClick={(e) => {
                             e.stopPropagation();

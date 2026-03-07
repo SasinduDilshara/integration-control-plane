@@ -143,6 +143,7 @@ export function RolesTab({ orgHandler, projectId, projectHandler, componentHandl
                       <Tooltip title="Delete">
                         <IconButton
                           size="small"
+                          color="error"
                           aria-label={`Delete ${r.roleName}`}
                           onClick={(e) => {
                             e.stopPropagation();

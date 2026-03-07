@@ -219,6 +219,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                         <Tooltip title="Delete">
                           <IconButton
                             size="small"
+                            color="error"
                             aria-label="Delete user"
                             onClick={(e) => {
                               e.stopPropagation();

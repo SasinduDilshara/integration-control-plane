@@ -211,7 +211,7 @@ export default function Environments(scope: OrgScope | ProjectScope): JSX.Elemen
                             </IconButton>
                           </Tooltip>
                           <Tooltip title="Delete">
-                            <IconButton size="small" aria-label={`Delete ${env.name}`} onClick={() => setDeleting(env)}>
+                            <IconButton size="small" color="error" aria-label={`Delete ${env.name}`} onClick={() => setDeleting(env)}>
                               <Trash2 size={16} />
                             </IconButton>
                           </Tooltip>
