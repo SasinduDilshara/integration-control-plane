@@ -137,7 +137,7 @@ function IntegrationsTable({
             </ListingTable.Head>
             <ListingTable.Body>
               {paginated.map((c) => (
-                <ListingTable.Row key={c.id} variant="card" sx={{ cursor: 'pointer' }} onClick={() => onSelect(c.handler)}>
+                <ListingTable.Row key={c.id} variant="card" clickable onClick={() => onSelect(c.handler)}>
                   <ListingTable.Cell>
                     <Stack direction="row" alignItems="center" gap={1.5}>
                       <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: 'action.hover', color: 'text.primary' }}>{c.displayName[0].toUpperCase()}</Avatar>
