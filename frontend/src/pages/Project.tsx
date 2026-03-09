@@ -137,7 +137,20 @@ function IntegrationsTable({
             </ListingTable.Head>
             <ListingTable.Body>
               {paginated.map((c) => (
-                <ListingTable.Row key={c.id} variant="card" sx={{ cursor: 'pointer' }} onClick={() => onSelect(c.handler)}>
+                <ListingTable.Row
+                  key={c.id}
+                  variant="card"
+                  clickable
+                  hover
+                  tabIndex={0}
+                  aria-label={`View details for ${c.displayName}`}
+                  onClick={() => onSelect(c.handler)}
+                  onKeyDown={(e) => {
+                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                      if (e.key === ' ') e.preventDefault();
+                      onSelect(c.handler);
+                    }
+                  }}>
                   <ListingTable.Cell>
                     <Stack direction="row" alignItems="center" gap={1.5}>
                       <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: 'action.hover', color: 'text.primary' }}>{c.displayName[0].toUpperCase()}</Avatar>
