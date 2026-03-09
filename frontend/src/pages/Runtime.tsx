@@ -44,7 +44,7 @@ export default function Runtime(scope: ProjectScope | ComponentScope): JSX.Eleme
 
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [deleting, setDeleting] = useState<GqlRuntime | null>(null);
   const deleteMutation = useDeleteRuntime();
 
@@ -89,32 +89,40 @@ export default function Runtime(scope: ProjectScope | ComponentScope): JSX.Eleme
                 </ListingTable.Row>
               </ListingTable.Head>
               <ListingTable.Body>
-                {paged.map((r) => (
-                  <ListingTable.Row key={r.runtimeId}>
-                    <ListingTable.Cell>{r.runtimeId}</ListingTable.Cell>
-                    <ListingTable.Cell>{r.runtimeType}</ListingTable.Cell>
-                    <ListingTable.Cell>
-                      <Chip label={r.status} size="small" color={r.status === 'RUNNING' ? 'success' : 'default'} />
-                    </ListingTable.Cell>
-                    <ListingTable.Cell>{r.version || '—'}</ListingTable.Cell>
-                    <ListingTable.Cell>
-                      <Typography variant="body2">{formatPlatform(r)}</Typography>
-                      {r.platformHome && (
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          {r.platformHome}
-                        </Typography>
-                      )}
-                    </ListingTable.Cell>
-                    <ListingTable.Cell>{[r.osName, r.osVersion].filter(Boolean).join(' ')}</ListingTable.Cell>
-                    <ListingTable.Cell>{r.registrationTime ? formatDate(r.registrationTime) : '—'}</ListingTable.Cell>
-                    <ListingTable.Cell>{r.lastHeartbeat ? formatDate(r.lastHeartbeat) : '—'}</ListingTable.Cell>
-                    <ListingTable.Cell>
-                      <IconButton size="small" color="error" aria-label={`Delete runtime ${r.runtimeId}`} disabled={r.status === 'RUNNING'} onClick={() => setDeleting(r)}>
-                        <Trash2 size={16} />
-                      </IconButton>
+                {paged.length === 0 ? (
+                  <ListingTable.Row>
+                    <ListingTable.Cell colSpan={9} align="center">
+                      No records to display
                     </ListingTable.Cell>
                   </ListingTable.Row>
-                ))}
+                ) : (
+                  paged.map((r) => (
+                    <ListingTable.Row key={r.runtimeId}>
+                      <ListingTable.Cell>{r.runtimeId}</ListingTable.Cell>
+                      <ListingTable.Cell>{r.runtimeType}</ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Chip label={r.status} size="small" color={r.status === 'RUNNING' ? 'success' : 'default'} />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>{r.version || '—'}</ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Typography variant="body2">{formatPlatform(r)}</Typography>
+                        {r.platformHome && (
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {r.platformHome}
+                          </Typography>
+                        )}
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>{[r.osName, r.osVersion].filter(Boolean).join(' ')}</ListingTable.Cell>
+                      <ListingTable.Cell>{r.registrationTime ? formatDate(r.registrationTime) : '—'}</ListingTable.Cell>
+                      <ListingTable.Cell>{r.lastHeartbeat ? formatDate(r.lastHeartbeat) : '—'}</ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <IconButton size="small" color="error" aria-label={`Delete runtime ${r.runtimeId}`} disabled={r.status === 'RUNNING'} onClick={() => setDeleting(r)}>
+                          <Trash2 size={16} />
+                        </IconButton>
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
+                  ))
+                )}
               </ListingTable.Body>
             </ListingTable>
             <TablePagination
@@ -128,7 +136,7 @@ export default function Runtime(scope: ProjectScope | ComponentScope): JSX.Eleme
                 setRowsPerPage(parseInt(e.target.value, 10));
                 setPage(0);
               }}
-              rowsPerPageOptions={[5, 10, 25]}
+              rowsPerPageOptions={[5, 10, 25, 50]}
             />
           </ListingTable.Container>
         </>
