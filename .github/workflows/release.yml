@@ -159,8 +159,15 @@ jobs:
           echo "Extracted to: $EXTRACT_DIR"
           ls -la "$EXTRACT_DIR"
 
+      - name: Install Trivy
+        run: |
+          wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+          echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+          sudo apt-get update -qq
+          sudo apt-get install -y trivy
+
       - name: Run Trivy security scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           scan-type: "fs"
           scan-ref: "build/distribution/extracted"
@@ -168,6 +175,7 @@ jobs:
           output: "trivy-results.sarif"
           severity: "CRITICAL,HIGH"
           exit-code: "0"
+          skip-setup-trivy: true
 
       - name: Upload Trivy scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -176,16 +184,17 @@ jobs:
           sarif_file: "trivy-results.sarif"
 
       - name: Trivy security gate (block on HIGH/CRITICAL)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         with:
           scan-type: "fs"
           scan-ref: "build/distribution/extracted"
           format: "table"
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+          skip-setup-trivy: true
 
       - name: Generate Trivy report (table format)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.30.0
         if: always()
         with:
           scan-type: "fs"
@@ -193,6 +202,7 @@ jobs:
           format: "table"
           severity: "CRITICAL,HIGH,MEDIUM"
           exit-code: "0"
+          skip-setup-trivy: true
 
       - name: Upload Trivy scan results as artifact
         uses: actions/upload-artifact@v4
