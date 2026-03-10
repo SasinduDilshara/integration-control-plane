@@ -114,7 +114,7 @@ export default function AppLayout(): JSX.Element {
   const componentId = currentComponent?.id;
 
   /** Returns the resource if the user has permission at the target scope, or 'overview' as fallback. */
-  const canAccessResource = (targetScope: Parameters<typeof hasProject>[0], target: Resource): Resource => {
+  const canAccessResource = (targetScope: Parameters<typeof hasProject>[0], target: Resource, targetProjectId: string | undefined = projectId || undefined, targetComponentId: string | undefined = componentId): Resource => {
     switch (target) {
       case 'overview':
         return 'overview';
@@ -122,7 +122,7 @@ export default function AppLayout(): JSX.Element {
         const perms: string[] = [...ALL_USER_MGT_PERMISSIONS];
         if (hasProject(targetScope)) perms.push(Permissions.PROJECT_EDIT, Permissions.PROJECT_MANAGE);
         if (hasComponent(targetScope)) perms.push(Permissions.INTEGRATION_EDIT, Permissions.INTEGRATION_MANAGE);
-        return hasAnyPermission(perms, projectId || undefined, componentId) ? 'access-control' : 'overview';
+        return hasAnyPermission(perms, targetProjectId, targetComponentId) ? 'access-control' : 'overview';
       }
       case 'logs':
         return 'logs';
@@ -167,7 +167,10 @@ export default function AppLayout(): JSX.Element {
               sx={{ display: 'inline-flex', alignSelf: 'center', cursor: 'pointer' }}
               onClick={() => navigate(orgUrl(scope.org))}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') navigate(orgUrl(scope.org));
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  navigate(orgUrl(scope.org));
+                }
               }}>
               <ComplexSelect
                 value={scope.org}
@@ -269,7 +272,7 @@ export default function AppLayout(): JSX.Element {
                         setProjectSearch('');
                         const newScope = narrow({ level: 'organizations', org: scope.org }, p.handler);
                         const target = resource ?? 'overview';
-                        navigate(resourceUrl(newScope, canAccessResource(newScope, target)));
+                        navigate(resourceUrl(newScope, canAccessResource(newScope, target, p.id, undefined)));
                       }}>
                       {p.name}
                     </MenuItem>
@@ -285,7 +288,10 @@ export default function AppLayout(): JSX.Element {
                   sx={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }}
                   onClick={() => navigate(resourceUrl({ level: 'projects' as const, org: scope.org, project: scope.project }, 'overview'))}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') navigate(resourceUrl({ level: 'projects' as const, org: scope.org, project: scope.project }, 'overview'));
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(resourceUrl({ level: 'projects' as const, org: scope.org, project: scope.project }, 'overview'));
+                    }
                   }}>
                   <ComplexSelect
                     value={scope.project}
@@ -297,11 +303,21 @@ export default function AppLayout(): JSX.Element {
                     IconComponent={({ ownerState: _ownerState, ...props }) => (
                       <span
                         {...props}
+                        role="button"
+                        tabIndex={0}
                         style={{ position: 'absolute', top: 'auto', bottom: '0', right: '6px', display: 'flex', pointerEvents: 'all', cursor: 'pointer' }}
                         onClick={(e) => {
                           e.stopPropagation();
                           setProjectMenuDir('below');
                           setProjectMenuAnchor(projectCardRef.current);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setProjectMenuDir('below');
+                            setProjectMenuAnchor(projectCardRef.current);
+                          }
                         }}>
                         <ChevronDown size={18} />
                       </span>
@@ -403,7 +419,7 @@ export default function AppLayout(): JSX.Element {
                             setComponentSearch('');
                             const newScope = narrow({ level: 'projects', org: scope.org, project: scope.project }, c.handler);
                             const target = resource ?? 'overview';
-                            navigate(resourceUrl(newScope, canAccessResource(newScope, target)));
+                            navigate(resourceUrl(newScope, canAccessResource(newScope, target, projectId, c.id)));
                           }}>
                           {c.displayName}
                         </MenuItem>
@@ -420,7 +436,10 @@ export default function AppLayout(): JSX.Element {
                 sx={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }}
                 onClick={() => navigate(resourceUrl(scope, 'overview'))}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') navigate(resourceUrl(scope, 'overview'));
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(resourceUrl(scope, 'overview'));
+                  }
                 }}>
                 <ComplexSelect
                   value={scope.component}
@@ -432,11 +451,21 @@ export default function AppLayout(): JSX.Element {
                   IconComponent={({ ownerState: _ownerState, ...props }) => (
                     <span
                       {...props}
+                      role="button"
+                      tabIndex={0}
                       style={{ position: 'absolute', top: 'auto', bottom: '0', right: '6px', display: 'flex', pointerEvents: 'all', cursor: 'pointer' }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setComponentMenuDir('below');
                         setComponentMenuAnchor(integrationCardRef.current);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setComponentMenuDir('below');
+                          setComponentMenuAnchor(integrationCardRef.current);
+                        }
                       }}>
                       <ChevronDown size={18} />
                     </span>
