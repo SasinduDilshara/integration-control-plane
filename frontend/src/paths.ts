@@ -97,6 +97,14 @@ export function editOrgGroupUrl(orgHandler: string, groupId: string): string {
   return `/organizations/${orgHandler}/settings/access-control/groups/${groupId}/edit`;
 }
 
+export function projectGroupDetailUrl(orgHandler: string, projectHandler: string, groupId: string): string {
+  return `/organizations/${orgHandler}/projects/${projectHandler}/settings/access-control/groups/${groupId}/edit`;
+}
+
+export function componentGroupDetailUrl(orgHandler: string, projectHandler: string, componentHandler: string, groupId: string): string {
+  return `/organizations/${orgHandler}/projects/${projectHandler}/components/${componentHandler}/settings/access-control/groups/${groupId}/edit`;
+}
+
 export function orgRoleDetailUrl(orgHandler: string, roleId: string): string {
   return `/organizations/${orgHandler}/settings/access-control/roles/${roleId}/edit`;
 }

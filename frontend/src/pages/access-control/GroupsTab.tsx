@@ -26,7 +26,7 @@ import { Permissions } from '../../constants/permissions';
 import { useGroups, useDeleteGroup, useGroupRoles, useGroupUsers } from '../../api/authQueries';
 import { useComponentByHandler } from '../../api/queries';
 import type { Group } from '../../api/auth';
-import { newOrgGroupUrl, editOrgGroupUrl } from '../../paths';
+import { newOrgGroupUrl, editOrgGroupUrl, projectGroupDetailUrl, componentGroupDetailUrl } from '../../paths';
 import { Loading } from './shared';
 import { useFiltered } from './utils';
 
@@ -42,7 +42,7 @@ function GroupRoleCount({ orgHandler, groupId, projectId, componentId }: { orgHa
   return <>{roles.length}</>;
 }
 
-export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }: { orgHandler: string; projectId?: string; projectHandler?: string; componentHandler?: string; readOnly?: boolean }): JSX.Element {
+export function GroupsTab({ orgHandler, projectId, projectHandler, componentHandler, readOnly }: { orgHandler: string; projectId?: string; projectHandler?: string; componentHandler?: string; readOnly?: boolean }): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { hasOrgPermission } = useAccessControl();
@@ -61,6 +61,12 @@ export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }:
   const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
   const safePage = Math.min(page, maxPage);
   const paginated = filtered.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
+
+  const getGroupDetailUrl = (groupId: string) => {
+    if (componentHandler && projectHandler) return componentGroupDetailUrl(orgHandler, projectHandler, componentHandler, groupId);
+    if (projectHandler) return projectGroupDetailUrl(orgHandler, projectHandler, groupId);
+    return editOrgGroupUrl(orgHandler, groupId);
+  };
 
   useEffect(() => {
     const state = location.state as { created?: boolean; name?: string } | null;
@@ -114,11 +120,11 @@ export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }:
                   hover
                   tabIndex={0}
                   aria-label={`View details for ${g.groupName}`}
-                  onClick={() => navigate(editOrgGroupUrl(orgHandler, g.groupId))}
+                  onClick={() => navigate(getGroupDetailUrl(g.groupId))}
                   onKeyDown={(e) => {
                     if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                       if (e.key === ' ') e.preventDefault();
-                      navigate(editOrgGroupUrl(orgHandler, g.groupId));
+                      navigate(getGroupDetailUrl(g.groupId));
                     }
                   }}>
                   <ListingTable.Cell>{g.groupName}</ListingTable.Cell>
@@ -136,7 +142,7 @@ export function GroupsTab({ orgHandler, projectId, componentHandler, readOnly }:
                         aria-label={`Edit ${g.groupName}`}
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(editOrgGroupUrl(orgHandler, g.groupId));
+                          navigate(getGroupDetailUrl(g.groupId));
                         }}>
                         <Pencil size={16} />
                       </IconButton>

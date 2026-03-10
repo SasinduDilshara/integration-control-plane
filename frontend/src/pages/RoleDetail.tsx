@@ -31,15 +31,11 @@ import {
   DialogTitle,
   FormControlLabel,
   IconButton,
+  ListingTable,
   MenuItem,
   Radio,
   RadioGroup,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -273,21 +269,13 @@ export default function RoleDetail(): JSX.Element {
       <Typography variant="h1" sx={{ mb: 4 }}>
         Manage Role
       </Typography>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" sx={{ mb: 2 }}>
-        <Stack>
-          <Typography variant="h6">Role : {role.roleName}</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Description : {role.description}
-          </Typography>
-        </Stack>
-        {subTab === 'groups' && (
-          <Stack direction="row" gap={1}>
-            <SearchField value={search} onChange={setSearch} />
-            <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingGroups(true)}>
-              Add Group
-            </Button>
-          </Stack>
-        )}
+      <Stack sx={{ mb: 2 }}>
+        <Typography variant="h6" component="h2">
+          Role : {role.roleName}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Description : {role.description}
+        </Typography>
       </Stack>
       <ToggleButtonGroup
         exclusive
@@ -342,52 +330,62 @@ export default function RoleDetail(): JSX.Element {
       )}
       {subTab === 'groups' && (
         <>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Group Name</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Mapping Level</TableCell>
-                <TableCell align="center">Applicable Environment</TableCell>
-                <TableCell width={80}>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loadingGroups ? (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <Loading />
-                  </TableCell>
-                </TableRow>
-              ) : filteredGroups.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center">
-                    No records to display
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredGroups.map((g) => (
-                  <TableRow key={g.id}>
-                    <TableCell>{g.groupName ?? g.groupId}</TableCell>
-                    <TableCell>{g.groupDescription}</TableCell>
-                    <TableCell>
-                      <Chip label={mappingLevel(g)} size="small" />
-                    </TableCell>
-                    <TableCell align="center">
-                      <Chip label={envLabel(g, allEnvironments)} size="small" />
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title="Remove">
-                        <IconButton size="small" aria-label={`Remove ${g.groupName ?? g.groupId} from role`} onClick={() => handleDeleteGroup(g)} disabled={removeMutation.isPending}>
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </Tooltip>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+          <ListingTable.Container>
+            <ListingTable.Toolbar
+              searchSlot={<SearchField value={search} onChange={setSearch} />}
+              actions={
+                <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingGroups(true)}>
+                  Add Groups
+                </Button>
+              }
+            />
+            <ListingTable>
+              <ListingTable.Head>
+                <ListingTable.Row>
+                  <ListingTable.Cell>Group Name</ListingTable.Cell>
+                  <ListingTable.Cell>Description</ListingTable.Cell>
+                  <ListingTable.Cell>Mapping Level</ListingTable.Cell>
+                  <ListingTable.Cell align="center">Applicable Environment</ListingTable.Cell>
+                  <ListingTable.Cell align="right">Actions</ListingTable.Cell>
+                </ListingTable.Row>
+              </ListingTable.Head>
+              <ListingTable.Body>
+                {loadingGroups ? (
+                  <ListingTable.Row>
+                    <ListingTable.Cell colSpan={5}>
+                      <Loading />
+                    </ListingTable.Cell>
+                  </ListingTable.Row>
+                ) : filteredGroups.length === 0 ? (
+                  <ListingTable.Row>
+                    <ListingTable.Cell colSpan={5} align="center">
+                      No records to display
+                    </ListingTable.Cell>
+                  </ListingTable.Row>
+                ) : (
+                  filteredGroups.map((g) => (
+                    <ListingTable.Row key={g.id}>
+                      <ListingTable.Cell>{g.groupName ?? g.groupId}</ListingTable.Cell>
+                      <ListingTable.Cell>{g.groupDescription}</ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Chip label={mappingLevel(g)} size="small" />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell align="center">
+                        <Chip label={envLabel(g, allEnvironments)} size="small" />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell align="right">
+                        <Tooltip title="Remove">
+                          <IconButton size="small" color="error" aria-label={`Remove ${g.groupName ?? g.groupId} from role`} onClick={() => handleDeleteGroup(g)} disabled={removeMutation.isPending}>
+                            <Trash2 size={16} />
+                          </IconButton>
+                        </Tooltip>
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
+                  ))
+                )}
+              </ListingTable.Body>
+            </ListingTable>
+          </ListingTable.Container>
           {addingGroups && (
             <AssignRoleToGroupsDialog
               orgHandler={orgHandler}
