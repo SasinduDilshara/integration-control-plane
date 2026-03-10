@@ -160,7 +160,15 @@ export default function AppLayout(): JSX.Element {
             </Header.BrandLogo>
           </Header.Brand>
           <Header.Switchers showDivider={false}>
-            <Box ref={orgCardRef} sx={{ display: 'inline-flex', alignSelf: 'center', cursor: 'pointer' }} onClick={() => navigate(orgUrl(scope.org))}>
+            <Box
+              ref={orgCardRef}
+              role="button"
+              tabIndex={0}
+              sx={{ display: 'inline-flex', alignSelf: 'center', cursor: 'pointer' }}
+              onClick={() => navigate(orgUrl(scope.org))}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') navigate(orgUrl(scope.org));
+              }}>
               <ComplexSelect
                 value={scope.org}
                 open={false}
@@ -270,7 +278,15 @@ export default function AppLayout(): JSX.Element {
             </Popover>
             {hasProject(scope) && (
               <>
-                <Box ref={projectCardRef} sx={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }} onClick={() => navigate(resourceUrl({ level: 'projects' as const, org: scope.org, project: scope.project }, 'overview'))}>
+                <Box
+                  ref={projectCardRef}
+                  role="button"
+                  tabIndex={0}
+                  sx={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }}
+                  onClick={() => navigate(resourceUrl({ level: 'projects' as const, org: scope.org, project: scope.project }, 'overview'))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') navigate(resourceUrl({ level: 'projects' as const, org: scope.org, project: scope.project }, 'overview'));
+                  }}>
                   <ComplexSelect
                     value={scope.project}
                     open={false}
@@ -397,7 +413,15 @@ export default function AppLayout(): JSX.Element {
               </>
             )}
             {hasComponent(scope) && (
-              <Box ref={integrationCardRef} sx={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }} onClick={() => navigate(resourceUrl(scope, 'overview'))}>
+              <Box
+                ref={integrationCardRef}
+                role="button"
+                tabIndex={0}
+                sx={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }}
+                onClick={() => navigate(resourceUrl(scope, 'overview'))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') navigate(resourceUrl(scope, 'overview'));
+                }}>
                 <ComplexSelect
                   value={scope.component}
                   open={false}

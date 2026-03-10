@@ -45,7 +45,7 @@ import { useState, useMemo, useCallback, type JSX } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import SearchField from '../components/SearchField';
 import { useRoleDetail, useRoleGroups, useGroups, useAddRolesToGroup, useRemoveRoleFromGroup } from '../api/authQueries';
-import { Permissions, ALL_USER_MGT_PERMISSIONS } from '../constants/permissions';
+import { Permissions, ALL_ROLE_MODIFY_PERMISSIONS } from '../constants/permissions';
 import { useAccessControl } from '../contexts/AccessControlContext';
 import type { RoleGroupMapping, Group } from '../api/auth';
 import { useAllEnvironments, useProjectByHandler, useComponentByHandler } from '../api/queries';
@@ -177,7 +177,7 @@ export default function ComponentRoleDetail(): JSX.Element {
   const projectId = projectData?.id ?? '';
   const { data: component, isLoading: loadingComponent } = useComponentByHandler(projectId, componentHandler);
   const componentId = component?.id;
-  const roleModifyPerms = [...ALL_USER_MGT_PERMISSIONS, Permissions.PROJECT_EDIT, Permissions.PROJECT_MANAGE, Permissions.INTEGRATION_EDIT, Permissions.INTEGRATION_MANAGE];
+  const roleModifyPerms = [...ALL_ROLE_MODIFY_PERMISSIONS, Permissions.PROJECT_EDIT, Permissions.PROJECT_MANAGE, Permissions.INTEGRATION_EDIT, Permissions.INTEGRATION_MANAGE];
 
   const { data: role, isLoading: loadingRole } = useRoleDetail(orgHandler, roleId, projectId, componentId);
   const { data: roleGroups = [], isLoading: loadingGroups } = useRoleGroups(orgHandler, roleId, projectId, componentId);
@@ -188,6 +188,8 @@ export default function ComponentRoleDetail(): JSX.Element {
   const [deletingGroup, setDeletingGroup] = useState<RoleGroupMapping | null>(null);
   const [pageAlert, setPageAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const actionsVisible = hasAnyPermission(roleModifyPerms, projectId || undefined, componentId);
+  const colCount = actionsVisible ? 4 : 3;
   const getSearchStr = useCallback((g: RoleGroupMapping) => (g.groupName ?? '') + (g.groupId ?? ''), []);
   const filteredGroups = useMemo(() => {
     if (!search.trim()) return roleGroups;
@@ -262,7 +264,7 @@ export default function ComponentRoleDetail(): JSX.Element {
         <ListingTable.Toolbar
           searchSlot={<SearchField value={search} onChange={setSearch} />}
           actions={
-            hasAnyPermission(roleModifyPerms, projectId || undefined, componentId) && (
+            actionsVisible && (
               <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingGroups(true)}>
                 Add Group
               </Button>
@@ -275,19 +277,19 @@ export default function ComponentRoleDetail(): JSX.Element {
               <ListingTable.Cell>Group Name</ListingTable.Cell>
               <ListingTable.Cell>Mapping Level</ListingTable.Cell>
               <ListingTable.Cell align="center">Applicable Environment</ListingTable.Cell>
-              {hasAnyPermission(roleModifyPerms, projectId || undefined, componentId) && <ListingTable.Cell align="right">Actions</ListingTable.Cell>}
+              {actionsVisible && <ListingTable.Cell align="right">Actions</ListingTable.Cell>}
             </ListingTable.Row>
           </ListingTable.Head>
           <ListingTable.Body>
             {loadingGroups ? (
               <ListingTable.Row>
-                <ListingTable.Cell colSpan={4}>
+                <ListingTable.Cell colSpan={colCount}>
                   <Loading />
                 </ListingTable.Cell>
               </ListingTable.Row>
             ) : filteredGroups.length === 0 ? (
               <ListingTable.Row>
-                <ListingTable.Cell colSpan={4} align="center">
+                <ListingTable.Cell colSpan={colCount} align="center">
                   No records to display
                 </ListingTable.Cell>
               </ListingTable.Row>
@@ -301,7 +303,7 @@ export default function ComponentRoleDetail(): JSX.Element {
                   <ListingTable.Cell align="center">
                     <Chip label={envLabel(g, allEnvironments)} size="small" />
                   </ListingTable.Cell>
-                  {hasAnyPermission(roleModifyPerms, projectId || undefined, componentId) && (
+                  {actionsVisible && (
                     <ListingTable.Cell align="right">
                       <Tooltip title={!g.integrationUuid ? 'Org/Project-level mapping' : 'Remove'}>
                         <span style={{ display: 'inline-flex' }}>

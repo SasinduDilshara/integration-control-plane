@@ -53,6 +53,7 @@ import { useAllEnvironments } from '../api/queries';
 import { orgAccessControlUrl } from '../paths';
 import Authorized from '../components/Authorized';
 import { ALL_ROLE_MODIFY_PERMISSIONS } from '../constants/permissions';
+import { useAccessControl } from '../contexts/AccessControlContext';
 
 function Loading() {
   return <CircularProgress sx={{ display: 'block', mx: 'auto', py: 8 }} />;
@@ -203,6 +204,9 @@ export default function RoleDetail(): JSX.Element {
   const { orgHandler = 'default', roleId = '' } = useParams();
   const navigate = useNavigate();
   const roleModifyPerms: string[] = [...ALL_ROLE_MODIFY_PERMISSIONS];
+  const { hasAnyPermission } = useAccessControl();
+  const canModifyRole = hasAnyPermission(roleModifyPerms);
+  const colCount = canModifyRole ? 5 : 4;
   const { data: role, isLoading: loadingRole } = useRoleDetail(orgHandler, roleId);
   const { data: allPermsData } = useAllPermissions();
   const { data: roleGroups = [], isLoading: loadingGroups } = useRoleGroups(orgHandler, roleId);
@@ -334,9 +338,11 @@ export default function RoleDetail(): JSX.Element {
             <ListingTable.Toolbar
               searchSlot={<SearchField value={search} onChange={setSearch} />}
               actions={
-                <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingGroups(true)}>
-                  Add Groups
-                </Button>
+                <Authorized permissions={roleModifyPerms}>
+                  <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => setAddingGroups(true)}>
+                    Add Groups
+                  </Button>
+                </Authorized>
               }
             />
             <ListingTable>
@@ -346,19 +352,19 @@ export default function RoleDetail(): JSX.Element {
                   <ListingTable.Cell>Description</ListingTable.Cell>
                   <ListingTable.Cell>Mapping Level</ListingTable.Cell>
                   <ListingTable.Cell align="center">Applicable Environment</ListingTable.Cell>
-                  <ListingTable.Cell align="right">Actions</ListingTable.Cell>
+                  {canModifyRole && <ListingTable.Cell align="right">Actions</ListingTable.Cell>}
                 </ListingTable.Row>
               </ListingTable.Head>
               <ListingTable.Body>
                 {loadingGroups ? (
                   <ListingTable.Row>
-                    <ListingTable.Cell colSpan={5}>
+                    <ListingTable.Cell colSpan={colCount}>
                       <Loading />
                     </ListingTable.Cell>
                   </ListingTable.Row>
                 ) : filteredGroups.length === 0 ? (
                   <ListingTable.Row>
-                    <ListingTable.Cell colSpan={5} align="center">
+                    <ListingTable.Cell colSpan={colCount} align="center">
                       No records to display
                     </ListingTable.Cell>
                   </ListingTable.Row>
@@ -373,13 +379,15 @@ export default function RoleDetail(): JSX.Element {
                       <ListingTable.Cell align="center">
                         <Chip label={envLabel(g, allEnvironments)} size="small" />
                       </ListingTable.Cell>
-                      <ListingTable.Cell align="right">
-                        <Tooltip title="Remove">
-                          <IconButton size="small" color="error" aria-label={`Remove ${g.groupName ?? g.groupId} from role`} onClick={() => handleDeleteGroup(g)} disabled={removeMutation.isPending}>
-                            <Trash2 size={16} />
-                          </IconButton>
-                        </Tooltip>
-                      </ListingTable.Cell>
+                      <Authorized permissions={roleModifyPerms}>
+                        <ListingTable.Cell align="right">
+                          <Tooltip title="Remove">
+                            <IconButton size="small" color="error" aria-label={`Remove ${g.groupName ?? g.groupId} from role`} onClick={() => handleDeleteGroup(g)} disabled={removeMutation.isPending}>
+                              <Trash2 size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        </ListingTable.Cell>
+                      </Authorized>
                     </ListingTable.Row>
                   ))
                 )}
