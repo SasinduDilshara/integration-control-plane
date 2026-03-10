@@ -40,7 +40,7 @@ export default function CreateComponent(scope: ProjectScope): JSX.Element {
   const [handler, setHandler] = useState('');
   const [handlerEdited, setHandlerEdited] = useState(false);
   const [description, setDescription] = useState('');
-  const [componentType, setComponentType] = useState<'MI' | 'BI'>('MI');
+  const [componentType, setComponentType] = useState<'MI' | 'BI'>('BI');
   const mutation = useCreateComponent();
 
   const effectiveHandler = handlerEdited ? handler : toHandler(displayName);
@@ -139,9 +139,9 @@ export default function CreateComponent(scope: ProjectScope): JSX.Element {
           />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
-          <TextField label="Integration Type" select value={componentType} onChange={(e) => setComponentType(e.target.value as 'MI' | 'BI')} fullWidth slotProps={{ htmlInput: { 'aria-label': 'Integration Type' } }}>
-            <MenuItem value="MI">MI</MenuItem>
+          <TextField label="Integration Type" select value={componentType} onChange={(e) => setComponentType(e.target.value as 'BI' | 'MI')} fullWidth slotProps={{ htmlInput: { 'aria-label': 'Integration Type' } }}>
             <MenuItem value="BI">BI</MenuItem>
+            <MenuItem value="MI">MI</MenuItem>
           </TextField>
         </Grid>
       </Grid>
