@@ -49,17 +49,14 @@ public isolated function getRuntimes(string? status, string? runtimeType, string
     sql:ParameterizedQuery orderByClause = ` ORDER BY registration_time DESC `;
     sql:ParameterizedQuery query = sql:queryConcat(selectClause, whereClause, whereConditions, orderByClause);
     stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(query);
-
-    check from types:RuntimeDBRecord runtime in runtimeStream
-        do {
-            runtimeList.push(check mapToRuntime(runtime));
-        };
-
+    types:RuntimeDBRecord[] records = check from types:RuntimeDBRecord r in runtimeStream select r;
+    log:printDebug(string `getRuntimes: collected ${records.length()} records, mapping`);
+    foreach types:RuntimeDBRecord rec in records {
+        runtimeList.push(check mapToRuntime(rec));
+    }
     return runtimeList;
 }
 
-// Get runtimes for multiple integrations in a single batch query (optimized for RBAC v2)
-// This eliminates N+1 query pattern by using SQL IN clause
 public isolated function getRuntimesByIntegrationIds(
         string[] integrationIds,
         string? status = (),
@@ -112,12 +109,11 @@ public isolated function getRuntimesByIntegrationIds(
     sql:ParameterizedQuery query = sql:queryConcat(selectClause, whereClause, whereConditions, orderByClause);
 
     stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(query);
-
-    check from types:RuntimeDBRecord runtime in runtimeStream
-        do {
-            runtimeList.push(check mapToRuntime(runtime));
-        };
-
+    types:RuntimeDBRecord[] records = check from types:RuntimeDBRecord r in runtimeStream select r;
+    log:printDebug(string `getRuntimesByIntegrationIds: collected ${records.length()} records, mapping`);
+    foreach types:RuntimeDBRecord rec in records {
+        runtimeList.push(check mapToRuntime(rec));
+    }
     return runtimeList;
 }
 
@@ -219,21 +215,18 @@ public isolated function markOfflineRuntimes() returns error? {
     }
 }
 
-// Get services for a specific runtime
 public isolated function getServicesForRuntime(string runtimeId) returns types:Service[]|error {
-    types:Service[] serviceList = [];
     stream<types:ServiceRecordInDB, sql:Error?> serviceStream = dbClient->query(`
-        SELECT service_name, service_package, base_path, state 
-        FROM bi_service_artifacts 
+        SELECT service_name, service_package, base_path, state
+        FROM bi_service_artifacts
         WHERE runtime_id = ${runtimeId}
     `);
-
-    check from types:ServiceRecordInDB serviceRecord in serviceStream
-        do {
-            types:Service mappedService = check mapToService(serviceRecord, runtimeId);
-            serviceList.push(mappedService);
-        };
-
+    types:ServiceRecordInDB[] records = check from types:ServiceRecordInDB r in serviceStream select r;
+    log:printDebug(string `getServicesForRuntime(${runtimeId}): collected ${records.length()} records, mapping`);
+    types:Service[] serviceList = [];
+    foreach types:ServiceRecordInDB rec in records {
+        serviceList.push(check mapToService(rec, runtimeId));
+    }
     return serviceList;
 }
 
@@ -254,9 +247,19 @@ public isolated function getListenersForRuntime(string runtimeId) returns types:
     return listenerList;
 }
 
-// Get REST APIs for a specific runtime
+type ApiRecordInDB record {|
+    string api_name;
+    string url;
+    string? urls;
+    string context;
+    string? version;
+    string state;
+    string tracing;
+    string statistics;
+    string? carbon_app;
+|};
+
 public isolated function getApisForRuntime(string runtimeId) returns types:RestApi[]|error {
-    types:RestApi[] apiList = [];
     sql:ParameterizedQuery apiQuery;
     if isMSSQL() {
         apiQuery = `
@@ -271,46 +274,31 @@ public isolated function getApisForRuntime(string runtimeId) returns types:RestA
             WHERE runtime_id = ${runtimeId}
         `;
     }
-    stream<record {|
-        string api_name;
-        string url;
-        string? urls;
-        string context;
-        string? version;
-        string state;
-        string tracing;
-        string statistics;
-        string? carbon_app;
-    |}, sql:Error?> apiStream = dbClient->query(apiQuery);
+    stream<ApiRecordInDB, sql:Error?> apiStream = dbClient->query(apiQuery);
+    ApiRecordInDB[] records = check from ApiRecordInDB r in apiStream select r;
+    log:printDebug(string `getApisForRuntime(${runtimeId}): collected ${records.length()} records, mapping`);
 
-    check from var apiRecord in apiStream
-        do {
-            // Get resources for this API
-            types:ApiResource[] resources = check getApiResourcesForRuntime(runtimeId, apiRecord.api_name);
-
-            // Parse urls JSON string to array
-            string[] urlsArray = [];
-            string? urlsStr = apiRecord.urls;
-            if urlsStr is string {
-                json urlsJson = check urlsStr.fromJsonString();
-                urlsArray = check urlsJson.cloneWithType();
-            }
-
-            types:RestApi api = {
-                name: apiRecord.api_name,
-                url: apiRecord.url,
-                urls: urlsArray,
-                context: apiRecord.context,
-                version: apiRecord.version,
-                state: <types:ArtifactState>apiRecord.state,
-                tracing: apiRecord.tracing,
-                statistics: apiRecord.statistics,
-                carbonApp: apiRecord.carbon_app,
-                resources: resources
-            };
-            apiList.push(api);
-        };
-
+    types:RestApi[] apiList = [];
+    foreach ApiRecordInDB rec in records {
+        types:ApiResource[] resources = check getApiResourcesForRuntime(runtimeId, rec.api_name);
+        string[] urlsArray = [];
+        if rec.urls is string {
+            json urlsJson = check (<string>rec.urls).fromJsonString();
+            urlsArray = check urlsJson.cloneWithType();
+        }
+        apiList.push({
+            name: rec.api_name,
+            url: rec.url,
+            urls: urlsArray,
+            context: rec.context,
+            version: rec.version,
+            state: <types:ArtifactState>rec.state,
+            tracing: rec.tracing,
+            statistics: rec.statistics,
+            carbonApp: rec.carbon_app,
+            resources: resources
+        });
+    }
     return apiList;
 }
 
@@ -386,9 +374,13 @@ public isolated function getProxyServicesForRuntime(string runtimeId) returns ty
     return proxyList;
 }
 
-// Get endpoints for a specific runtime
+type EndpointAttrRecordInDB record {|
+    string endpoint_name;
+    string attribute_name;
+    string attribute_value;
+|};
+
 public isolated function getEndpointsForRuntime(string runtimeId) returns types:Endpoint[]|error {
-    types:Endpoint[] endpointList = [];
     sql:ParameterizedQuery endpointQuery;
     if isMSSQL() {
         endpointQuery = `
@@ -404,39 +396,39 @@ public isolated function getEndpointsForRuntime(string runtimeId) returns types:
         `;
     }
     stream<types:EndpointRecordInDB, sql:Error?> endpointStream = dbClient->query(endpointQuery);
+    types:EndpointRecordInDB[] records = check from types:EndpointRecordInDB r in endpointStream select r;
 
-    check from types:EndpointRecordInDB endpointRecord in endpointStream
-        do {
-            types:Endpoint endpoint = {
-                name: endpointRecord.endpoint_name,
-                'type: endpointRecord.endpoint_type,
-                state: endpointRecord.state,
-                tracing: endpointRecord.tracing,
-                statistics: endpointRecord.statistics,
-                carbonApp: endpointRecord.carbon_app
-            };
-            endpointList.push(endpoint);
-        };
-
-    // Attach attributes per endpoint
-    foreach int i in 0 ..< (endpointList.length()) {
-        types:Endpoint ep = endpointList[i];
-        stream<types:EndpointAttribute, sql:Error?> attrStream = dbClient->query(`
-            SELECT attribute_name, attribute_value
-            FROM mi_endpoint_attribute_artifacts
-            WHERE runtime_id = ${runtimeId} AND endpoint_name = ${ep.name}
-        `);
-        types:EndpointAttribute[] attrs = [];
-        check from types:EndpointAttribute a in attrStream
-            do {
-                attrs.push(a);
-            };
-        if attrs.length() > 0 {
-            ep.attributes = attrs;
-            endpointList[i] = ep;
-        }
+    // Batch-load all attributes for this runtime
+    stream<EndpointAttrRecordInDB, sql:Error?> attrStream = dbClient->query(`
+        SELECT endpoint_name, attribute_name, attribute_value
+        FROM mi_endpoint_attribute_artifacts
+        WHERE runtime_id = ${runtimeId}
+    `);
+    EndpointAttrRecordInDB[] attrRecords = check from EndpointAttrRecordInDB a in attrStream select a;
+    map<types:EndpointAttribute[]> attrMap = {};
+    foreach EndpointAttrRecordInDB a in attrRecords {
+        types:EndpointAttribute[] existing = attrMap[a.endpoint_name] ?: [];
+        existing.push({name: a.attribute_name, value: a.attribute_value});
+        attrMap[a.endpoint_name] = existing;
     }
+    log:printDebug(string `getEndpointsForRuntime(${runtimeId}): ${records.length()} endpoints, ${attrRecords.length()} attributes`);
 
+    types:Endpoint[] endpointList = [];
+    foreach types:EndpointRecordInDB rec in records {
+        types:Endpoint endpoint = {
+            name: rec.endpoint_name,
+            'type: rec.endpoint_type,
+            state: rec.state,
+            tracing: rec.tracing,
+            statistics: rec.statistics,
+            carbonApp: rec.carbon_app
+        };
+        types:EndpointAttribute[]? attrs = attrMap[rec.endpoint_name];
+        if attrs is types:EndpointAttribute[] && attrs.length() > 0 {
+            endpoint.attributes = attrs;
+        }
+        endpointList.push(endpoint);
+    }
     return endpointList;
 }
 
