@@ -2283,7 +2283,12 @@ service /graphql on graphqlListener {
 
         // Step 2: Fetch the actual WSDL XML content from the URL
         // The WSDL URL is typically on the MI HTTP service port (e.g. :8290), not the management port
-        string wsdlXml = check mi_management:fetchWsdlContent(wsdlUrl, artifactsApiAllowInsecureTLS);
+        // Pass the trusted runtime hostname for validation (SSRF protection)
+        string trustedHost = runtime.managementHostname ?: "";
+        if trustedHost == "" {
+            return error("Runtime management hostname is not set");
+        }
+        string wsdlXml = check mi_management:fetchWsdlContent(wsdlUrl, trustedHost, artifactsApiAllowInsecureTLS);
 
         log:printInfo("Successfully fetched artifact WSDL via MI management API",
                 runtimeId = runtime.runtimeId,
@@ -2414,9 +2419,6 @@ service /graphql on graphqlListener {
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
         // Fetch inbound endpoint info via MI Management API (/management/inbound-endpoints?...)
-        // NOTE: The management API returns {name, protocol} only — it does NOT expose the
-        // detailed inbound endpoint parameters. The returned Parameter list reflects what
-        // the management API provides.
         mi_management:MgmtInboundEndpointInfo inboundInfo = check mi_management:fetchInboundEndpointInfo(
                 mgmtClient, hmacToken, inboundName);
 
@@ -2424,6 +2426,17 @@ service /graphql on graphqlListener {
         types:Parameter[] params = [];
         if inboundInfo.protocol is string {
             params.push({name: "protocol", value: <string>inboundInfo.protocol});
+        }
+
+        // Fetch detailed parameters from the management API response
+        mi_management:MgmtArtifactParameter[] mgmtParams = check mi_management:fetchArtifactParameterInfo(
+                mgmtClient, hmacToken, "inbound-endpoint", inboundName);
+
+        // Append each parameter from the management API to the result
+        if mgmtParams.length() > 0 {
+            foreach mi_management:MgmtArtifactParameter p in mgmtParams {
+                params.push({name: p.key, value: p.value});
+            }
         }
 
         log:printInfo("Successfully fetched inbound endpoint info from MI management API",
@@ -2566,6 +2579,7 @@ service /graphql on graphqlListener {
                 mgmtClient, hmacToken, dataSourceName);
 
         types:Parameter[] result = [];
+        result.push({name: "name", value: overview.name});
         if overview.'type is string {
             result.push({name: "type", value: <string>overview.'type});
         }

@@ -242,7 +242,7 @@ isolated function extractFirstFromMgmtList(json response, string? expectedName =
                 }
             }
         }
-        return items[0]; // fall back to first item
+        return error(string `Artifact '${expectedName}' not found in management API response (searched ${items.length()} items)`);
     }
 
     // Direct format: the response IS the item itself
@@ -455,14 +455,40 @@ public isolated function fetchArtifactWsdlUrl(
 // fetchWsdlContent fetches the actual WSDL XML from the URL returned by the
 // MI Management API. The URL is typically on the MI HTTP service port (e.g.
 // http://host:8290/services/TestProxy?wsdl), distinct from the management port.
-public isolated function fetchWsdlContent(string wsdlUrl, boolean allowInsecureTLS) returns string|error {
+//
+// Security: Validates that the WSDL URL points to the trusted runtime host to prevent SSRF attacks.
+public isolated function fetchWsdlContent(string wsdlUrl, string trustedHost, boolean allowInsecureTLS) returns string|error {
     int? schemeEndPos = wsdlUrl.indexOf("://");
     if schemeEndPos is () {
         return error(string `Invalid WSDL URL (missing scheme): ${wsdlUrl}`);
     }
+
+    // Validate scheme is http or https only
+    string scheme = wsdlUrl.substring(0, schemeEndPos);
+    if scheme != "http" && scheme != "https" {
+        return error(string `Invalid WSDL URL scheme '${scheme}' (only http/https allowed): ${wsdlUrl}`);
+    }
+
     int? pathStartPos = wsdlUrl.indexOf("/", schemeEndPos + 3);
     if pathStartPos is () {
         return error(string `Invalid WSDL URL (no path component): ${wsdlUrl}`);
+    }
+
+    // Extract host:port from URL
+    string hostAndPort = wsdlUrl.substring(schemeEndPos + 3, pathStartPos);
+
+    // Extract hostname (before the port if present)
+    string urlHost;
+    int? portSeparatorPos = hostAndPort.indexOf(":");
+    if portSeparatorPos is () {
+        urlHost = hostAndPort;
+    } else {
+        urlHost = hostAndPort.substring(0, portSeparatorPos);
+    }
+
+    // Validate that the URL host matches the trusted runtime host
+    if urlHost != trustedHost {
+        return error(string `WSDL URL host '${urlHost}' does not match trusted runtime host '${trustedHost}' (potential SSRF attack)`);
     }
 
     string wsdlBaseUrl = wsdlUrl.substring(0, pathStartPos);

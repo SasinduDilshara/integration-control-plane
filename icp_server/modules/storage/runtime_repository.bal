@@ -710,7 +710,7 @@ public isolated function getConnectorsForRuntime(string runtimeId) returns types
     log:printDebug("Fetching connectors for runtime: " + runtimeId);
     types:Connector[] connectorList = [];
     stream<types:Connector, sql:Error?> connectorStream = dbClient->query(`
-        SELECT connector_name, package, version, description, state
+        SELECT connector_name, package, version, description, state AS connector_state
         FROM mi_connector_artifacts
         WHERE runtime_id = ${runtimeId}
     `);

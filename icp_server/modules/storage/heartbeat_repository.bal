@@ -1714,7 +1714,7 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
                 MERGE INTO mi_connector_artifacts AS target
                 USING (VALUES (${heartbeat.runtime}, ${connector.name}, ${artifactId}, ${connector.package}, ${connector.version}, ${connector.description}, ${connector.state}))
                        AS source (runtime_id, connector_name, artifact_id, package, version, description, state)
-                ON (target.runtime_id = source.runtime_id AND target.connector_name = source.connector_name)
+                ON (target.runtime_id = source.runtime_id AND target.connector_name = source.connector_name AND target.package = source.package)
                 WHEN MATCHED THEN
                     UPDATE SET version = source.version, description = source.description, state = source.state, updated_at = CURRENT_TIMESTAMP
                 WHEN NOT MATCHED THEN
