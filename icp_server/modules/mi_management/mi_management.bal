@@ -297,6 +297,13 @@ public isolated function fetchWsdlContent(string wsdlUrl, string trustedHost, bo
     // Extract host:port from URL, then pull out only the port.
     // We discard the host from the URL and substitute trustedHost (SSRF protection).
     string hostAndPort = wsdlUrl.substring(schemeEndPos + 3, pathStartPos);
+
+    // Reject userinfo (e.g. user:pass@host) in the authority to prevent it being
+    // misinterpreted as part of the port or host.
+    if hostAndPort.indexOf("@") is int {
+        return error(string `Invalid WSDL URL (userinfo not allowed in authority): ${wsdlUrl}`);
+    }
+
     string urlPort;
     if hostAndPort.startsWith("[") {
         // IPv6 literal: check for port after closing bracket, e.g. "[::1]:8290"
@@ -310,6 +317,14 @@ public isolated function fetchWsdlContent(string wsdlUrl, string trustedHost, bo
         // IPv4 or hostname: extract port if present
         int? portSeparatorPos = hostAndPort.indexOf(":");
         urlPort = portSeparatorPos is () ? "" : hostAndPort.substring(portSeparatorPos + 1);
+    }
+
+    // Validate the extracted port is either absent or a numeric value in range 1–65535.
+    if urlPort != "" {
+        int|error portNum = int:fromString(urlPort);
+        if portNum is error || portNum < 1 || portNum > 65535 {
+            return error(string `Invalid WSDL URL (invalid port '${urlPort}'): ${wsdlUrl}`);
+        }
     }
 
     // Build the fetch URL using the trusted management hostname but keeping the original port and path.
