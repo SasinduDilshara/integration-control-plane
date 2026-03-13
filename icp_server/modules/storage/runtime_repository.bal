@@ -707,10 +707,11 @@ public isolated function getDataSourcesForRuntime(string runtimeId) returns type
 
 // Get connectors for a specific runtime
 public isolated function getConnectorsForRuntime(string runtimeId) returns types:Connector[]|error {
+    log:printDebug("Fetching connectors for runtime: " + runtimeId);
     types:Connector[] connectorList = [];
     stream<types:Connector, sql:Error?> connectorStream = dbClient->query(`
-        SELECT connector_name, package, version, state
-        FROM mi_connector_artifacts 
+        SELECT connector_name, package, version, description, state AS connector_state
+        FROM mi_connector_artifacts
         WHERE runtime_id = ${runtimeId}
     `);
 
@@ -718,12 +719,13 @@ public isolated function getConnectorsForRuntime(string runtimeId) returns types
         do {
             connectorList.push(connectorRecord);
         };
-
+    log:printDebug("Retrieved " + connectorList.length().toString() + " connectors for runtime: " + runtimeId);
     return connectorList;
 }
 
 // Get registry resources for a specific runtime
 public isolated function getRegistryResourcesForRuntime(string runtimeId) returns types:RegistryResource[]|error {
+    log:printDebug("Fetching registry resources for runtime: " + runtimeId);
     types:RegistryResource[] resourceList = [];
     stream<types:RegistryResourceRecordInDB, sql:Error?> resourceStream = dbClient->query(`
         SELECT resource_name, resource_type

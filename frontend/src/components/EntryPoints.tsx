@@ -80,13 +80,14 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const showWsdlButton = artifactType === 'ProxyService';
   const showStatisticsToggle = ['RestApi', 'ProxyService', 'InboundEndpoint'].includes(artifactType);
   const showStatusToggle = artifactType === 'ProxyService';
+  const showStatusChip = ['RestApi', 'InboundEndpoint'].includes(artifactType);
   const showListenerToggle = artifactType === 'Listener';
   const showTaskToggle = artifactType === 'Task';
   const showTaskTrigger = artifactType === 'Task';
   const hasRuntimes = artifact.runtimes && Array.isArray(artifact.runtimes) && artifact.runtimes.length > 0;
 
   // Track if any preceding controls are visible for proper divider placement
-  const hasPrecedingControls = carbonApp || showStatusToggle || showTracingToggle || showStatisticsToggle || showListenerToggle;
+  const hasPrecedingControls = carbonApp || showStatusToggle || showStatusChip || showTracingToggle || showStatisticsToggle || showListenerToggle;
   const toEnabled = (value: unknown) => {
     if (typeof value === 'boolean') return value;
     const normalized = (value ?? '').toString().toLowerCase();
@@ -267,6 +268,15 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
         <Stack direction="row" alignItems="center" gap={1.5} sx={{ px: 2, py: 1.5 }}>
           {carbonApp && <Chip label={`C-App: ${carbonApp}`} size="small" variant="outlined" sx={{ bgcolor: '#e8eaf6', color: '#3949ab', fontSize: 11 }} />}
           {carbonApp && <Divider orientation="vertical" flexItem />}
+          {showStatusChip && artifact.state && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontSize: 11 }}>
+                Status
+              </Typography>
+              <Chip label={String(artifact.state).charAt(0).toUpperCase() + String(artifact.state).slice(1).toLowerCase()} size="small" variant="outlined" color={toEnabled(artifact.state) ? 'success' : 'default'} />
+            </Box>
+          )}
+          {showStatusChip && artifact.state && (showStatusToggle || showTracingToggle || showStatisticsToggle || showListenerToggle) && <Divider orientation="vertical" flexItem />}
           {showStatusToggle && (
             <FormControlLabel
               control={<Switch name="status" size="small" checked={statusEnabled} onChange={(e) => handleToggleStatus(e.target.checked)} disabled={updateArtifactStatus.isPending} />}

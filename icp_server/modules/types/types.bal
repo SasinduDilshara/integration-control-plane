@@ -1038,6 +1038,7 @@ public type Connector record {
     string name;
     string 'package;
     string version?;
+    string description?;
     @sql:Column {
         name: "connector_state"
     }
@@ -2123,6 +2124,39 @@ public type Parameter record {|
 public type LocalEntryValue record {|
     string name;
     string value;
+|};
+
+public type DataServiceDataSourceEntry record {|
+    string name;
+    string 'type?;
+    Parameter[] properties = [];
+|};
+
+public type DataServiceQueryEntry record {|
+    string name;
+    string 'type?;
+|};
+
+public type DataServiceResourceEntry record {|
+    string name;
+    string 'type?;
+|};
+
+public type DataServiceOperationEntry record {|
+    string name;
+    string 'type?;
+|};
+
+public type DataServiceOverview record {|
+    string serviceName;
+    string serviceDescription?;
+    string wsdl1_1?;
+    string wsdl2_0?;
+    string swagger_url?;
+    DataServiceDataSourceEntry[] dataSources = [];
+    DataServiceQueryEntry[] queries = [];
+    DataServiceResourceEntry[] resources = [];
+    DataServiceOperationEntry[] operations = [];
 |};
 
 // Input type for changing artifact status

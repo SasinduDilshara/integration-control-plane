@@ -1194,6 +1194,7 @@ CREATE TABLE mi_connector_artifacts (
     artifact_id CHAR(36) NOT NULL UNIQUE,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50),
+    description VARCHAR(500),
     state VARCHAR(20) NOT NULL DEFAULT 'enabled',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

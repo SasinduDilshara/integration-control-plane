@@ -48,7 +48,21 @@ import { useArtifactTypes, useArtifacts, ARTIFACT_QUERY_MAP, type GqlArtifact } 
 import { useUpdateArtifactStatus, useUpdateListenerState } from '../api/mutations';
 import { useUpdateArtifactTracingStatus, useUpdateArtifactStatisticsStatus } from '../api/artifactToggleMutations';
 import SearchField from './SearchField';
-import { ArtifactSource, ArtifactApiDefinition, ArtifactEndpoints, ArtifactWsdl, ArtifactValue, ArtifactCarbonArtifacts, ArtifactRuntimes, InboundEndpointParameters, AutomationExecutions } from './ArtifactTabs';
+import {
+  ArtifactSource,
+  ArtifactApiDefinition,
+  ArtifactEndpoints,
+  ArtifactWsdl,
+  ArtifactValue,
+  ArtifactCarbonArtifacts,
+  ArtifactRuntimes,
+  InboundEndpointParameters,
+  AutomationExecutions,
+  DataSourceOverview,
+  DataServiceOverview,
+  MessageProcessorOverview,
+  MessageProcessorParameters,
+} from './ArtifactTabs';
 import { ARTIFACT_ICONS, ARTIFACT_TABS, DEFAULT_ARTIFACT_TABS, ENTRY_POINT_TYPE_SET, formatArtifactTypeName, typePlural, type SelectedArtifact, type TabProps } from './artifact-config';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -109,7 +123,7 @@ function SelectedTypeArtifacts({ artifacts, artifactType, envId, componentId, qu
     // For other artifacts, search by name
     return a.name?.toString().toLowerCase().includes(searchQuery);
   });
-  const supportsToggle = ['Endpoint', 'Listener'].includes(artifactType);
+  const supportsToggle = ['Endpoint', 'Listener', 'MessageProcessor'].includes(artifactType);
   const hasStateField = ['Connector'].includes(artifactType);
   const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
   const safePage = Math.min(page, maxPage);
@@ -125,8 +139,8 @@ function SelectedTypeArtifacts({ artifacts, artifactType, envId, componentId, qu
       if (supportsToggle) count++;
       // Statistics: Endpoint, InboundEndpoint, Sequence, and Templates with type=sequence
       if (['Endpoint', 'InboundEndpoint', 'Sequence'].includes(artifactType) || (artifactType === 'Template' && artifactType_ === 'sequence')) count++;
-      // Tracing: Endpoint, InboundEndpoint, MessageProcessor, Sequence
-      if (['Endpoint', 'InboundEndpoint', 'MessageProcessor', 'Sequence'].includes(artifactType)) count++;
+      // Tracing: Endpoint, InboundEndpoint, Sequence
+      if (['Endpoint', 'InboundEndpoint', 'Sequence'].includes(artifactType)) count++;
       max = Math.max(max, count);
     });
     return max;
@@ -218,7 +232,7 @@ function SelectedTypeArtifacts({ artifacts, artifactType, envId, componentId, qu
 
           // Check if this specific artifact supports statistics and tracing
           const showStatistics = ['Endpoint', 'InboundEndpoint', 'Sequence'].includes(artifactType) || (artifactType === 'Template' && artifactTypeField === 'sequence');
-          const showTracing = ['Endpoint', 'InboundEndpoint', 'MessageProcessor', 'Sequence'].includes(artifactType);
+          const showTracing = ['Endpoint', 'InboundEndpoint', 'Sequence'].includes(artifactType);
 
           return (
             <Card key={i} variant="outlined" sx={{ cursor: 'pointer', width: '100%', '&:hover': { boxShadow: 1 } }} onClick={() => onSelect(a)}>
@@ -416,6 +430,10 @@ export function ArtifactDetail({ selected, onClose }: { selected: SelectedArtifa
         return <ArtifactEndpoints {...tabProps} />;
       case 'WSDL':
         return <ArtifactWsdl {...tabProps} />;
+      case 'Overview':
+        if (artifactType === 'DataService') return <DataServiceOverview {...tabProps} />;
+        if (artifactType === 'MessageProcessor') return <MessageProcessorOverview {...tabProps} />;
+        return <DataSourceOverview {...tabProps} />;
       case 'Value':
         return <ArtifactValue {...tabProps} />;
       case 'Artifacts':
@@ -423,6 +441,7 @@ export function ArtifactDetail({ selected, onClose }: { selected: SelectedArtifa
       case 'Runtimes':
         return <ArtifactRuntimes {...tabProps} />;
       case 'Parameters':
+        if (artifactType === 'MessageProcessor') return <MessageProcessorParameters {...tabProps} />;
         return <InboundEndpointParameters {...tabProps} />;
       case 'Executions':
         return <AutomationExecutions {...tabProps} />;

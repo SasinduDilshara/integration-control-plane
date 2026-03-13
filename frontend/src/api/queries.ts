@@ -271,7 +271,7 @@ const ARTIFACT_QUERY_MAP: Record<string, { queryName: string; field: string; fie
   Task: { queryName: 'tasksByEnvironmentAndComponent', field: 'tasksByEnvironmentAndComponent', fields: 'name, group, state', gqlFields: 'name, class, group, state, carbonApp, runtimes { runtimeId, status }' },
   LocalEntry: { queryName: 'localEntriesByEnvironmentAndComponent', field: 'localEntriesByEnvironmentAndComponent', fields: 'name, type', gqlFields: 'name, type, value, state, runtimes { runtimeId, status }' },
   CarbonApp: { queryName: 'carbonAppsByEnvironmentAndComponent', field: 'carbonAppsByEnvironmentAndComponent', fields: 'name, version', gqlFields: 'name, version, state, artifacts { name, type }, runtimes { runtimeId, status }' },
-  Connector: { queryName: 'connectorsByEnvironmentAndComponent', field: 'connectorsByEnvironmentAndComponent', fields: 'name, package, state', gqlFields: 'name, package, version, state, runtimes { runtimeId, status }' },
+  Connector: { queryName: 'connectorsByEnvironmentAndComponent', field: 'connectorsByEnvironmentAndComponent', fields: 'name, package, description, state', gqlFields: 'name, package, version, description, state, runtimes { runtimeId, status }' },
   RegistryResource: { queryName: 'registryResourcesByEnvironmentAndComponent', field: 'registryResourcesByEnvironmentAndComponent', fields: 'name, type', gqlFields: 'name, type, runtimes { runtimeId, status }' },
   Listener: { queryName: 'listenersByEnvironmentAndComponent', field: 'listenersByEnvironmentAndComponent', fields: 'name, package, protocol, host, port, state', gqlFields: 'name, package, protocol, host, port, state, runtimes { runtimeId, status }' },
   Service: {
@@ -296,7 +296,7 @@ const ARTIFACT_QUERY_MAP: Record<string, { queryName: string; field: string; fie
     queryName: 'messageProcessorsByEnvironmentAndComponent',
     field: 'messageProcessorsByEnvironmentAndComponent',
     fields: 'name, type, state',
-    gqlFields: 'name, type, state, tracing, carbonApp, runtimes { runtimeId, status }',
+    gqlFields: 'name, type, state, carbonApp, runtimes { runtimeId, status }',
   },
   Template: {
     queryName: 'templatesByEnvironmentAndComponent',
@@ -339,19 +339,21 @@ export { ARTIFACT_QUERY_MAP };
 // ── Artifact detail panel queries ──
 
 const ARTIFACT_SOURCE_QUERY = `
-  query GetArtifactSource($environmentId: String!, $componentId: String!, $artifactType: String!, $artifactName: String!) {
-    artifactSourceByComponent(environmentId: $environmentId, componentId: $componentId, artifactType: $artifactType, artifactName: $artifactName)
+  query GetArtifactSource($environmentId: String!, $componentId: String!, $artifactType: String!, $artifactName: String!, $packageName: String, $templateType: String) {
+    artifactSourceByComponent(environmentId: $environmentId, componentId: $componentId, artifactType: $artifactType, artifactName: $artifactName, packageName: $packageName, templateType: $templateType)
   }`;
 
-export function useArtifactSource(envId: string, componentId: string, artifactType: string, artifactName: string) {
+export function useArtifactSource(envId: string, componentId: string, artifactType: string, artifactName: string, packageName?: string, templateType?: string) {
   return useQuery({
-    queryKey: ['artifactSource', envId, componentId, artifactType, artifactName],
+    queryKey: ['artifactSource', envId, componentId, artifactType, artifactName, packageName, templateType],
     queryFn: () =>
       gql<{ artifactSourceByComponent: string }>(ARTIFACT_SOURCE_QUERY, {
         environmentId: envId,
         componentId,
         artifactType,
         artifactName,
+        packageName,
+        templateType,
       }).then((d) => d.artifactSourceByComponent),
     enabled: !!envId && !!componentId && !!artifactType && !!artifactName,
   });
@@ -375,6 +377,112 @@ export function useLocalEntryValue(componentId: string, entryName: string, envId
   });
 }
 
+const DATA_SOURCE_OVERVIEW_QUERY = `
+  query GetDataSourceOverview($componentId: String!, $dataSourceName: String!, $environmentId: String) {
+    dataSourceOverviewByComponent(
+      componentId: $componentId
+      dataSourceName: $dataSourceName
+      environmentId: $environmentId
+    ) {
+      name
+      value
+    }
+  }`;
+
+export function useDataSourceOverview(componentId: string, dataSourceName: string, envId: string) {
+  return useQuery({
+    queryKey: ['dataSourceOverview', componentId, dataSourceName, envId],
+    queryFn: () =>
+      gql<{ dataSourceOverviewByComponent: GqlArtifactParam[] }>(DATA_SOURCE_OVERVIEW_QUERY, {
+        componentId,
+        dataSourceName,
+        environmentId: envId,
+      }).then((d) => d.dataSourceOverviewByComponent),
+    enabled: !!componentId && !!dataSourceName && !!envId,
+  });
+}
+
+export interface GqlDataServiceOverview {
+  serviceName: string;
+  serviceDescription?: string;
+  wsdl1_1?: string;
+  wsdl2_0?: string;
+  swagger_url?: string;
+  dataSources: Array<{ dataSourceId: string; dataSourceType?: string }>;
+  queries: Array<{ id: string; dataSourceId?: string }>;
+  resources: Array<{ resourcePath: string; resourceMethod?: string }>;
+  operations: Array<{ operationName: string; queryName?: string }>;
+}
+
+const DATA_SERVICE_OVERVIEW_QUERY = `
+  query GetDataServiceOverview($componentId: String!, $dataServiceName: String!, $environmentId: String) {
+    dataServiceOverviewByComponent(
+      componentId: $componentId
+      dataServiceName: $dataServiceName
+      environmentId: $environmentId
+    ) {
+      serviceName
+      serviceDescription
+      wsdl1_1
+      wsdl2_0
+      swagger_url
+      dataSources {
+        dataSourceId
+        dataSourceType
+      }
+      queries {
+        id
+        dataSourceId
+      }
+      resources {
+        resourcePath
+        resourceMethod
+      }
+      operations {
+        operationName
+        queryName
+      }
+    }
+  }`;
+
+export function useDataServiceOverview(componentId: string, dataServiceName: string, envId: string) {
+  return useQuery({
+    queryKey: ['dataServiceOverview', componentId, dataServiceName, envId],
+    queryFn: () =>
+      gql<{ dataServiceOverviewByComponent: GqlDataServiceOverview }>(DATA_SERVICE_OVERVIEW_QUERY, {
+        componentId,
+        dataServiceName,
+        environmentId: envId,
+      }).then((d) => d.dataServiceOverviewByComponent),
+    enabled: !!componentId && !!dataServiceName && !!envId,
+  });
+}
+
+const MESSAGE_PROCESSOR_OVERVIEW_QUERY = `
+  query GetMessageProcessorOverview($componentId: String!, $processorName: String!, $environmentId: String) {
+    messageProcessorOverviewByComponent(
+      componentId: $componentId
+      processorName: $processorName
+      environmentId: $environmentId
+    ) {
+      name
+      value
+    }
+  }`;
+
+export function useMessageProcessorOverview(componentId: string, processorName: string, envId: string) {
+  return useQuery({
+    queryKey: ['messageProcessorOverview', componentId, processorName, envId],
+    queryFn: () =>
+      gql<{ messageProcessorOverviewByComponent: GqlArtifactParam[] }>(MESSAGE_PROCESSOR_OVERVIEW_QUERY, {
+        componentId,
+        processorName,
+        environmentId: envId,
+      }).then((d) => d.messageProcessorOverviewByComponent),
+    enabled: !!componentId && !!processorName && !!envId,
+  });
+}
+
 // Maps display artifactType to the backend "type" param used in artifactSourceByComponent
 export const ARTIFACT_TYPE_TO_SOURCE_TYPE: Record<string, string> = {
   RestApi: 'api',
@@ -390,6 +498,11 @@ export const ARTIFACT_TYPE_TO_SOURCE_TYPE: Record<string, string> = {
   Listener: 'listener',
   Service: 'service',
   Automation: 'automation',
+  MessageStore: 'message-store',
+  MessageProcessor: 'message-processor',
+  Template: 'template',
+  DataService: 'data-service',
+  DataSource: 'data-source',
 };
 
 export interface GqlArtifactParam {
@@ -398,22 +511,23 @@ export interface GqlArtifactParam {
 }
 
 const ARTIFACT_PARAMS_QUERY = `
-  query ArtifactParams($componentId: String!, $artifactType: String!, $artifactName: String!, $environmentId: String, $runtimeId: String) {
+  query ArtifactParams($componentId: String!, $artifactType: String!, $artifactName: String!, $environmentId: String, $runtimeId: String, $packageName: String) {
     artifactParametersByComponent(
       componentId: $componentId,
       artifactType: $artifactType,
       artifactName: $artifactName,
       environmentId: $environmentId,
-      runtimeId: $runtimeId
+      runtimeId: $runtimeId,
+      packageName: $packageName
     ) {
       name
       value
     }
   }`;
 
-export function useArtifactParams(componentId: string, artifactType: string, artifactName: string, envId: string, runtimeId?: string) {
+export function useArtifactParams(componentId: string, artifactType: string, artifactName: string, envId: string, runtimeId?: string, packageName?: string) {
   return useQuery({
-    queryKey: ['artifactParams', componentId, artifactType, artifactName, envId, runtimeId],
+    queryKey: ['artifactParams', componentId, artifactType, artifactName, envId, runtimeId, packageName],
     queryFn: () =>
       gql<{ artifactParametersByComponent: GqlArtifactParam[] }>(ARTIFACT_PARAMS_QUERY, {
         componentId,
@@ -421,25 +535,27 @@ export function useArtifactParams(componentId: string, artifactType: string, art
         artifactName,
         environmentId: envId,
         runtimeId,
+        packageName,
       }).then((d) => d.artifactParametersByComponent),
     enabled: !!componentId && !!artifactType && !!artifactName && !!envId,
   });
 }
 
 const ARTIFACT_WSDL_QUERY = `
-  query ArtifactWsdl($componentId: String!, $artifactType: String!, $artifactName: String!, $environmentId: String, $runtimeId: String) {
+  query ArtifactWsdl($componentId: String!, $artifactType: String!, $artifactName: String!, $environmentId: String, $runtimeId: String, $packageName: String) {
     artifactWsdlByComponent(
       componentId: $componentId,
       artifactType: $artifactType,
       artifactName: $artifactName,
       environmentId: $environmentId,
-      runtimeId: $runtimeId
+      runtimeId: $runtimeId,
+      packageName: $packageName
     )
   }`;
 
-export function useArtifactWsdl(componentId: string, artifactType: string, artifactName: string, envId: string, runtimeId?: string) {
+export function useArtifactWsdl(componentId: string, artifactType: string, artifactName: string, envId: string, runtimeId?: string, packageName?: string) {
   return useQuery({
-    queryKey: ['artifactWsdl', componentId, artifactType, artifactName, envId, runtimeId],
+    queryKey: ['artifactWsdl', componentId, artifactType, artifactName, envId, runtimeId, packageName],
     queryFn: () =>
       gql<{ artifactWsdlByComponent: string }>(ARTIFACT_WSDL_QUERY, {
         componentId,
@@ -447,6 +563,7 @@ export function useArtifactWsdl(componentId: string, artifactType: string, artif
         artifactName,
         environmentId: envId,
         runtimeId,
+        packageName,
       }).then((d) => d.artifactWsdlByComponent),
     enabled: !!componentId && !!artifactType && !!artifactName && !!envId,
   });

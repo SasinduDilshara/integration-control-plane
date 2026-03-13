@@ -1793,6 +1793,7 @@ CREATE TABLE mi_connector_artifacts (
     artifact_id CHAR(36) NOT NULL UNIQUE,
     package NVARCHAR (200) NOT NULL,
     version NVARCHAR (50) NULL,
+    description NVARCHAR (500) NULL,
     state NVARCHAR (20) NOT NULL DEFAULT 'enabled' CHECK (
         state IN (
             'enabled',

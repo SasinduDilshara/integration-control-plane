@@ -994,6 +994,7 @@ CREATE TABLE mi_connector_artifacts (
     artifact_id CHAR(36) NOT NULL UNIQUE,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50) NULL,
+    description VARCHAR(500) NULL,
     state ENUM(
         'enabled',
         'disabled'

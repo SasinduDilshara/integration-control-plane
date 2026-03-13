@@ -1072,6 +1072,7 @@ CREATE TABLE mi_connector_artifacts (
     connector_name VARCHAR(200) NOT NULL,
     package VARCHAR(200) NOT NULL,
     version VARCHAR(50) NULL,
+    description VARCHAR(500) NULL,
     state VARCHAR(20) NOT NULL DEFAULT 'enabled' CHECK (state IN ('enabled', 'disabled')),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

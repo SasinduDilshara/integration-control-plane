@@ -63,11 +63,11 @@ export const ARTIFACT_TABS: Record<string, string[]> = {
   Listener: ['Runtimes'],
   Service: ['Runtimes'],
   Automation: ['Executions', 'Runtimes'],
-  MessageStore: ['Runtimes'],
-  MessageProcessor: ['Source', 'Runtimes'],
+  MessageStore: ['Source', 'Runtimes'],
+  MessageProcessor: ['Overview', 'Parameters', 'Source', 'Runtimes'],
   Template: ['Source', 'Runtimes'],
-  DataService: ['Source', 'Runtimes'],
-  DataSource: ['Source', 'Runtimes'],
+  DataService: ['Overview', 'Source', 'Runtimes'],
+  DataSource: ['Overview', 'Parameters', 'Source', 'Runtimes'],
 };
 export const DEFAULT_ARTIFACT_TABS = ['Source', 'Runtimes'];
 

@@ -22,8 +22,87 @@ import ballerina/log;
 import ballerina/sql;
 import ballerina/uuid;
 
-// Constants for artifact management
-const string ICP_ARTIFACTS_PATH = "/icp/artifacts";
+// Artifact type identifier constants
+const string ARTIFACT_TYPE_API = "api";
+const string ARTIFACT_TYPE_PROXY_SERVICE = "proxy-service";
+const string ARTIFACT_TYPE_ENDPOINT = "endpoint";
+const string ARTIFACT_TYPE_INBOUND_ENDPOINT = "inbound-endpoint";
+const string ARTIFACT_TYPE_SEQUENCE = "sequence";
+const string ARTIFACT_TYPE_TEMPLATE = "template";
+const string ARTIFACT_TYPE_MESSAGE_PROCESSOR = "message-processor";
+const string ARTIFACT_TYPE_TASK = "task";
+const string ARTIFACT_TYPE_LOCAL_ENTRY = "local-entry";
+const string ARTIFACT_TYPE_DATA_SERVICE = "data-service";
+const string ARTIFACT_TYPE_CONNECTOR = "connector";
+
+// Artifact type plural aliases (for backward compatibility and flexibility)
+const string ARTIFACT_TYPE_APIS = "apis";
+const string ARTIFACT_TYPE_PROXY_SERVICES = "proxy-services";
+const string ARTIFACT_TYPE_ENDPOINTS = "endpoints";
+const string ARTIFACT_TYPE_INBOUND_ENDPOINTS = "inbound-endpoints";
+const string ARTIFACT_TYPE_SEQUENCES = "sequences";
+const string ARTIFACT_TYPE_TASKS = "tasks";
+const string ARTIFACT_TYPE_MESSAGE_PROCESSORS = "message-processors";
+const string ARTIFACT_TYPE_LOCAL_ENTRIES = "local-entries";
+const string ARTIFACT_TYPE_DATA_SERVICES = "data-services";
+const string ARTIFACT_TYPE_CONNECTORS = "connectors";
+
+// Management API path constants
+const string MGMT_PATH_APIS = "/management/apis";
+const string MGMT_PATH_PROXY_SERVICES = "/management/proxy-services";
+const string MGMT_PATH_ENDPOINTS = "/management/endpoints";
+const string MGMT_PATH_INBOUND_ENDPOINTS = "/management/inbound-endpoints";
+const string MGMT_PATH_SEQUENCES = "/management/sequences";
+const string MGMT_PATH_TEMPLATES = "/management/templates";
+const string MGMT_PATH_MESSAGE_PROCESSORS = "/management/message-processors";
+const string MGMT_PATH_TASKS = "/management/tasks";
+
+// Artifact state value constants
+const string STATE_ACTIVE = "active";
+const string STATE_INACTIVE = "inactive";
+const string STATE_TRIGGER = "trigger";
+const string TOGGLE_ENABLE = "enable";
+const string TOGGLE_DISABLE = "disable";
+
+// HTTP header value constants
+const string CONTENT_TYPE_JSON = "application/json";
+
+// Returns the management API path for the given artifact type.
+// When statusOnly=true, only artifact types that support the status field are matched;
+// proxy-service, endpoint, message-processor, and task support status (active/inactive/trigger),
+// while api, sequence, inbound-endpoint, and template only support trace/statistics.
+isolated function getManagementPath(string artifactType, boolean statusOnly = false) returns string? {
+    log:printDebug("Resolving management path", artifactType = artifactType, statusOnly = statusOnly);
+    match artifactType.toLowerAscii().trim() {
+        ARTIFACT_TYPE_PROXY_SERVICE => {
+            return MGMT_PATH_PROXY_SERVICES;
+        }
+        ARTIFACT_TYPE_ENDPOINT => {
+            return MGMT_PATH_ENDPOINTS;
+        }
+        ARTIFACT_TYPE_MESSAGE_PROCESSOR => {
+            return MGMT_PATH_MESSAGE_PROCESSORS;
+        }
+        ARTIFACT_TYPE_TASK => {
+            return MGMT_PATH_TASKS;
+        }
+        ARTIFACT_TYPE_INBOUND_ENDPOINT if !statusOnly => {
+            return MGMT_PATH_INBOUND_ENDPOINTS;
+        }
+        ARTIFACT_TYPE_API if !statusOnly => {
+            return MGMT_PATH_APIS;
+        }
+        ARTIFACT_TYPE_TEMPLATE if !statusOnly => {
+            return MGMT_PATH_TEMPLATES;
+        }
+        ARTIFACT_TYPE_SEQUENCE if !statusOnly => {
+            return MGMT_PATH_SEQUENCES;
+        }
+        _ => {
+            return ();
+        }
+    }
+}
 
 // Record type for artifact lookup
 type ArtifactInfoRecord record {|
@@ -60,39 +139,69 @@ public isolated function sendMIControlCommandAsync(string runtimeId, string arti
 
         // Determine API endpoint and payload based on action type
         if action == types:ARTIFACT_ENABLE || action == types:ARTIFACT_DISABLE || action == types:ARTIFACT_TRIGGER {
-            // Status change: active/inactive/trigger
+            // Status change: use artifact-specific management API paths
             string status;
             if action == types:ARTIFACT_ENABLE {
-                status = "active";
+                status = STATE_ACTIVE;
             } else if action == types:ARTIFACT_DISABLE {
-                status = "inactive";
+                status = STATE_INACTIVE;
             } else {
-                status = "trigger";
+                status = STATE_TRIGGER;
             }
+
+            string? managementPath = getManagementPath(artifactType, true);
+            if managementPath is () {
+                log:printWarn(string `Status change not supported for artifact type: ${artifactType}`, runtimeId = runtimeId);
+                return;
+            }
+
             payload = {
-                "type": artifactType,
                 "name": artifactName,
                 "status": status
             };
-            artifactPath = string `${ICP_ARTIFACTS_PATH}/status`;
+            artifactPath = managementPath;
         } else if action == types:ARTIFACT_ENABLE_TRACING || action == types:ARTIFACT_DISABLE_TRACING {
-            // Tracing change: enable/disable
-            string trace = action == types:ARTIFACT_ENABLE_TRACING ? "enable" : "disable";
+            // Tracing change: enable/disable - use artifact-specific management API paths
+            string tracing = action == types:ARTIFACT_ENABLE_TRACING ? TOGGLE_ENABLE : TOGGLE_DISABLE;
+
+            string? managementPath = getManagementPath(artifactType);
+            if managementPath is () {
+                log:printWarn(string `Tracing not supported for artifact type: ${artifactType}`, runtimeId = runtimeId);
+                return;
+            }
+
             payload = {
-                "type": artifactType,
                 "name": artifactName,
-                "trace": trace
+                "trace": tracing
             };
-            artifactPath = string `${ICP_ARTIFACTS_PATH}/tracing`;
+            artifactPath = managementPath;
         } else if action == types:ARTIFACT_ENABLE_STATISTICS || action == types:ARTIFACT_DISABLE_STATISTICS {
-            // Statistics change: enable/disable
-            string statistics = action == types:ARTIFACT_ENABLE_STATISTICS ? "enable" : "disable";
-            payload = {
-                "type": artifactType,
-                "name": artifactName,
-                "statistics": statistics
-            };
-            artifactPath = string `${ICP_ARTIFACTS_PATH}/statistics`;
+            // Statistics change: enable/disable - use artifact-specific management API paths
+            string statistics = action == types:ARTIFACT_ENABLE_STATISTICS ? TOGGLE_ENABLE : TOGGLE_DISABLE;
+            
+            // Map artifact type to the correct management API path
+            string? managementPath = getManagementPath(artifactType);
+            if managementPath is () {
+                log:printWarn(string `Statistics not supported for artifact type: ${artifactType}`, runtimeId = runtimeId);
+                return;
+            }
+            
+            // Build payload based on artifact type
+            if artifactType == ARTIFACT_TYPE_TEMPLATE {
+                // Templates require a 'type' field (sequence or endpoint)
+                payload = {
+                    "name": artifactName,
+                    "type": ARTIFACT_TYPE_SEQUENCE, // Default to sequence template
+                    "statistics": statistics
+                };
+            } else {
+                payload = {
+                    "name": artifactName,
+                    "statistics": statistics
+                };
+            }
+            
+            artifactPath = managementPath;
         } else {
             log:printWarn(string `Unknown MI control action: ${action}`, runtimeId = runtimeId);
             return;
@@ -107,7 +216,7 @@ public isolated function sendMIControlCommandAsync(string runtimeId, string arti
 
         http:Response|error resp = mgmtClient->post(artifactPath, payload, {
             "Authorization": string `Bearer ${hmacToken}`,
-            "Content-Type": "application/json"
+            "Content-Type": CONTENT_TYPE_JSON
         });
 
         if resp is error {
@@ -760,25 +869,25 @@ type ArtifactTableMetadata record {|
 // Resolve artifact type aliases to table metadata (single source of truth for artifact type → table mapping)
 isolated function resolveArtifactTableMetadata(string artifactType) returns ArtifactTableMetadata? {
     string normalizedType = artifactType.toLowerAscii().trim();
-    if normalizedType == "api" || normalizedType == "apis" {
+    if normalizedType == ARTIFACT_TYPE_APIS {
         return {tableName: "mi_api_artifacts", nameColumn: "api_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == "proxy-service" || normalizedType == "proxy-services" {
+    } else if normalizedType == ARTIFACT_TYPE_PROXY_SERVICES {
         return {tableName: "mi_proxy_service_artifacts", nameColumn: "proxy_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == "endpoint" || normalizedType == "endpoints" {
+    } else if normalizedType == ARTIFACT_TYPE_ENDPOINTS {
         return {tableName: "mi_endpoint_artifacts", nameColumn: "endpoint_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == "inbound-endpoint" || normalizedType == "inbound-endpoints" {
+    } else if normalizedType == ARTIFACT_TYPE_INBOUND_ENDPOINTS {
         return {tableName: "mi_inbound_endpoint_artifacts", nameColumn: "inbound_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == "sequence" || normalizedType == "sequences" {
+    } else if normalizedType == ARTIFACT_TYPE_SEQUENCES {
         return {tableName: "mi_sequence_artifacts", nameColumn: "sequence_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == "task" || normalizedType == "tasks" {
+    } else if normalizedType == ARTIFACT_TYPE_TASKS {
         return {tableName: "mi_task_artifacts", nameColumn: "task_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == "message-processor" || normalizedType == "message-processors" {
+    } else if normalizedType == ARTIFACT_TYPE_MESSAGE_PROCESSORS {
         return {tableName: "mi_message_processor_artifacts", nameColumn: "processor_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == "local-entry" || normalizedType == "local-entries" {
+    } else if normalizedType == ARTIFACT_TYPE_LOCAL_ENTRIES {
         return {tableName: "mi_local_entry_artifacts", nameColumn: "entry_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == "data-service" || normalizedType == "data-services" {
+    } else if normalizedType == ARTIFACT_TYPE_DATA_SERVICES {
         return {tableName: "mi_data_service_artifacts", nameColumn: "service_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == "connector" || normalizedType == "connectors" {
+    } else if normalizedType == ARTIFACT_TYPE_CONNECTORS {
         return {tableName: "mi_connector_artifacts", nameColumn: "connector_name", hasTracing: false, hasStatistics: false, stateColumn: "status"};
     }
     return ();
@@ -1016,6 +1125,11 @@ public isolated function buildManagementBaseUrl(string? managementHost, string? 
 
 // Helper function to send artifact tracing change to a runtime
 public isolated function sendArtifactTracingChange(types:Runtime runtime, string artifactType, string artifactName, string trace) returns error? {
+    string? managementPath = getManagementPath(artifactType);
+    if managementPath is () {
+        return error(string `Tracing not supported for artifact type: ${artifactType}`);
+    }
+
     string baseUrl = check buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
 
     http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
@@ -1030,20 +1144,18 @@ public isolated function sendArtifactTracingChange(types:Runtime runtime, string
     string hmacToken = check issueRuntimeHmacToken(runtime.runtimeId);
 
     json payload = {
-        "type": artifactType,
         "name": artifactName,
         "trace": trace
     };
 
-    string artifactPath = string `${ICP_ARTIFACTS_PATH}/tracing`;
     log:printDebug("Sending artifact tracing change request",
             runtimeId = runtime.runtimeId,
-            url = string `${baseUrl}${artifactPath}`,
+            url = string `${baseUrl}${managementPath}`,
             artifactType = artifactType,
             artifactName = artifactName,
             trace = trace);
 
-    http:Response|error resp = mgmtClient->post(artifactPath, payload, {
+    http:Response|error resp = mgmtClient->post(managementPath, payload, {
         "Authorization": string `Bearer ${hmacToken}`,
         "Content-Type": "application/json"
     });

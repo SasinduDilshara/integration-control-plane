@@ -1712,41 +1712,44 @@ isolated function insertAdditionalMIArtifacts(types:Heartbeat heartbeat) returns
         if isMSSQL() {
             _ = check dbClient->execute(`
                 MERGE INTO mi_connector_artifacts AS target
-                USING (VALUES (${heartbeat.runtime}, ${connector.name}, ${artifactId}, ${connector.package}, ${connector.version}, ${connector.state}))
-                       AS source (runtime_id, connector_name, artifact_id, package, version, state)
-                ON (target.runtime_id = source.runtime_id AND target.connector_name = source.connector_name)
+                USING (VALUES (${heartbeat.runtime}, ${connector.name}, ${artifactId}, ${connector.package}, ${connector.version}, ${connector.description}, ${connector.state}))
+                       AS source (runtime_id, connector_name, artifact_id, package, version, description, state)
+                ON (target.runtime_id = source.runtime_id AND target.connector_name = source.connector_name AND target.package = source.package)
                 WHEN MATCHED THEN
-                    UPDATE SET version = source.version, state = source.state, updated_at = CURRENT_TIMESTAMP
+                    UPDATE SET version = source.version, description = source.description, state = source.state, updated_at = CURRENT_TIMESTAMP
                 WHEN NOT MATCHED THEN
-                    INSERT (runtime_id, connector_name, artifact_id, package, version, state)
-                    VALUES (source.runtime_id, source.connector_name, source.artifact_id, source.package, source.version, source.state);
+                    INSERT (runtime_id, connector_name, artifact_id, package, version, description, state)
+                    VALUES (source.runtime_id, source.connector_name, source.artifact_id, source.package, source.version, source.description, source.state);
             `);
         } else if dbType == POSTGRESQL {
             _ = check dbClient->execute(`
                 INSERT INTO mi_connector_artifacts (
-                    runtime_id, connector_name, package, version, state
+                    runtime_id, connector_name, package, version, description, state
                 ) VALUES (
                     ${heartbeat.runtime}, ${connector.name}, ${connector.package},
-                    ${connector.version}, ${connector.state}
+                    ${connector.version}, ${connector.description}, ${connector.state}
                 )
                 ON CONFLICT (runtime_id, connector_name, package) DO UPDATE SET
                     version = EXCLUDED.version,
+                    description = EXCLUDED.description,
                     state = EXCLUDED.state,
                     updated_at = CURRENT_TIMESTAMP
             `);
         } else {
             _ = check dbClient->execute(`
                 INSERT INTO mi_connector_artifacts (
-                    runtime_id, connector_name, artifact_id, package, version, state
+                    runtime_id, connector_name, artifact_id, package, version, description, state
                 ) VALUES (
                     ${heartbeat.runtime}, ${connector.name}, ${artifactId}, ${connector.package},
-                    ${connector.version}, ${connector.state}
+                    ${connector.version}, ${connector.description}, ${connector.state}
                 )
                 ON DUPLICATE KEY UPDATE
                     version = VALUES(version),
+                    description = VALUES(description),
                     state = VALUES(state),
                     updated_at = CURRENT_TIMESTAMP
             `);
+            log:printDebug(string `Successfully processed connector artifact: ${connector.name} version: ${connector.version.toString()}`);
         }
     }
 
