@@ -267,22 +267,17 @@ public isolated function getArtifactSource(http:Client mgmtClient, string hmacTo
     return artifact.toJson().toJsonString();
 }
 
-// isLocalhostVariant checks if a hostname represents localhost or a local development machine.
-// Returns true for: localhost, 127.0.0.1, ::1, localhost.localdomain, and *.local hostnames
-isolated function isLocalhostVariant(string hostname) returns boolean {
-    return hostname == "localhost"
-        || hostname == "127.0.0.1"
-        || hostname == "::1"
-        || hostname == "localhost.localdomain"
-        || hostname.endsWith(".local");
-}
-
 // fetchWsdlContent fetches the actual WSDL XML from the URL returned by the
 // MI Management API. The URL is typically on the MI HTTP service port (e.g.
 // http://host:8290/services/TestProxy?wsdl), distinct from the management port.
 //
-// Security: Validates that the WSDL URL points to the trusted runtime host to prevent SSRF attacks.
+// Security: Replaces the URL host with the trusted management hostname to prevent SSRF attacks.
+// MI may report its own configured hostname in the WSDL URL (e.g. the machine name) which can
+// differ from the hostname ICP uses to connect to the management API. By substituting the host,
+// we ensure the request always goes to the trusted runtime, regardless of what hostname MI reports.
+
 public isolated function fetchWsdlContent(string wsdlUrl, string trustedHost, boolean allowInsecureTLS) returns string|error {
+    log:printInfo("Fetching WSDL content", wsdlUrl = wsdlUrl, trustedHost = trustedHost);
     int? schemeEndPos = wsdlUrl.indexOf("://");
     if schemeEndPos is () {
         return error(string `Invalid WSDL URL (missing scheme): ${wsdlUrl}`);
@@ -299,47 +294,45 @@ public isolated function fetchWsdlContent(string wsdlUrl, string trustedHost, bo
         return error(string `Invalid WSDL URL (no path component): ${wsdlUrl}`);
     }
 
-    // Extract host:port from URL
+    // Extract host:port from URL, then pull out only the port.
+    // We discard the host from the URL and substitute trustedHost (SSRF protection).
     string hostAndPort = wsdlUrl.substring(schemeEndPos + 3, pathStartPos);
 
-    // Extract hostname (before the port if present)
-    string urlHost;
+    // Reject userinfo (e.g. user:pass@host) in the authority to prevent it being
+    // misinterpreted as part of the port or host.
+    if hostAndPort.indexOf("@") is int {
+        return error(string `Invalid WSDL URL (userinfo not allowed in authority): ${wsdlUrl}`);
+    }
+
+    string urlPort;
     if hostAndPort.startsWith("[") {
-        // IPv6 literal: extract the bracketed address
+        // IPv6 literal: check for port after closing bracket, e.g. "[::1]:8290"
         int? ipv6EndPos = hostAndPort.indexOf("]");
         if ipv6EndPos is () {
             return error(string `Invalid WSDL URL (unterminated IPv6 host): ${wsdlUrl}`);
         }
-        urlHost = hostAndPort.substring(1, ipv6EndPos);
+        string afterBracket = hostAndPort.substring(ipv6EndPos + 1);
+        urlPort = afterBracket.startsWith(":") ? afterBracket.substring(1) : "";
     } else {
-        // IPv4 or hostname: split on the port separator
+        // IPv4 or hostname: extract port if present
         int? portSeparatorPos = hostAndPort.indexOf(":");
-        if portSeparatorPos is () {
-            urlHost = hostAndPort;
-        } else {
-            urlHost = hostAndPort.substring(0, portSeparatorPos);
+        urlPort = portSeparatorPos is () ? "" : hostAndPort.substring(portSeparatorPos + 1);
+    }
+
+    // Validate the extracted port is either absent or a numeric value in range 1–65535.
+    if urlPort != "" {
+        int|error portNum = int:fromString(urlPort);
+        if portNum is error || portNum < 1 || portNum > 65535 {
+            return error(string `Invalid WSDL URL (invalid port '${urlPort}'): ${wsdlUrl}`);
         }
     }
 
-    // Validate that the URL host matches the trusted runtime host (SSRF protection)
-    // Strategy:
-    //   - Exact match: always allowed
-    //   - Localhost variants: if BOTH are localhost variants (127.0.0.1, ::1, *.local, etc), allow
-    //   - Production hostnames: require exact match
-    boolean urlIsLocalhost = isLocalhostVariant(urlHost);
-    boolean trustedIsLocalhost = isLocalhostVariant(trustedHost);
-
-    boolean isHostTrusted = urlHost == trustedHost
-        || (urlIsLocalhost && trustedIsLocalhost);
-
-    if !isHostTrusted {
-        return error(string `WSDL URL host '${urlHost}' does not match trusted runtime host '${trustedHost}' (potential SSRF attack)`);
-    }
-
-    string wsdlBaseUrl = wsdlUrl.substring(0, pathStartPos);
+    // Build the fetch URL using the trusted management hostname but keeping the original port and path.
+    string trustedHostAndPort = urlPort == "" ? trustedHost : string `${trustedHost}:${urlPort}`;
+    string wsdlBaseUrl = string `${scheme}://${trustedHostAndPort}`;
     string wsdlPath = wsdlUrl.substring(pathStartPos);
 
-    log:printDebug("Fetching WSDL content", wsdlBaseUrl = wsdlBaseUrl, wsdlPath = wsdlPath);
+    log:printInfo("WSDL URL host replaced for security", originalUrl = wsdlUrl, trustedBaseUrl = wsdlBaseUrl);
 
     http:Client|error wsdlClientResult = allowInsecureTLS
         ? new (wsdlBaseUrl, {secureSocket: {enable: false}})
