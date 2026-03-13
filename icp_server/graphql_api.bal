@@ -2141,7 +2141,8 @@ service /graphql on graphqlListener {
             string artifactName,
             string? environmentId = (),
             string? runtimeId = (),
-            string? packageName = ()
+            string? packageName = (),
+            string? templateType = ()
     ) returns string|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
@@ -2195,8 +2196,8 @@ service /graphql on graphqlListener {
                 artifactType = artifactType,
                 artifactName = artifactName
         );
-        string artifactDetails = check mi_management:fetchArtifactDetails(
-                mgmtClientResult, hmacToken, artifactType, artifactName, packageName);
+        string artifactDetails = check mi_management:getArtifactSource(
+                mgmtClientResult, hmacToken, artifactType, artifactName, packageName, templateType);
 
         log:printInfo("Successfully fetched artifact details from MI management API",
                 runtimeId = runtime.runtimeId,
@@ -2207,6 +2208,7 @@ service /graphql on graphqlListener {
     }
 
     // Get WSDL for any supported artifact by type and name via ICP internal API
+    // Currently only supported for proxy services, but can be extended to other artifact types in the future if needed (e.g. APIs with OAS)
     isolated resource function get artifactWsdlByComponent(
             graphql:Context context,
             string componentId,
@@ -2274,14 +2276,16 @@ service /graphql on graphqlListener {
 
         // Step 1: Retrieve the WSDL URL from the MI Management API
         // (management API returns wsdl1_1 / wsdl2_0 URLs, not the WSDL content directly)
-        string wsdlUrl = check mi_management:fetchArtifactWsdlUrl(
-                mgmtClient, hmacToken, artifactType, artifactName, packageName);
-
+        types:MgmtProxyServiceInfo fetchProxyServiceArtifact = check mi_management:fetchProxyServiceArtifact(mgmtClient, hmacToken, artifactName);
+        string? wsdlUrl = fetchProxyServiceArtifact?.wsdl1_1;
         log:printDebug("Retrieved WSDL URL from MI management API",
                 runtimeId = runtime.runtimeId,
                 artifactType = artifactType,
                 artifactName = artifactName,
                 wsdlUrl = wsdlUrl);
+        if wsdlUrl is () {
+            return error("WSDL URL not found for this artifact");
+        }
 
         // Step 2: Fetch the actual WSDL XML content from the URL
         // The WSDL URL is typically on the MI HTTP service port (e.g. :8290), not the management port
@@ -2358,94 +2362,13 @@ service /graphql on graphqlListener {
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
         // Fetch local entry info via MI Management API (/management/local-entries?name=...)
-        types:MgmtLocalEntryInfo entryInfo = check mi_management:fetchLocalEntryInfo(
-                mgmtClient, hmacToken, entryName);
-
+        types:MgmtLocalEntryInfo entryInfo = check mi_management:fetchLocalEntryArtifact(mgmtClient, hmacToken, entryName);
         log:printInfo("Successfully fetched local entry info from MI management API",
                 runtimeId = runtime.runtimeId,
                 entryName = entryInfo.name,
-                entryType = entryInfo.'type ?: "unknown");
+                entryType = entryInfo.'type);
 
-        return entryInfo.value ?: "";
-    }
-
-    // Get Inbound Endpoint parameters from management API via ICP internal API
-    isolated resource function get inboundEndpointParametersByComponent(
-            graphql:Context context,
-            string componentId,
-            string inboundName,
-            string? environmentId = (),
-            string? runtimeId = ()
-        ) returns types:Parameter[]|error {
-        value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
-        if authHeader !is string {
-            return error("Authorization header missing in request");
-        }
-
-        types:UserContextV2 userContext = check auth:extractUserContextV2(authHeader);
-        types:Component? component = check storage:getComponentById(componentId);
-        if component is () {
-            return error("Integration not found");
-        }
-
-        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
-        if !check auth:hasAnyPermission(userContext.userId, ["integration_mgt:view", "integration_mgt:edit", "integration_mgt:manage"], scope) {
-            return error("Insufficient permissions to view component artifacts");
-        }
-
-        types:Runtime[] runtimes = check storage:getRuntimes((), (), environmentId, component.projectId, componentId);
-        if runtimes.length() == 0 {
-            return error("No runtimes found for this component");
-        }
-
-        // Select runtime using shared helper
-        types:Runtime runtime = check selectRuntime(runtimes, componentId, environmentId, runtimeId);
-
-        // Build management API base URL
-        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
-
-        log:printInfo("Fetching inbound endpoint info via MI management API",
-                runtimeId = runtime.runtimeId,
-                managementUrl = baseUrl,
-                inboundName = inboundName);
-
-        http:Client|error mgmtClientResult = artifactsApiAllowInsecureTLS
-            ? new (baseUrl, {secureSocket: {enable: false}})
-            : new (baseUrl);
-        if mgmtClientResult is error {
-            log:printError("Failed to create management API client", mgmtClientResult);
-            return error("Failed to create management API client");
-        }
-        http:Client mgmtClient = mgmtClientResult;
-
-        string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
-
-        // Fetch inbound endpoint info via MI Management API (/management/inbound-endpoints?...)
-        types:MgmtInboundEndpointInfo inboundInfo = check mi_management:fetchInboundEndpointInfo(
-                mgmtClient, hmacToken, inboundName);
-
-        // Convert management API response fields to Parameter[] format
-        types:Parameter[] params = [];
-        if inboundInfo.protocol is string {
-            params.push({name: "protocol", value: <string>inboundInfo.protocol});
-        }
-
-        // Fetch detailed parameters from the management API response
-        types:MgmtArtifactParameter[] mgmtParams = check mi_management:fetchArtifactParameterInfo(
-                mgmtClient, hmacToken, "inbound-endpoint", inboundName);
-
-        // Append each parameter from the management API to the result
-        if mgmtParams.length() > 0 {
-            foreach types:MgmtArtifactParameter p in mgmtParams {
-                params.push({name: p.key, value: p.value});
-            }
-        }
-
-        log:printInfo("Successfully fetched inbound endpoint info from MI management API",
-                runtimeId = runtime.runtimeId,
-                inboundName = inboundInfo.name,
-                paramCount = params.length());
-        return params;
+        return entryInfo.value;
     }
 
     // Get Parameters for any artifact type from management API via ICP internal API
@@ -2487,16 +2410,15 @@ service /graphql on graphqlListener {
         // Select runtime using shared helper
         types:Runtime runtime = check selectRuntime(runtimes, componentId, environmentId, runtimeId);
 
-        // Build management API base URL
-        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
-
         log:printInfo("Fetching artifact parameters via MI management API",
                 runtimeId = runtime.runtimeId,
-                managementUrl = baseUrl,
                 artifactType = artifactType,
                 artifactName = artifactName);
 
-        // Create MI management API client (toggle insecure TLS via configuration)
+        // Build management API base URL
+        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+
+        // Create management API client
         http:Client|error mgmtClientResult = artifactsApiAllowInsecureTLS
             ? new (baseUrl, {secureSocket: {enable: false}})
             : new (baseUrl);
@@ -2505,27 +2427,54 @@ service /graphql on graphqlListener {
             return error("Failed to create management API client");
         }
         http:Client mgmtClient = mgmtClientResult;
-
-        // Generate an HMAC JWT (same mechanism as heartbeat) to call the ICP internal API
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
-        // Fetch artifact parameter metadata via MI Management API
-        // NOTE: The management API does not have a dedicated parameters endpoint.
-        // fetchArtifactParameterInfo extracts available metadata fields from the
-        // appropriate management API endpoint and converts them to Parameter format.
-        // For connectors, packageName can be specified to disambiguate connectors with the same name.
-        types:MgmtArtifactParameter[] mgmtParams = check mi_management:fetchArtifactParameterInfo(
-                mgmtClient, hmacToken, artifactType, artifactName, packageName);
+        // Fetch artifact and extract parameters based on artifact type
+        types:Parameter[] params = [];
 
-        // Convert MgmtArtifactParameter[] to types:Parameter[]
-        types:Parameter[] params = from types:MgmtArtifactParameter p in mgmtParams
-            select {name: p.key, value: p.value};
+        if artifactType == mi_management:ARTIFACT_TYPE_INBOUND_ENDPOINT {
+            types:MgmtInboundEndpointInfo inboundInfo = check mi_management:fetchInboundEndpointArtifact(mgmtClient, hmacToken, artifactName);
+            // Append parameters from the management API response
+            params = inboundInfo.parameters ?: [];
+        } else if artifactType == mi_management:ARTIFACT_TYPE_MESSAGE_PROCESSOR {
+            types:MgmtMessageProcessorInfo processorInfo = check mi_management:fetchMessageProcessorArtifact(
+                    mgmtClient, hmacToken, artifactName);
+
+            // Append parameters from the map
+            map<string>? parameters = processorInfo.parameters;
+            if parameters is map<string> {
+                foreach var [key, value] in parameters.entries() {
+                    params.push({name: key, value: value});
+                }
+            }
+        } else if artifactType == mi_management:ARTIFACT_TYPE_DATA_SOURCE {
+            types:MgmtDataSourceInfo dataSourceInfo = check mi_management:fetchDataSourceArtifact(
+                    mgmtClient, hmacToken, artifactName);
+
+            // Append configuration parameters from the management API response
+            map<json>? configParams = dataSourceInfo.configurationParameters;
+            log:printDebug("Data source configurationParameters check",
+                    artifactName = artifactName,
+                    hasConfigParams = configParams is map<json>,
+                    configParamsValue = configParams);
+
+            if configParams is map<json> {
+                log:printDebug("Adding data source configuration parameters",
+                        artifactName = artifactName,
+                        parameterCount = configParams.length());
+                foreach var [key, value] in configParams.entries() {
+                    params.push({name: key, value: value.toString()});
+                }
+            }
+        }
+        // Add more artifact types here as needed
 
         log:printInfo("Successfully fetched artifact parameters from MI management API",
                 runtimeId = runtime.runtimeId,
                 artifactType = artifactType,
                 artifactName = artifactName,
                 paramCount = params.length());
+
         return params;
     }
 
@@ -2579,7 +2528,7 @@ service /graphql on graphqlListener {
 
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
-        types:MgmtDataSourceInfo overview = check mi_management:fetchDataSourceOverview(
+        types:MgmtDataSourceInfo overview = check mi_management:fetchDataSourceArtifact(
                 mgmtClient, hmacToken, dataSourceName);
 
         types:Parameter[] result = [];
@@ -2599,6 +2548,12 @@ service /graphql on graphqlListener {
         if overview.url is string {
             result.push({name: "url", value: <string>overview.url});
         }
+
+        log:printInfo("Successfully fetched data source overview from MI management API",
+                runtimeId = runtime.runtimeId,
+                dataSourceName = dataSourceName,
+                totalParamCount = result.length());
+
         return result;
     }
 
@@ -2651,7 +2606,7 @@ service /graphql on graphqlListener {
 
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
-        types:MgmtMessageStoreInfo overview = check mi_management:fetchMessageStoreOverview(
+        types:MgmtMessageStoreInfo overview = check mi_management:fetchMessageStoreArtifact(
                 mgmtClient, hmacToken, storeName);
 
         types:Parameter[] result = [];
@@ -2717,7 +2672,7 @@ service /graphql on graphqlListener {
 
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
 
-        types:MgmtMessageProcessorInfo overview = check mi_management:fetchMessageProcessorOverview(
+        types:MgmtMessageProcessorInfo overview = check mi_management:fetchMessageProcessorArtifact(
                 mgmtClient, hmacToken, processorName);
 
         types:Parameter[] result = [];
@@ -2741,7 +2696,7 @@ service /graphql on graphqlListener {
             string dataServiceName,
             string? environmentId = (),
             string? runtimeId = ()
-        ) returns types:DataServiceOverview|error {
+        ) returns types:MgmtDataServiceInfo|error {
         value:Cloneable|error|isolated object {} authHeader = context.get("Authorization");
         if authHeader !is string {
             return error("Authorization header missing in request");
@@ -2780,40 +2735,9 @@ service /graphql on graphqlListener {
             return error("Failed to create management API client");
         }
         http:Client mgmtClient = mgmtClientResult;
-
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
-
-        types:MgmtDataServiceOverview overview = check mi_management:fetchDataServiceOverview(
-                mgmtClient, hmacToken, dataServiceName);
-
-        types:DataServiceDataSourceEntry[] dataSources = from types:MgmtDataServiceDataSource ds in overview.dataSources
-            select {
-                name: ds.dataSourceId,
-                'type: ds.dataSourceType,
-                properties: from types:MgmtArtifactParameter p in ds.properties
-                    select {name: p.key, value: p.value}
-            };
-
-        types:DataServiceQueryEntry[] queries = from types:MgmtDataServiceQuery q in overview.queries
-            select {name: q.id, 'type: q.namespace};
-
-        types:DataServiceResourceEntry[] resources = from types:MgmtDataServiceResource r in overview.resources
-            select {name: r.resourcePath, 'type: r.resourceMethod};
-
-        types:DataServiceOperationEntry[] operations = from types:MgmtDataServiceOperation op in overview.operations
-            select {name: op.operationName, 'type: op.queryName};
-
-        return {
-            serviceName: overview.serviceName,
-            serviceDescription: overview.serviceDescription,
-            wsdl1_1: overview.wsdl1_1,
-            wsdl2_0: overview.wsdl2_0,
-            swagger_url: overview.swagger_url,
-            dataSources: dataSources,
-            queries: queries,
-            resources: resources,
-            operations: operations
-        };
+        types:MgmtDataServiceInfo dataServiceInfo = check mi_management:fetchDataServiceArtifact(mgmtClient, hmacToken, dataServiceName); 
+        return dataServiceInfo;
     }
 }
 

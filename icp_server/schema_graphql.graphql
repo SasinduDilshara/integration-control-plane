@@ -491,64 +491,64 @@ type RegistryResource {
 }
 
 # ============================================
-# RuntimeLogLevel Type - Runtime Log Level Configuration
+# Parameter Type - Generic Key-Value Parameter
 # ============================================
-type RuntimeLogLevel {
-  runtimeId: String!
-  componentName: String!
-  logLevel: String!
-}
-
-# ============================================
-# RuntimeType Enum - Component Runtime Type
-# ============================================
-enum RuntimeType {
-  MI
-  BI
-}
-
-# ============================================
-# ArtifactState Enum - Artifact Status
-# ============================================
-enum ArtifactState {
-  FAILED
-  STOPPING
-  STARTING
-  DISABLED
-  ENABLED
-}
-
-# ============================================
-# ArtifactRuntimeInfo Type - Runtime Information for Artifacts
-# ============================================
-type ArtifactRuntimeInfo {
-  runtimeId: String!
-  status: String!
-}
-
-# ============================================
-# Component Type - Application Component
-# ============================================
-type Component {
-  # Basic Identity Fields
-  id: String!
-  projectId: String!
-  orgHandler: String!
-  orgId: Int
-
-  # Component Metadata
+type Parameter {
   name: String!
-  handler: String!
-  displayName: String!
-  displayType: String!
-  description: String
-  ownerName: String
+  value: String!
+}
 
-  # Status Fields
-  status: String!
-  initStatus: String
+# ============================================
+# MgmtDataServiceDataSource Type - Data Service Data Source
+# ============================================
+type MgmtDataServiceDataSource {
+  dataSourceId: String!
+  dataSourceType: String
+}
 
-  # Version & Timestamps
+# ============================================
+# MgmtDataServiceQuery Type - Data Service Query
+# ============================================
+type MgmtDataServiceQuery {
+  id: String!
+  dataSourceId: String
+  namespace: String
+}
+
+# ============================================
+# MgmtDataServiceResource Type - Data Service Resource
+# ============================================
+type MgmtDataServiceResource {
+  resourcePath: String!
+  resourceMethod: String
+  resourceQuery: String
+}
+
+# ============================================
+# MgmtDataServiceOperation Type - Data Service Operation
+# ============================================
+type MgmtDataServiceOperation {
+  operationName: String!
+  queryName: String
+}
+
+# ============================================
+# MgmtDataServiceOverview Type - Data Service Overview
+# ============================================
+type MgmtDataServiceOverview {
+  serviceName: String!
+  serviceDescription: String
+  wsdl1_1: String
+  wsdl2_0: String
+  swagger_url: String
+  dataSources: [MgmtDataServiceDataSource!]!
+  queries: [MgmtDataServiceQuery!]!
+  resources: [MgmtDataServiceResource!]!
+  operations: [MgmtDataServiceOperation!]!
+}
+
+# ============================================
+# # Version & Timestamps
   version: String!
   createdAt: String!
   lastBuildDate: String

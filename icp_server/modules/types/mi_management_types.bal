@@ -1,4 +1,4 @@
-// Copyright (c) 2025, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
+// Copyright (c) 2026, WSO2 Inc. (http://www.wso2.org) All Rights Reserved.
 //
 // WSO2 Inc. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
@@ -20,54 +20,74 @@
 //   - /management     → operational metadata (status, URLs, etc.)
 
 // GET /management/proxy-services?proxyServiceName={name}
-public type MgmtProxyServiceInfo record {|
+public type MgmtProxyServiceInfo record {
     string name;
-    string wsdl1_1?;
-    string wsdl2_0?;
-    string configuration?;
-|};
-
-// GET /management/apis?apiName={name}
-public type MgmtRestApiInfo record {|
-    string name;
-    string url?;
     string tracing?;
+    string[] eprs?;
     string stats?;
     string configuration?;
-|};
+    boolean isRunning?;
+    string wsdl1_1?;
+    string wsdl2_0?;
+};
+
+public type APIResourcesItem record {
+    string[] methods;
+    string url;
+};
+
+// GET /management/apis?apiName={name}
+public type MgmtRestApiInfo record {
+    string name;
+    string tracing?;
+    string stats?;
+    int port?;
+    string configuration?;
+    string context?;
+    APIResourcesItem[] resources?;
+    string[] urlList?;
+    string version?;
+    string url?;
+};
 
 // GET /management/endpoints?endpointName={name}
-public type MgmtEndpointInfo record {|
+public type MgmtEndpointInfo record {
     string name;
+    string tracing?;
+    string address?;
+    string configuration?;
     string 'type?;
     boolean isActive?;
-|};
+};
 
 // GET /management/sequences?sequenceName={name}
-public type MgmtSequenceInfo record {|
+public type MgmtSequenceInfo record {
     string name;
     string container?;
     string tracing?;
+    string[] mediators?;
     string stats?;
-|};
+    string configuration?;
+};
 
 // GET /management/tasks?taskName={name}
-public type MgmtTaskInfo record {|
+public type MgmtTaskInfo record {
     string name;
-    string configuration?;
-    string triggerType?;
     string triggerInterval?;
-    string triggerCount?;
+    string configuration?;
     string implementation?;
+    string triggerType?;
+    string triggerCount?;
+    map<string> properties?;
     string taskGroup?;
-|};
+};
 
 // GET /management/local-entries?name={name}
 // Open record to accept additional fields from MI Management API
 public type MgmtLocalEntryInfo record {
     string name;
-    string 'type?;
-    string value?;
+    string 'type;
+    string value;
 };
 
 // GET /management/message-stores?name={name}
@@ -75,76 +95,84 @@ public type MgmtLocalEntryInfo record {
 public type MgmtMessageStoreInfo record {
     string name;
     string 'type?;
-    int size?;
     string container?;
+    string file?;
+    int size?;
+    string configuration?;
+    map<string> properties?;
+    // Allow additional fields from the API
 };
 
 // GET /management/message-processors?name={name}
 // Open record to accept additional fields from MI Management API
-// (fileName, configuration, artifactContainer, parameters, etc.)
 public type MgmtMessageProcessorInfo record {
     string name;
     string 'type?;
-    string status?;
+    string fileName?;
     string messageStore?;
+    string configuration?;
+    map<string> parameters?;
+    string status?;
+    // Allow additional fields from the API
 };
 
 // GET /management/inbound-endpoints?inboundEndpointName={name}
-// Full single-item response: {name, protocol, sequence, error, status, stats,
-//   tracing, configuration, parameters:[{name,value},...]}
 // Open record to accept additional fields from MI Management API
 public type MgmtInboundEndpointInfo record {
     string name;
     string protocol?;
-    string status?;
-    string stats?;
+    string sequence?;
     string tracing?;
+    string stats?;
+    string configuration?;
+    string 'error?;
+    string status?;
+    Parameter[] parameters?;
+    // Allow additional fields from the API
 };
 
 // GET /management/connectors (no name filter — filtered client-side)
-public type MgmtConnectorInfo record {|
+public type MgmtConnectorInfo record {
     string name;
     string 'package?;
     string description?;
     string status?;
-|};
+};
 
-// Individual template entry (used in sequence and endpoint template lists)
-public type MgmtTemplateInfo record {|
+
+// GET /management/templates?name={name}&type={type}
+public type MgmtTemplateInfo record {
+    string configuration;
     string name;
-|};
+    string 'type;
+};
 
 // GET /management/data-services?dataServiceName={name}
-public type MgmtDataServiceInfo record {|
-    string name;
-    string wsdl1_1?;
-    string wsdl2_0?;
-|};
+public type MgmtDataServiceOperation record {
+    string operationName;
+    string queryName?;
+};
 
-public type MgmtDataServiceDataSource record {|
-    string dataSourceId;
-    string dataSourceType?;
-    MgmtArtifactParameter[] properties;
-|};
-
-public type MgmtDataServiceQuery record {|
+public type MgmtDataServiceQuery record {
     string id;
     string dataSourceId?;
     string namespace?;
-|};
+};
 
-public type MgmtDataServiceResource record {|
+public type MgmtDataServiceResource record {
     string resourcePath;
     string resourceMethod?;
     string resourceQuery?;
-|};
+};
 
-public type MgmtDataServiceOperation record {|
-    string operationName;
-    string queryName?;
-|};
+public type MgmtDataServiceDataSource record {
+    string dataSourceId;
+    string dataSourceType?;
+};
 
-public type MgmtDataServiceOverview record {|
+// GET /management/data-services?dataServiceName={name}
+// Open record to accept additional fields from MI Management API
+public type MgmtDataServiceInfo record {
     string serviceName;
     string serviceDescription?;
     string wsdl1_1?;
@@ -154,24 +182,27 @@ public type MgmtDataServiceOverview record {|
     MgmtDataServiceQuery[] queries;
     MgmtDataServiceResource[] resources;
     MgmtDataServiceOperation[] operations;
-|};
+    string configuration?;
+    string serviceGroupName?;
+};
 
 // GET /management/data-sources?name={name}
 // Open record to accept additional fields from MI Management API
 public type MgmtDataSourceInfo record {
     string name;
     string 'type?;
-    string description?;
+    string configuration?;
     string driverClass?;
+    string description?;
     string userName?;
     string url?;
+    map<json> configurationParameters?;
+    // Allow additional fields from the API
 };
 
-// Key-value pair extracted from a management API artifact response.
-// Equivalent to types:Parameter but sourced from the management API.
-// Note: for inbound endpoints, the management API uses field name 'name'
-// (not 'key') in the parameters array; this type normalises to 'key'.
-public type MgmtArtifactParameter record {|
-    string key;
-    string value;
-|};
+// GET /management/applications?carbonAppName={name}
+public type MgmtCarbonAppInfo record {
+    string name;
+    string version?;
+    json artifacts?;
+};

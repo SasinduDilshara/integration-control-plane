@@ -31,6 +31,21 @@ const string ARTIFACT_TYPE_SEQUENCE = "sequence";
 const string ARTIFACT_TYPE_TEMPLATE = "template";
 const string ARTIFACT_TYPE_MESSAGE_PROCESSOR = "message-processor";
 const string ARTIFACT_TYPE_TASK = "task";
+const string ARTIFACT_TYPE_LOCAL_ENTRY = "local-entry";
+const string ARTIFACT_TYPE_DATA_SERVICE = "data-service";
+const string ARTIFACT_TYPE_CONNECTOR = "connector";
+
+// Artifact type plural aliases (for backward compatibility and flexibility)
+const string ARTIFACT_TYPE_APIS = "apis";
+const string ARTIFACT_TYPE_PROXY_SERVICES = "proxy-services";
+const string ARTIFACT_TYPE_ENDPOINTS = "endpoints";
+const string ARTIFACT_TYPE_INBOUND_ENDPOINTS = "inbound-endpoints";
+const string ARTIFACT_TYPE_SEQUENCES = "sequences";
+const string ARTIFACT_TYPE_TASKS = "tasks";
+const string ARTIFACT_TYPE_MESSAGE_PROCESSORS = "message-processors";
+const string ARTIFACT_TYPE_LOCAL_ENTRIES = "local-entries";
+const string ARTIFACT_TYPE_DATA_SERVICES = "data-services";
+const string ARTIFACT_TYPE_CONNECTORS = "connectors";
 
 // Management API path constants
 const string MGMT_PATH_APIS = "/management/apis";
@@ -854,25 +869,25 @@ type ArtifactTableMetadata record {|
 // Resolve artifact type aliases to table metadata (single source of truth for artifact type → table mapping)
 isolated function resolveArtifactTableMetadata(string artifactType) returns ArtifactTableMetadata? {
     string normalizedType = artifactType.toLowerAscii().trim();
-    if normalizedType == ARTIFACT_TYPE_API || normalizedType == "apis" {
+    if normalizedType == ARTIFACT_TYPE_APIS {
         return {tableName: "mi_api_artifacts", nameColumn: "api_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == ARTIFACT_TYPE_PROXY_SERVICE || normalizedType == "proxy-services" {
+    } else if normalizedType == ARTIFACT_TYPE_PROXY_SERVICES {
         return {tableName: "mi_proxy_service_artifacts", nameColumn: "proxy_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == ARTIFACT_TYPE_ENDPOINT || normalizedType == "endpoints" {
+    } else if normalizedType == ARTIFACT_TYPE_ENDPOINTS {
         return {tableName: "mi_endpoint_artifacts", nameColumn: "endpoint_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == ARTIFACT_TYPE_INBOUND_ENDPOINT || normalizedType == "inbound-endpoints" {
+    } else if normalizedType == ARTIFACT_TYPE_INBOUND_ENDPOINTS {
         return {tableName: "mi_inbound_endpoint_artifacts", nameColumn: "inbound_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == ARTIFACT_TYPE_SEQUENCE || normalizedType == "sequences" {
+    } else if normalizedType == ARTIFACT_TYPE_SEQUENCES {
         return {tableName: "mi_sequence_artifacts", nameColumn: "sequence_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
-    } else if normalizedType == "task" || normalizedType == "tasks" {
+    } else if normalizedType == ARTIFACT_TYPE_TASKS {
         return {tableName: "mi_task_artifacts", nameColumn: "task_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == ARTIFACT_TYPE_MESSAGE_PROCESSOR || normalizedType == "message-processors" {
+    } else if normalizedType == ARTIFACT_TYPE_MESSAGE_PROCESSORS {
         return {tableName: "mi_message_processor_artifacts", nameColumn: "processor_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == "local-entry" || normalizedType == "local-entries" {
+    } else if normalizedType == ARTIFACT_TYPE_LOCAL_ENTRIES {
         return {tableName: "mi_local_entry_artifacts", nameColumn: "entry_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == "data-service" || normalizedType == "data-services" {
+    } else if normalizedType == ARTIFACT_TYPE_DATA_SERVICES {
         return {tableName: "mi_data_service_artifacts", nameColumn: "service_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
-    } else if normalizedType == "connector" || normalizedType == "connectors" {
+    } else if normalizedType == ARTIFACT_TYPE_CONNECTORS {
         return {tableName: "mi_connector_artifacts", nameColumn: "connector_name", hasTracing: false, hasStatistics: false, stateColumn: "status"};
     }
     return ();

@@ -27,7 +27,8 @@ import type { TabProps } from './artifact-config';
 
 export function ArtifactSource({ envId, componentId, artifactType, artifact }: TabProps) {
   const sourceType = ARTIFACT_TYPE_TO_SOURCE_TYPE[artifactType] ?? artifactType.toLowerCase();
-  const { data: source, isLoading, error } = useArtifactSource(envId, componentId, sourceType, artifact.name?.toString() ?? '', artifact.package?.toString());
+  const templateType = artifactType === 'Template' ? (artifact.type as string | undefined) : undefined;
+  const { data: source, isLoading, error } = useArtifactSource(envId, componentId, sourceType, artifact.name?.toString() ?? '', artifact.package?.toString(), templateType);
   if (isLoading) return <CircularProgress size={24} sx={{ display: 'block', mx: 'auto', py: 4 }} />;
   if (error || !source) return <Typography sx={emptySx}>No source content available.</Typography>;
 
@@ -205,12 +206,12 @@ export function DataServiceOverview({ artifact, envId, componentId }: TabProps) 
         title="Data Sources"
         items={data.dataSources}
         renderSummary={(item) => {
-          const ds = item as { name: string; type?: string };
-          return ds.name;
+          const ds = item as { dataSourceId: string; dataSourceType?: string };
+          return ds.dataSourceId;
         }}
         renderDetails={(item) => {
-          const ds = item as { name: string; type?: string; properties: { name: string; value: string }[] };
-          return [['Name', ds.name], ...(ds.type ? [['Type', ds.type] as [string, string]] : []), ...ds.properties.map((p): [string, string] => [p.name, p.value])];
+          const ds = item as { dataSourceId: string; dataSourceType?: string };
+          return [['ID', ds.dataSourceId], ...(ds.dataSourceType ? [['Type', ds.dataSourceType] as [string, string]] : [])];
         }}
       />
 
@@ -218,10 +219,10 @@ export function DataServiceOverview({ artifact, envId, componentId }: TabProps) 
       <DataServiceSection
         title="Queries"
         items={data.queries}
-        renderSummary={(item) => (item as { name: string }).name}
+        renderSummary={(item) => (item as { id: string }).id}
         renderDetails={(item) => {
-          const q = item as { name: string; type?: string };
-          return [['Name', q.name], ...(q.type ? [['Type', q.type] as [string, string]] : [])];
+          const q = item as { id: string; dataSourceId?: string };
+          return [['ID', q.id], ...(q.dataSourceId ? [['Data Source', q.dataSourceId] as [string, string]] : [])];
         }}
       />
 
@@ -229,10 +230,10 @@ export function DataServiceOverview({ artifact, envId, componentId }: TabProps) 
       <DataServiceSection
         title="Resources"
         items={data.resources}
-        renderSummary={(item) => (item as { name: string }).name}
+        renderSummary={(item) => (item as { resourcePath: string }).resourcePath}
         renderDetails={(item) => {
-          const r = item as { name: string; type?: string };
-          return [['Name', r.name], ...(r.type ? [['Type', r.type] as [string, string]] : [])];
+          const r = item as { resourcePath: string; resourceMethod?: string };
+          return [['Path', r.resourcePath], ...(r.resourceMethod ? [['Method', r.resourceMethod] as [string, string]] : [])];
         }}
       />
 
@@ -240,10 +241,10 @@ export function DataServiceOverview({ artifact, envId, componentId }: TabProps) 
       <DataServiceSection
         title="Operations"
         items={data.operations}
-        renderSummary={(item) => (item as { name: string }).name}
+        renderSummary={(item) => (item as { operationName: string }).operationName}
         renderDetails={(item) => {
-          const o = item as { name: string; type?: string };
-          return [['Name', o.name], ...(o.type ? [['Type', o.type] as [string, string]] : [])];
+          const o = item as { operationName: string; queryName?: string };
+          return [['Name', o.operationName], ...(o.queryName ? [['Query', o.queryName] as [string, string]] : [])];
         }}
       />
     </Stack>

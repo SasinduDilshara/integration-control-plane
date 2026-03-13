@@ -339,13 +339,13 @@ export { ARTIFACT_QUERY_MAP };
 // ── Artifact detail panel queries ──
 
 const ARTIFACT_SOURCE_QUERY = `
-  query GetArtifactSource($environmentId: String!, $componentId: String!, $artifactType: String!, $artifactName: String!, $packageName: String) {
-    artifactSourceByComponent(environmentId: $environmentId, componentId: $componentId, artifactType: $artifactType, artifactName: $artifactName, packageName: $packageName)
+  query GetArtifactSource($environmentId: String!, $componentId: String!, $artifactType: String!, $artifactName: String!, $packageName: String, $templateType: String) {
+    artifactSourceByComponent(environmentId: $environmentId, componentId: $componentId, artifactType: $artifactType, artifactName: $artifactName, packageName: $packageName, templateType: $templateType)
   }`;
 
-export function useArtifactSource(envId: string, componentId: string, artifactType: string, artifactName: string, packageName?: string) {
+export function useArtifactSource(envId: string, componentId: string, artifactType: string, artifactName: string, packageName?: string, templateType?: string) {
   return useQuery({
-    queryKey: ['artifactSource', envId, componentId, artifactType, artifactName, packageName],
+    queryKey: ['artifactSource', envId, componentId, artifactType, artifactName, packageName, templateType],
     queryFn: () =>
       gql<{ artifactSourceByComponent: string }>(ARTIFACT_SOURCE_QUERY, {
         environmentId: envId,
@@ -353,6 +353,7 @@ export function useArtifactSource(envId: string, componentId: string, artifactTy
         artifactType,
         artifactName,
         packageName,
+        templateType,
       }).then((d) => d.artifactSourceByComponent),
     enabled: !!envId && !!componentId && !!artifactType && !!artifactName,
   });
@@ -407,10 +408,10 @@ export interface GqlDataServiceOverview {
   wsdl1_1?: string;
   wsdl2_0?: string;
   swagger_url?: string;
-  dataSources: Array<{ name: string; type?: string; properties: GqlArtifactParam[] }>;
-  queries: Array<{ name: string; type?: string }>;
-  resources: Array<{ name: string; type?: string }>;
-  operations: Array<{ name: string; type?: string }>;
+  dataSources: Array<{ dataSourceId: string; dataSourceType?: string }>;
+  queries: Array<{ id: string; dataSourceId?: string }>;
+  resources: Array<{ resourcePath: string; resourceMethod?: string }>;
+  operations: Array<{ operationName: string; queryName?: string }>;
 }
 
 const DATA_SERVICE_OVERVIEW_QUERY = `
@@ -426,21 +427,20 @@ const DATA_SERVICE_OVERVIEW_QUERY = `
       wsdl2_0
       swagger_url
       dataSources {
-        name
-        type
-        properties { name value }
+        dataSourceId
+        dataSourceType
       }
       queries {
-        name
-        type
+        id
+        dataSourceId
       }
       resources {
-        name
-        type
+        resourcePath
+        resourceMethod
       }
       operations {
-        name
-        type
+        operationName
+        queryName
       }
     }
   }`;
