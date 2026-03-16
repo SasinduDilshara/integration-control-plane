@@ -2133,9 +2133,15 @@ public type ArtifactStatusChangeInput record {|
     string status; // "active" or "inactive"
 |};
 
+public enum Status {
+    SUCCESS,
+    FAILED
+
+}
+
 // Response for artifact status change
 public type ArtifactStatusChangeResponse record {|
-    string status; // "success" or "failed"
+    Status status; // "SUCCESS" or "FAILED"
     string message;
     int successCount; // Number of runtimes successfully updated
     int failedCount; // Number of runtimes that failed
@@ -2152,7 +2158,7 @@ public type ArtifactTracingChangeInput record {|
 
 // Response for artifact tracing change
 public type ArtifactTracingChangeResponse record {|
-    string status; // "success" or "failed"
+    Status status; // "SUCCESS" or "FAILED"
     string message;
     int successCount; // Number of runtimes successfully updated
     int failedCount; // Number of runtimes that failed
@@ -2169,7 +2175,7 @@ public type ArtifactStatisticsChangeInput record {|
 
 // Response for artifact statistics change
 public type ArtifactStatisticsChangeResponse record {|
-    string status; // "success" or "failed"
+    Status status; // "SUCCESS" or "FAILED"
     string message;
     int successCount; // Number of runtimes successfully updated
     int failedCount; // Number of runtimes that failed
@@ -2184,7 +2190,7 @@ public type ArtifactTriggerInput record {|
 
 // Response for artifact trigger
 public type ArtifactTriggerResponse record {|
-    string status; // "success" or "failed"
+    Status status; // "SUCCESS" or "FAILED"
     string message;
     int successCount; // Number of runtimes successfully triggered
     int failedCount; // Number of runtimes that failed

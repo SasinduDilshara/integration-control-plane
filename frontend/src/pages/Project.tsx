@@ -16,56 +16,21 @@
  * under the License.
  */
 
-import { Alert, Avatar, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Grid, IconButton, ListingTable, PageContent, Stack, TablePagination, TextField, Tooltip, Typography } from '@wso2/oxygen-ui';
+import { Avatar, Button, CircularProgress, Grid, IconButton, ListingTable, PageContent, Stack, TablePagination, Tooltip, Typography } from '@wso2/oxygen-ui';
 import { Plus, PlugZap, RefreshCw, Trash2 } from '@wso2/oxygen-ui-icons-react';
 import EmptyListing from '../components/EmptyListing';
 import IntegrationTypesCard from '../components/IntegrationTypesCard';
 import SearchField from '../components/SearchField';
+import DeleteIntegrationDialog from '../components/DeleteIntegrationDialog';
 import { useNavigate } from 'react-router';
 import { useState, type JSX } from 'react';
 import { useProjectByHandler, useComponents, type GqlComponent } from '../api/queries';
-import { useDeleteComponent } from '../api/mutations';
 import NotFound from '../components/NotFound';
 import { formatDistanceToNow } from '../utils/time';
 import { resourceUrl, narrow, broaden, newComponentUrl, type ProjectScope } from '../nav';
 import { Permissions } from '../constants/permissions';
 import Authorized from '../components/Authorized';
 import { useLoadProjectPermissions } from '../hooks/usePermissionLoader';
-
-function DeleteDialog({ component, scope, projectId, onClose }: { component: GqlComponent; scope: ProjectScope; projectId: string; onClose: () => void }) {
-  const [confirmation, setConfirmation] = useState('');
-  const mutation = useDeleteComponent();
-  const confirmed = confirmation === component.displayName;
-
-  const handleDelete = () => {
-    mutation.mutate({ orgHandler: scope.org, componentId: component.id, projectId }, { onSuccess: onClose });
-  };
-
-  return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>
-        Are you sure you want to remove the integration &lsquo;<strong>{component.displayName}</strong>&rsquo; ?
-      </DialogTitle>
-      <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>This action will be irreversible and all related details will be lost. Please type in the integration name below to confirm.</DialogContentText>
-        {mutation.error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {mutation.error.message || 'Failed to delete integration. Please try again.'}
-          </Alert>
-        )}
-        <TextField autoFocus fullWidth placeholder="Enter integration name to confirm" value={confirmation} onChange={(e) => setConfirmation(e.target.value)} />
-      </DialogContent>
-      <DialogActions>
-        <Button variant="outlined" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button variant="contained" color="error" disabled={!confirmed || mutation.isPending} onClick={handleDelete}>
-          Delete
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
 
 function IntegrationsTable({
   components,
@@ -206,7 +171,7 @@ function IntegrationsTable({
         />
       )}
 
-      {deleting && <DeleteDialog component={deleting} scope={scope} projectId={projectId} onClose={() => setDeleting(null)} />}
+      {deleting && <DeleteIntegrationDialog component={deleting} orgHandler={scope.org} projectId={projectId} onClose={() => setDeleting(null)} />}
     </section>
   );
 }

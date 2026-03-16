@@ -20,10 +20,11 @@ import { useState, useMemo, type JSX } from 'react';
 import { Box, Button, Card, CardContent, Chip, IconButton, ListingTable, Menu, MenuItem, Select, FormControl, FormLabel, TablePagination, PageContent, PageTitle, type ListingTableDensity, CircularProgress } from '@wso2/oxygen-ui';
 import { Plus, MoreVertical, Filter, Download, FileText, Key, Shield, RefreshCw, Lock, Inbox } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate, useParams, Link as NavigateLink } from 'react-router';
-import { useComponents } from '../api/queries';
+import { useComponents, type GqlComponent } from '../api/queries';
 import { projectUrl, newComponentUrl, componentUrl, editComponentUrl } from '../paths';
 import { getStatusColor } from '../config/statusColors';
 import { capitalize } from '../utils/string';
+import DeleteIntegrationDialog from '../components/DeleteIntegrationDialog';
 
 const ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   Authentication: Key,
@@ -69,13 +70,13 @@ const FilterBar = ({ filters, onChange }: { filters: Filters; onChange: (f: Part
   </Card>
 );
 
-const ActionMenu = ({ anchor, onClose, onView, onEdit }: { anchor: HTMLElement | null; onClose: () => void; onView: () => void; onEdit: () => void }) => (
+const ActionMenu = ({ anchor, onClose, onView, onEdit, onDelete }: { anchor: HTMLElement | null; onClose: () => void; onView: () => void; onEdit: () => void; onDelete: () => void }) => (
   <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={onClose}>
     <MenuItem onClick={onView}>View Details</MenuItem>
     <MenuItem onClick={onEdit}>Edit</MenuItem>
     <MenuItem onClick={onClose}>Duplicate</MenuItem>
     <MenuItem onClick={onClose}>Export</MenuItem>
-    <MenuItem onClick={onClose} sx={{ color: 'error.main' }}>
+    <MenuItem onClick={onDelete} sx={{ color: 'error.main' }}>
       Delete
     </MenuItem>
   </Menu>
@@ -97,6 +98,7 @@ export default function Components(): JSX.Element {
     el: HTMLElement | null;
     handler: string | null;
   }>({ el: null, handler: null });
+  const [deleting, setDeleting] = useState<GqlComponent | null>(null);
 
   const list = useMemo(() => {
     const q = filters.query.toLowerCase();
@@ -238,7 +240,14 @@ export default function Components(): JSX.Element {
             if (orgId && id && menu.handler) navigate(editComponentUrl(orgId, id, menu.handler));
             setMenu({ el: null, handler: null });
           }}
+          onDelete={() => {
+            const component = components.find((c) => c.handler === menu.handler);
+            if (component) setDeleting(component);
+            setMenu({ el: null, handler: null });
+          }}
         />
+
+        {deleting && orgId && id && <DeleteIntegrationDialog component={deleting} orgHandler={orgId} projectId={id} onClose={() => setDeleting(null)} />}
       </PageContent>
     </>
   );
