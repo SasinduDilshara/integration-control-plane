@@ -16,44 +16,63 @@
  * under the License.
  */
 
-import { Alert, Avatar, Box, Card, CardContent, Chip, CircularProgress, Divider, IconButton, MenuItem, PageContent, Select, Snackbar, Stack, Typography } from '@wso2/oxygen-ui';
-import { RefreshCw } from '@wso2/oxygen-ui-icons-react';
+import { Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, Drawer, IconButton, ListingTable, MenuItem, PageContent, Select, Snackbar, Stack, TablePagination, TextField, Typography } from '@wso2/oxygen-ui';
+import { Maximize2, RefreshCw, X } from '@wso2/oxygen-ui-icons-react';
+import DataTable from '../components/DataTable';
 import { useState, type JSX } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useProjectByHandler, useComponentByHandler, useEnvironments, useLoggers } from '../api/queries';
+import { useProjectByHandler, useComponentByHandler, useEnvironments, useLoggers, useRuntimes } from '../api/queries';
 import { useUpdateLogLevel } from '../api/mutations';
 import NotFound from '../components/NotFound';
 import { resourceUrl, broaden, type ComponentScope } from '../nav';
 
-type LogLevel = 'INFO' | 'DEBUG' | 'WARN' | 'ERROR';
+type LogLevel = 'OFF' | 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
 
-const LOG_LEVELS: LogLevel[] = ['INFO', 'DEBUG', 'WARN', 'ERROR'];
+const MI_LOG_LEVELS: LogLevel[] = ['OFF', 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'FATAL'];
+const BI_LOG_LEVELS: LogLevel[] = ['DEBUG', 'INFO', 'WARN', 'ERROR'];
 
-const getLogLevelColor = (level: string): 'default' | 'info' | 'warning' | 'error' => {
+const drawerSx = { '& .MuiDrawer-paper': { width: '60%', maxWidth: 700, minWidth: 400, position: 'fixed', top: 64, height: 'calc(100% - 64px)', borderLeft: '1px solid', borderColor: 'divider' } };
+const headerSx = { px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' };
+
+const getLogLevelColor = (level: string): 'default' | 'primary' | 'secondary' | 'info' | 'success' | 'warning' | 'error' => {
   switch (level) {
+    case 'OFF':
+      return 'default';      // Gray
+    case 'TRACE':
+      return 'secondary';    // Purple/Pink
     case 'DEBUG':
-      return 'info';
+      return 'info';         // Blue
+    case 'INFO':
+      return 'success';      // Green
     case 'WARN':
-      return 'warning';
+      return 'warning';      // Orange
     case 'ERROR':
-      return 'error';
+      return 'error';        // Red
+    case 'FATAL':
+      return 'error';        // Red (most critical)
     default:
       return 'default';
   }
 };
 
-function LoggersList({ environmentId, componentId }: { environmentId: string; componentId: string }) {
+function LoggersList({ environmentId, componentId, componentType }: { environmentId: string; componentId: string; componentType: string }) {
   const { data: loggers = [], isLoading, isError, error, refetch } = useLoggers(environmentId, componentId);
   const updateLogLevel = useUpdateLogLevel();
   const [updatingLogger, setUpdatingLogger] = useState<string | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [runtimeDrawer, setRuntimeDrawer] = useState<{ loggerName: string; runtimeIds: string[] } | null>(null);
 
-  const handleLogLevelChange = async (componentName: string, runtimeIds: string[], newLevel: LogLevel) => {
-    setUpdatingLogger(componentName);
+  const handleLogLevelChange = async (uniqueKey: string, loggerName: string, componentName: string, runtimeIds: string[], newLevel: LogLevel) => {
+    setUpdatingLogger(uniqueKey);
+    const isMI = componentType === 'MI';
     try {
+      // For MI: send loggerName (both update and add use loggerName, add also includes loggerClass)
+      // For BI: send componentName
       await updateLogLevel.mutateAsync({
         runtimeIds,
-        componentName,
+        ...(isMI ? { loggerName } : { componentName }),
         logLevel: newLevel,
       });
       setSnackbarOpen(true);
@@ -86,6 +105,14 @@ function LoggersList({ environmentId, componentId }: { environmentId: string; co
     );
   }
 
+  const isMI = componentType === 'MI';
+  const logLevels = isMI ? MI_LOG_LEVELS : BI_LOG_LEVELS;
+
+  // Pagination logic
+  const maxPage = Math.max(0, Math.ceil(loggers.length / rowsPerPage) - 1);
+  const safePage = Math.min(page, maxPage);
+  const paginatedLoggers = loggers.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
+
   if (loggers.length === 0) {
     return (
       <Box sx={{ p: 3, bgcolor: 'action.hover', borderRadius: 1, textAlign: 'center' }}>
@@ -98,34 +125,100 @@ function LoggersList({ environmentId, componentId }: { environmentId: string; co
 
   return (
     <>
-      <Stack spacing={2}>
-        {loggers.map((logger) => (
-          <Box key={logger.componentName} sx={{ p: 2, bgcolor: 'background.paper', border: 1, borderColor: 'divider', borderRadius: 1 }}>
-            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={2}>
-              <Box sx={{ flex: 1 }}>
-                <Typography variant="body1" sx={{ fontWeight: 500, fontFamily: 'monospace' }}>
-                  {logger.componentName}
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {logger.runtimeIds.length} runtime{logger.runtimeIds.length !== 1 ? 's' : ''}
-                </Typography>
-              </Box>
-              <Select value={logger.logLevel} onChange={(e) => handleLogLevelChange(logger.componentName, logger.runtimeIds, e.target.value as LogLevel)} size="small" disabled={updatingLogger === logger.componentName} sx={{ minWidth: 120 }}>
-                {LOG_LEVELS.map((level) => (
-                  <MenuItem key={level} value={level}>
-                    <Chip label={level} size="small" color={getLogLevelColor(level)} sx={{ minWidth: 70 }} />
-                  </MenuItem>
-                ))}
-              </Select>
-            </Stack>
-          </Box>
-        ))}
-      </Stack>
+      <ListingTable.Container>
+        <ListingTable>
+          <ListingTable.Head>
+            <ListingTable.Row>
+              {isMI && <ListingTable.Cell>Logger Name</ListingTable.Cell>}
+              <ListingTable.Cell>Component Name</ListingTable.Cell>
+              <ListingTable.Cell>Log Level</ListingTable.Cell>
+              <ListingTable.Cell></ListingTable.Cell>
+            </ListingTable.Row>
+          </ListingTable.Head>
+          <ListingTable.Body>
+            {paginatedLoggers.map((logger) => {
+              const uniqueKey = logger.loggerName || logger.componentName;
+
+              return (
+                <ListingTable.Row key={uniqueKey}>
+                  {isMI && (
+                    <ListingTable.Cell>
+                      <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                        {logger.loggerName}
+                      </Typography>
+                    </ListingTable.Cell>
+                  )}
+                  <ListingTable.Cell>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                      {logger.componentName}
+                    </Typography>
+                  </ListingTable.Cell>
+                  <ListingTable.Cell>
+                    <Select value={logger.logLevel} onChange={(e) => handleLogLevelChange(uniqueKey, logger.loggerName, logger.componentName, logger.runtimeIds, e.target.value as LogLevel)} size="small" disabled={updatingLogger === uniqueKey} sx={{ minWidth: 120 }}>
+                      {logLevels.map((level) => (
+                        <MenuItem key={level} value={level}>
+                          <Chip label={level} size="small" color={getLogLevelColor(level)} sx={{ minWidth: 70 }} />
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </ListingTable.Cell>
+                  <ListingTable.Cell>
+                    <Button variant="outlined" size="small" onClick={() => setRuntimeDrawer({ loggerName: logger.loggerName || logger.componentName, runtimeIds: logger.runtimeIds })}>
+                      View Runtimes
+                    </Button>
+                  </ListingTable.Cell>
+                </ListingTable.Row>
+              );
+            })}
+          </ListingTable.Body>
+        </ListingTable>
+        <TablePagination
+          sx={{ borderTop: '1px solid', borderColor: 'divider' }}
+          component="div"
+          count={loggers.length}
+          page={safePage}
+          onPageChange={(_, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          rowsPerPageOptions={[5, 10, 25, 50]}
+        />
+      </ListingTable.Container>
       <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
         <Alert onClose={() => setSnackbarOpen(false)} severity="success" variant="filled" sx={{ width: '100%' }}>
           Logger level update in progress, please refresh after sometime to view the change
         </Alert>
       </Snackbar>
+
+      {runtimeDrawer && (
+        <Drawer anchor="right" open onClose={() => setRuntimeDrawer(null)} variant="persistent" sx={drawerSx}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={headerSx}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+              {runtimeDrawer.loggerName}
+            </Typography>
+            <Stack direction="row" gap={0.5}>
+              <IconButton size="small" aria-label="maximize" disabled>
+                <Maximize2 size={16} />
+              </IconButton>
+              <IconButton size="small" aria-label="close" onClick={() => setRuntimeDrawer(null)}>
+                <X size={16} />
+              </IconButton>
+            </Stack>
+          </Stack>
+          <Box sx={{ px: 2, py: 2 }}>
+            <DataTable
+              rows={runtimeDrawer.runtimeIds.map((runtimeId) => [
+                <Typography key="id" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+                  {runtimeId}
+                </Typography>,
+              ])}
+              emptyMsg="No runtimes found."
+            />
+          </Box>
+        </Drawer>
+      )}
     </>
   );
 }
@@ -133,6 +226,9 @@ function LoggersList({ environmentId, componentId }: { environmentId: string; co
 export default function ManageLoggers(scope: ComponentScope): JSX.Element {
   const queryClient = useQueryClient();
   const [refreshingEnv, setRefreshingEnv] = useState<string | null>(null);
+  const [addLoggerDialog, setAddLoggerDialog] = useState<{ open: boolean; environmentId?: string; runtimeIds?: string[] }>({ open: false });
+  const [newLoggerForm, setNewLoggerForm] = useState({ loggerName: '', loggerClass: '', logLevel: 'INFO' as LogLevel });
+  const updateLogLevel = useUpdateLogLevel();
   const { data: project, isLoading: loadingProject } = useProjectByHandler(scope.project);
   const projectId = project?.id ?? '';
   const { data: component, isLoading: loadingComponent } = useComponentByHandler(projectId, scope.component);
@@ -142,6 +238,33 @@ export default function ManageLoggers(scope: ComponentScope): JSX.Element {
     setRefreshingEnv(envId);
     await queryClient.invalidateQueries({ queryKey: ['loggers', envId, componentId] });
     setRefreshingEnv(null);
+  };
+
+  const handleAddLogger = async () => {
+    if (!addLoggerDialog.runtimeIds || addLoggerDialog.runtimeIds.length === 0) {
+      console.error('No runtime IDs available');
+      return;
+    }
+
+    try {
+      await updateLogLevel.mutateAsync({
+        runtimeIds: addLoggerDialog.runtimeIds,
+        loggerName: newLoggerForm.loggerName,
+        loggerClass: newLoggerForm.loggerClass,
+        logLevel: newLoggerForm.logLevel,
+      });
+
+      // Close dialog and reset form
+      setAddLoggerDialog({ open: false });
+      setNewLoggerForm({ loggerName: '', loggerClass: '', logLevel: 'INFO' });
+
+      // Refresh loggers
+      if (addLoggerDialog.environmentId) {
+        await queryClient.invalidateQueries({ queryKey: ['loggers', addLoggerDialog.environmentId, component?.id] });
+      }
+    } catch (error) {
+      console.error('Failed to add logger:', error);
+    }
   };
 
   const isLoading = loadingProject || loadingComponent;
@@ -190,25 +313,86 @@ export default function ManageLoggers(scope: ComponentScope): JSX.Element {
               </CardContent>
             </Card>
           ) : (
-            environments.map((env) => (
-              <Card key={env.id} variant="outlined" sx={{ mb: 3 }}>
-                <CardContent>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between">
-                    <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
-                      {env.name}
-                    </Typography>
-                    <IconButton size="small" onClick={() => handleRefresh(env.id, component.id)} disabled={refreshingEnv === env.id} aria-label="Refresh loggers">
-                      <RefreshCw size={16} style={{ animation: refreshingEnv === env.id ? 'spin 1s linear infinite' : 'none', transformOrigin: 'center' }} />
-                    </IconButton>
-                  </Stack>
-                  <Divider sx={{ my: 2 }} />
-                  <LoggersList environmentId={env.id} componentId={component.id} />
-                </CardContent>
-              </Card>
-            ))
+            environments.map((env) => {
+              // eslint-disable-next-line react-hooks/rules-of-hooks
+              const { data: runtimes = [] } = useRuntimes(env.id, projectId, component.id);
+              const runtimeIds = runtimes.map((r) => r.runtimeId);
+
+              return (
+                <Card key={env.id} variant="outlined" sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Stack direction="row" alignItems="center" justifyContent="space-between">
+                      <Typography variant="h6" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
+                        {env.name}
+                      </Typography>
+                      <Stack direction="row" gap={1}>
+                        {component.componentType === 'MI' && runtimeIds.length > 0 && (
+                          <Button variant="outlined" size="small" onClick={() => setAddLoggerDialog({ open: true, environmentId: env.id, runtimeIds })}>
+                            Add Logger
+                          </Button>
+                        )}
+                        <IconButton size="small" onClick={() => handleRefresh(env.id, component.id)} disabled={refreshingEnv === env.id} aria-label="Refresh loggers">
+                          <RefreshCw size={16} style={{ animation: refreshingEnv === env.id ? 'spin 1s linear infinite' : 'none', transformOrigin: 'center' }} />
+                        </IconButton>
+                      </Stack>
+                    </Stack>
+                    <Divider sx={{ my: 2 }} />
+                    <LoggersList environmentId={env.id} componentId={component.id} componentType={component.componentType} />
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </PageContent>
       </Box>
+
+      {/* Add Logger Dialog */}
+      <Dialog open={addLoggerDialog.open} onClose={() => setAddLoggerDialog({ open: false })} maxWidth="sm" fullWidth>
+        <DialogTitle>Add New Logger</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Logger Name"
+              value={newLoggerForm.loggerName}
+              onChange={(e) => setNewLoggerForm({ ...newLoggerForm, loggerName: e.target.value })}
+              placeholder="e.g., synapse-api, org-apache-hadoop-hive"
+              fullWidth
+              required
+            />
+            <TextField
+              label="Logger Class"
+              value={newLoggerForm.loggerClass}
+              onChange={(e) => setNewLoggerForm({ ...newLoggerForm, loggerClass: e.target.value })}
+              placeholder="e.g., org.apache.synapse.rest.API"
+              fullWidth
+              required
+            />
+            <Box>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                Log Level
+              </Typography>
+              <Select value={newLoggerForm.logLevel} onChange={(e) => setNewLoggerForm({ ...newLoggerForm, logLevel: e.target.value as LogLevel })} size="small" fullWidth>
+                {MI_LOG_LEVELS.map((level) => (
+                  <MenuItem key={level} value={level}>
+                    <Chip label={level} size="small" color={getLogLevelColor(level)} sx={{ minWidth: 70 }} />
+                  </MenuItem>
+                ))}
+              </Select>
+            </Box>
+            <Typography variant="body2" color="text.secondary">
+              This logger will be added to {addLoggerDialog.runtimeIds?.length || 0} runtime(s)
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddLoggerDialog({ open: false })} color="inherit">
+            Cancel
+          </Button>
+          <Button onClick={handleAddLogger} variant="contained" disabled={!newLoggerForm.loggerName || !newLoggerForm.loggerClass || updateLogLevel.isPending}>
+            {updateLogLevel.isPending ? 'Adding...' : 'Add Logger'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

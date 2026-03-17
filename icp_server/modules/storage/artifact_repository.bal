@@ -1317,6 +1317,7 @@ public isolated function getLoggersByEnvironmentAndComponent(string environmentI
     foreach [string, map<string[]>] [componentName, levelMap] in loggerGroupMap.entries() {
         foreach [string, string[]] [logLevel, rids] in levelMap.entries() {
             types:LoggerGroup group = {
+                loggerName: componentName, // Use componentName as loggerName for DB-based loggers
                 componentName: componentName,
                 logLevel: <types:LogLevel>logLevel,
                 runtimeIds: rids

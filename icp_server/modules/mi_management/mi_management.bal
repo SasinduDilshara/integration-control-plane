@@ -202,6 +202,31 @@ isolated function fetchCarbonAppArtifact(http:Client mgmtClient, string hmacToke
     return respResult;
 }
 
+// Fetch loggers from the MI Management API
+public isolated function fetchLoggers(http:Client mgmtClient, string hmacToken) returns types:MgmtLoggersResponse|error {
+    string path = string `${MGMT_API_PATH}/logging`;
+    log:printDebug("Calling MI management API", path = path);
+    types:MgmtLoggersResponse respResult = check mgmtClient->get(path, {
+        [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`,
+        [HEADER_ACCEPT]: CONTENT_TYPE_JSON
+    });
+    return respResult;
+}
+
+// Update logger (add new logger, update log level, or update root logger)
+public isolated function updateLogger(http:Client mgmtClient, string hmacToken, types:MgmtUpdateLoggerRequest request) returns types:MgmtUpdateLoggerResponse|error {
+    string path = string `${MGMT_API_PATH}/logging`;
+    log:printDebug("Calling MI management API to update logger", path = path, loggerName = request.loggerName, loggingLevel = request.loggingLevel);
+
+    types:MgmtUpdateLoggerResponse respResult = check mgmtClient->patch(path, request, {
+        [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`,
+        [HEADER_ACCEPT]: CONTENT_TYPE_JSON
+    });
+
+    log:printInfo("Successfully updated logger via MI management API", loggerName = request.loggerName, loggingLevel = request.loggingLevel);
+    return respResult;
+}
+
 // ============================================================
 // Dispatcher function
 // ============================================================

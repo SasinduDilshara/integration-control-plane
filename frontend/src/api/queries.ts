@@ -149,6 +149,7 @@ export function useAllEnvironments() {
 }
 
 export interface GqlLogger {
+  loggerName: string;
   componentName: string;
   logLevel: string;
   runtimeIds: string[];
@@ -157,7 +158,7 @@ export interface GqlLogger {
 const LOGGERS_BY_ENV_AND_COMPONENT_QUERY = `
   query GetLoggers($environmentId: String!, $componentId: String!) {
     loggersByEnvironmentAndComponent(environmentId: $environmentId, componentId: $componentId) {
-      componentName, logLevel, runtimeIds
+      loggerName, componentName, logLevel, runtimeIds
     }
   }`;
 

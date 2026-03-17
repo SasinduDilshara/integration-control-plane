@@ -95,21 +95,23 @@ public type Resource record {
 };
 
 public enum LogLevel {
+    OFF,
+    TRACE,
     DEBUG,
     INFO,
     WARN,
-    ERROR
+    ERROR,
+    FATAL
 }
 
 public type Logger record {
+    string? loggerName; // Optional: Only present for MI components
     string componentName;
     LogLevel logLevel;
-    string runtimeId;
 };
 
 public type LoggerGroup record {
-    string componentName;
-    LogLevel logLevel;
+    *Logger;
     string[] runtimeIds;
 };
 
@@ -2256,12 +2258,17 @@ public type ListenerControlResponse record {|
 
 public type UpdateLogLevelInput record {|
     string[] runtimeIds;
-    string componentName;
+    // BI fields
+    string? componentName?; // Required for BI, optional for MI
+    // MI fields
+    string? loggerName?; // Required for MI, optional for BI
+    string? loggerClass?; // Optional: only for adding new logger in MI
+    // Common fields
     LogLevel logLevel;
 |};
 
 public type UpdateLogLevelResponse record {|
     boolean success;
     string message;
-    string[] commandIds;
+    string[] commandIds; // For BI: command IDs, For MI: empty array (immediate update)
 |};

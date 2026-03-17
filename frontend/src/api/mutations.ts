@@ -233,8 +233,10 @@ export function useUpdateListenerState() {
 
 export interface UpdateLogLevelInput {
   runtimeIds: string[];
-  componentName: string;
-  logLevel: 'INFO' | 'DEBUG' | 'WARN' | 'ERROR';
+  componentName?: string;
+  loggerName?: string;
+  loggerClass?: string;
+  logLevel: 'OFF' | 'TRACE' | 'DEBUG' | 'INFO' | 'WARN' | 'ERROR' | 'FATAL';
 }
 
 const UPDATE_LOG_LEVEL = `
@@ -251,7 +253,9 @@ export function useUpdateLogLevel() {
       gql<{ updateLogLevel: { success: boolean; message: string; commandIds: string[] } }>(UPDATE_LOG_LEVEL, {
         input: {
           runtimeIds: input.runtimeIds,
-          componentName: input.componentName,
+          ...(input.componentName && { componentName: input.componentName }),
+          ...(input.loggerName && { loggerName: input.loggerName }),
+          ...(input.loggerClass && { loggerClass: input.loggerClass }),
           logLevel: input.logLevel,
         },
       }).then((d) => d.updateLogLevel),

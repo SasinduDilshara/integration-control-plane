@@ -216,4 +216,26 @@ public type LogFileInfo record {
 public type MgmtLogFilesResponse record {
     int count;
     LogFileInfo[] list;
+// GET /management/logging
+public type MgmtLoggerInfo record {
+    string level;
+    string componentName;
+    string loggerName;
+};
+
+public type MgmtLoggersResponse record {
+    int count;
+    MgmtLoggerInfo[] list;
+};
+
+// PATCH /management/logging - Request body
+public type MgmtUpdateLoggerRequest record {
+    string loggerName;
+    string loggingLevel;
+    string? loggerClass?; // Optional: only for adding new logger
+};
+
+// PATCH /management/logging - Response
+public type MgmtUpdateLoggerResponse record {
+    string message;
 };
