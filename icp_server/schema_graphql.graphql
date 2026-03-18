@@ -131,6 +131,10 @@ type Query {
     environmentId: String!
     componentId: String!
   ): [LoggerGroup!]!
+
+  # Log File Queries
+  logFilesByRuntime(runtimeId: String!, searchKey: String): LogFilesResponse!
+  logFileContent(runtimeId: String!, fileName: String!): String!
 }
 
 # ============================================
@@ -285,6 +289,22 @@ enum LogLevel {
   INFO
   WARN
   ERROR
+}
+
+# ============================================
+# LogFile Type - MI Log File Information
+# ============================================
+type LogFile {
+  fileName: String!
+  size: String!
+}
+
+# ============================================
+# LogFilesResponse Type - Response for Log Files Query
+# ============================================
+type LogFilesResponse {
+  count: Int!
+  files: [LogFile!]!
 }
 
 # ============================================

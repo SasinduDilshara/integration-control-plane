@@ -113,6 +113,16 @@ public type LoggerGroup record {
     string[] runtimeIds;
 };
 
+public type LogFile record {
+    string fileName;
+    string size;
+};
+
+public type LogFilesResponse record {
+    int count;
+    LogFile[] files;
+};
+
 public type Main record {
     string packageOrg;
     string packageName;

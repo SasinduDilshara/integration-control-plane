@@ -774,6 +774,100 @@ service /graphql on graphqlListener {
         return check storage:getLoggersByEnvironmentAndComponent(environmentId, componentId);
     }
 
+    // Get log files for a specific runtime
+    isolated resource function get logFilesByRuntime(graphql:Context context, string runtimeId, string? searchKey = ()) returns types:LogFilesResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Fetch the runtime to get its context for authorization
+        types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+
+        if runtime is () {
+            log:printWarn("Runtime not found for log files query", userId = userContext.userId, runtimeId = runtimeId);
+            return {count: 0, files: []};
+        }
+
+        // Build scope from runtime's context
+        types:AccessScope scope = auth:buildScopeFromContext(
+                runtime.component.projectId,
+                runtime.component.id,
+                runtime.environment.id
+        );
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access runtime log files without permission", userId = userContext.userId, runtimeId = runtimeId);
+            return {count: 0, files: []};
+        }
+
+        // Check if runtime is online
+        if runtime.status != types:RUNNING {
+            log:printWarn("Runtime is not online for log files query", userId = userContext.userId, runtimeId = runtimeId, status = runtime.status);
+            return error("Runtime is not online");
+        }
+
+        // Create HTTP client for MI management API
+        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+        http:Client mgmtClient = check (artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl));
+
+        // Generate HMAC token for authentication
+        string hmacToken = check storage:issueRuntimeHmacToken(runtimeId);
+
+        // Fetch log files from MI management API
+        types:MgmtLogFilesResponse mgmtResponse = check mi_management:fetchLogFiles(mgmtClient, hmacToken, searchKey);
+
+        // Transform to GraphQL response format
+        types:LogFile[] logFiles = from var item in mgmtResponse.list
+            select {fileName: item.FileName, size: item.Size};
+
+        return {count: mgmtResponse.count, files: logFiles};
+    }
+
+    // Get log file content for a specific runtime and file name
+    isolated resource function get logFileContent(graphql:Context context, string runtimeId, string fileName) returns string|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        // Fetch the runtime to get its context for authorization
+        types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+
+        if runtime is () {
+            log:printWarn("Runtime not found for log file content query", userId = userContext.userId, runtimeId = runtimeId);
+            return error("Runtime not found");
+        }
+
+        // Build scope from runtime's context
+        types:AccessScope scope = auth:buildScopeFromContext(
+                runtime.component.projectId,
+                runtime.component.id,
+                runtime.environment.id
+        );
+
+        // Verify user has view, edit, or manage permission
+        if !check auth:hasAnyPermission(userContext.userId, [auth:PERMISSION_INTEGRATION_VIEW, auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            log:printWarn("Attempt to access runtime log file content without permission", userId = userContext.userId, runtimeId = runtimeId, fileName = fileName);
+            return error("Insufficient permissions to access log file content");
+        }
+
+        // Check if runtime is online
+        if runtime.status != types:RUNNING {
+            log:printWarn("Runtime is not online for log file content query", userId = userContext.userId, runtimeId = runtimeId, status = runtime.status);
+            return error("Runtime is not online");
+        }
+
+        // Create HTTP client for MI management API
+        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+        http:Client mgmtClient = check (artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl));
+
+        // Generate HMAC token for authentication
+        string hmacToken = check storage:issueRuntimeHmacToken(runtimeId);
+
+        // Fetch log file content from MI management API
+        return check mi_management:fetchLogFileContent(mgmtClient, hmacToken, fileName);
+    }
+
     // Delete a runtime by ID
     isolated remote function deleteRuntime(graphql:Context context, string runtimeId) returns boolean|error {
         types:UserContextV2 userContext = check extractUserContext(context);
@@ -2736,7 +2830,7 @@ service /graphql on graphqlListener {
         }
         http:Client mgmtClient = mgmtClientResult;
         string hmacToken = check storage:issueRuntimeHmacToken(runtime.runtimeId);
-        types:MgmtDataServiceInfo dataServiceInfo = check mi_management:fetchDataServiceArtifact(mgmtClient, hmacToken, dataServiceName); 
+        types:MgmtDataServiceInfo dataServiceInfo = check mi_management:fetchDataServiceArtifact(mgmtClient, hmacToken, dataServiceName);
         return dataServiceInfo;
     }
 }

@@ -139,7 +139,6 @@ public type MgmtConnectorInfo record {
     string status?;
 };
 
-
 // GET /management/templates?name={name}&type={type}
 public type MgmtTemplateInfo record {
     string configuration;
@@ -205,4 +204,16 @@ public type MgmtCarbonAppInfo record {
     string name;
     string version?;
     json artifacts?;
+};
+
+// GET /management/logs
+// Response for listing log files
+public type LogFileInfo record {
+    string FileName;
+    string Size;
+};
+
+public type MgmtLogFilesResponse record {
+    int count;
+    LogFileInfo[] list;
 };
