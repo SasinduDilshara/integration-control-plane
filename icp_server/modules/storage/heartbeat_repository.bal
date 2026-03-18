@@ -570,10 +570,33 @@ isolated function checkBIIntendedStatesAndInsertCommands(string runtimeId, strin
                 }
             }
         } else {
-            log:printDebug(string `No log levels reported in heartbeat for runtime ${runtimeId}, skipping log level reconciliation`);
+            // No log levels reported in heartbeat - enforce all intended levels
+            log:printDebug(string `No log levels reported in heartbeat for runtime ${runtimeId}, enforcing all intended log levels`);
+            foreach string componentName in intendedLogLevels.keys() {
+                string intendedLevel = intendedLogLevels.get(componentName);
+
+                // Insert command for intended level (no current level to compare)
+                string|error commandId = insertLogLevelControlCommand(
+                        runtimeId,
+                        componentName,
+                        intendedLevel,
+                        ()
+                );
+
+                if commandId is string {
+                    commandCount += 1;
+                    log:printInfo(string `Inserted BI log level control command for ${componentName}: ${intendedLevel} (no log levels reported in heartbeat)`);
+                } else {
+                    log:printWarn(string `Failed to insert BI log level control command for ${componentName}`, commandId);
+                }
+            }
+        }
+    } else {
+        // No intended log levels configured - still enforce any reported log levels
+        if logLevels is map<log:Level> && logLevels.length() > 0 {
+            log:printDebug(string `No intended BI log levels configured for runtime ${runtimeId}, but runtime reported log levels`);
         }
     }
-
     return commandCount;
 }
 
