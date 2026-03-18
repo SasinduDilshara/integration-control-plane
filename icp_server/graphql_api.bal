@@ -828,6 +828,33 @@ service /graphql on graphqlListener {
     isolated resource function get logFileContent(graphql:Context context, string runtimeId, string fileName) returns string|error {
         types:UserContextV2 userContext = check extractUserContext(context);
 
+        // Validate fileName to prevent path traversal attacks
+        string trimmedFileName = fileName.trim();
+        if trimmedFileName == "" {
+            log:printWarn("Empty file name provided for log file content", userId = userContext.userId, runtimeId = runtimeId);
+            return error("Invalid file name");
+        }
+        if trimmedFileName.includes("/") || trimmedFileName.includes("\\") {
+            log:printWarn("File name contains path separator", userId = userContext.userId, runtimeId = runtimeId, fileName = fileName);
+            return error("Invalid file name");
+        }
+        if trimmedFileName.includes("..") {
+            log:printWarn("File name contains path traversal segment", userId = userContext.userId, runtimeId = runtimeId, fileName = fileName);
+            return error("Invalid file name");
+        }
+        if trimmedFileName.startsWith("/") {
+            log:printWarn("File name starts with absolute path marker", userId = userContext.userId, runtimeId = runtimeId, fileName = fileName);
+            return error("Invalid file name");
+        }
+        // Check for Windows drive letters (e.g., "C:", "D:")
+        if trimmedFileName.length() >= 2 && trimmedFileName[1] == ":" {
+            string firstChar = trimmedFileName[0];
+            if (firstChar >= "A" && firstChar <= "Z") || (firstChar >= "a" && firstChar <= "z") {
+                log:printWarn("File name contains drive letter", userId = userContext.userId, runtimeId = runtimeId, fileName = fileName);
+                return error("Invalid file name");
+            }
+        }
+
         // Fetch the runtime to get its context for authorization
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
 
