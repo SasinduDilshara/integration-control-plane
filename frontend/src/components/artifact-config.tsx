@@ -59,7 +59,7 @@ export const ARTIFACT_TABS: Record<string, string[]> = {
   LocalEntry: ['Value', 'Runtimes'],
   CarbonApp: ['Artifacts', 'Runtimes'],
   Connector: ['Runtimes'],
-  RegistryResource: ['Runtimes'],
+  RegistryResource: ['Browse', 'Runtimes'],
   Listener: ['Runtimes'],
   Service: ['Runtimes'],
   Automation: ['Executions', 'Runtimes'],

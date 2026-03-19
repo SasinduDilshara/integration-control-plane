@@ -65,6 +65,7 @@ import {
 } from './ArtifactTabs';
 import { ARTIFACT_ICONS, ARTIFACT_TABS, DEFAULT_ARTIFACT_TABS, ENTRY_POINT_TYPE_SET, formatArtifactTypeName, typePlural, type SelectedArtifact, type TabProps } from './artifact-config';
 import { useQueryClient } from '@tanstack/react-query';
+import { RegistryBrowser } from './RegistryBrowser';
 
 /**
  * Normalizes state/tracing/statistics values to a boolean.
@@ -445,6 +446,8 @@ export function ArtifactDetail({ selected, onClose }: { selected: SelectedArtifa
         return <InboundEndpointParameters {...tabProps} />;
       case 'Executions':
         return <AutomationExecutions {...tabProps} />;
+      case 'Browse':
+        return <RegistryBrowser runtimeId={(artifact.runtimes as Array<{ runtimeId: string }> | undefined)?.[0]?.runtimeId ?? ''} />;
       default:
         return null;
     }

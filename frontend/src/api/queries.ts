@@ -722,3 +722,123 @@ export function useLogFileContent(runtimeId: string, fileName: string, enabled =
     enabled: enabled && !!runtimeId && !!fileName,
   });
 }
+
+// ============================================
+// Registry Browser Queries
+// ============================================
+
+export interface GqlRegistryProperty {
+  name: string;
+  value: string;
+}
+
+export interface GqlRegistryDirectoryItem {
+  name: string;
+  mediaType: string;
+  isDirectory: boolean;
+  properties: GqlRegistryProperty[];
+}
+
+export interface GqlRegistryDirectoryResponse {
+  count: number;
+  items: GqlRegistryDirectoryItem[];
+}
+
+export interface GqlRegistryResourceMetadata {
+  name: string;
+  mediaType: string;
+}
+
+export interface GqlRegistryPropertiesResponse {
+  count: number;
+  properties: GqlRegistryProperty[];
+}
+
+const REGISTRY_DIRECTORY_QUERY = `
+  query RegistryDirectory($runtimeId: String!, $path: String!, $expand: Boolean) {
+    registryDirectory(runtimeId: $runtimeId, path: $path, expand: $expand) {
+      count
+      items {
+        name
+        mediaType
+        isDirectory
+        properties {
+          name
+          value
+        }
+      }
+    }
+  }`;
+
+const REGISTRY_FILE_CONTENT_QUERY = `
+  query RegistryFileContent($runtimeId: String!, $path: String!) {
+    registryFileContent(runtimeId: $runtimeId, path: $path)
+  }`;
+
+const REGISTRY_RESOURCE_METADATA_QUERY = `
+  query RegistryResourceMetadata($runtimeId: String!, $path: String!) {
+    registryResourceMetadata(runtimeId: $runtimeId, path: $path) {
+      name
+      mediaType
+    }
+  }`;
+
+const REGISTRY_RESOURCE_PROPERTIES_QUERY = `
+  query RegistryResourceProperties($runtimeId: String!, $path: String!) {
+    registryResourceProperties(runtimeId: $runtimeId, path: $path) {
+      count
+      properties {
+        name
+        value
+      }
+    }
+  }`;
+
+export function useRegistryDirectory(runtimeId: string, path: string, expand = false) {
+  return useQuery({
+    queryKey: ['registryDirectory', runtimeId, path, expand],
+    queryFn: () =>
+      gql<{ registryDirectory: GqlRegistryDirectoryResponse }>(REGISTRY_DIRECTORY_QUERY, {
+        runtimeId,
+        path,
+        expand,
+      }).then((d) => d.registryDirectory),
+    enabled: !!runtimeId && !!path,
+  });
+}
+
+export function useRegistryFileContent(runtimeId: string, path: string, enabled = false) {
+  return useQuery({
+    queryKey: ['registryFileContent', runtimeId, path],
+    queryFn: () =>
+      gql<{ registryFileContent: string }>(REGISTRY_FILE_CONTENT_QUERY, {
+        runtimeId,
+        path,
+      }).then((d) => d.registryFileContent),
+    enabled: enabled && !!runtimeId && !!path,
+  });
+}
+
+export function useRegistryResourceMetadata(runtimeId: string, path: string, enabled = false) {
+  return useQuery({
+    queryKey: ['registryResourceMetadata', runtimeId, path],
+    queryFn: () =>
+      gql<{ registryResourceMetadata: GqlRegistryResourceMetadata }>(REGISTRY_RESOURCE_METADATA_QUERY, {
+        runtimeId,
+        path,
+      }).then((d) => d.registryResourceMetadata),
+    enabled: enabled && !!runtimeId && !!path,
+  });
+}
+
+export function useRegistryResourceProperties(runtimeId: string, path: string, enabled = false) {
+  return useQuery({
+    queryKey: ['registryResourceProperties', runtimeId, path],
+    queryFn: () =>
+      gql<{ registryResourceProperties: GqlRegistryPropertiesResponse }>(REGISTRY_RESOURCE_PROPERTIES_QUERY, {
+        runtimeId,
+        path,
+      }).then((d) => d.registryResourceProperties),
+    enabled: enabled && !!runtimeId && !!path,
+  });
+}

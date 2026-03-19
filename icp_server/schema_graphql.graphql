@@ -142,6 +142,11 @@ type Query {
 
   # MI Runtime User Management Queries
   getMIUsers(componentId: String!, runtimeId: String!): MIUsersResponse!
+  # Registry Resource Browser Queries
+  registryDirectory(runtimeId: String!, path: String!, expand: Boolean): RegistryDirectoryResponse!
+  registryFileContent(runtimeId: String!, path: String!): String!
+  registryResourceMetadata(runtimeId: String!, path: String!): RegistryResourceMetadata!
+  registryResourceProperties(runtimeId: String!, path: String!): RegistryPropertiesResponse!
 }
 
 # ============================================
@@ -530,6 +535,36 @@ type RegistryResource {
   name: String!
   type: String!
   runtimes: [ArtifactRuntimeInfo]
+}
+
+# ============================================
+# Registry Browser Types - For browsing registry contents
+# ============================================
+type RegistryDirectoryItem {
+  name: String!
+  mediaType: String!
+  isDirectory: Boolean!
+  properties: [RegistryProperty!]
+}
+
+type RegistryProperty {
+  name: String!
+  value: String!
+}
+
+type RegistryDirectoryResponse {
+  count: Int!
+  items: [RegistryDirectoryItem!]!
+}
+
+type RegistryResourceMetadata {
+  name: String!
+  mediaType: String!
+}
+
+type RegistryPropertiesResponse {
+  count: Int!
+  properties: [RegistryProperty!]!
 }
 
 # ============================================
