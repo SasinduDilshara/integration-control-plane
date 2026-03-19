@@ -2282,7 +2282,7 @@ public type UpdateLogLevelResponse record {|
 // ============================================================
 
 public type MiUser record {|
-    string userId;
+    string username;
     boolean isAdmin;
 |};
 
@@ -2291,6 +2291,6 @@ public type MiUsersResponse record {|
 |};
 
 public type MiUserOperationResponse record {|
-    string userId;
+    string username;
     string status;
 |};

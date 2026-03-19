@@ -627,6 +627,14 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
     }
   };
 
+  const closeCreateUserDialog = () => {
+    setCreateUserDialogOpen(false);
+    setNewUserId('');
+    setNewPassword('');
+    setNewIsAdmin(false);
+    setCreateUserError(null);
+  };
+
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
@@ -807,11 +815,11 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
                 <List dense disablePadding>
                   {miUsers.map((u) => (
                     <ListItem
-                      key={u.userId}
+                      key={u.username}
                       disableGutters
                       secondaryAction={
-                        <Tooltip title={`Delete ${u.userId}`}>
-                          <IconButton size="small" color="error" onClick={() => setDeleteUserTarget(u.userId)} aria-label={`Delete ${u.userId}`}>
+                        <Tooltip title={`Delete ${u.username}`}>
+                          <IconButton size="small" color="error" onClick={() => setDeleteUserTarget(u.username)} aria-label={`Delete ${u.username}`}>
                             <Trash2 size={14} />
                           </IconButton>
                         </Tooltip>
@@ -820,7 +828,7 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
                         primary={
                           <Stack direction="row" alignItems="center" gap={1}>
                             <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                              {u.userId}
+                              {u.username}
                             </Typography>
                             {u.isAdmin && <Chip label="Admin" size="small" color="primary" sx={{ fontSize: 10, height: 18 }} />}
                           </Stack>
@@ -835,7 +843,7 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
         </Drawer>
 
         {/* Create MI User dialog */}
-        <Dialog open={createUserDialogOpen} onClose={() => setCreateUserDialogOpen(false)} maxWidth="xs" fullWidth>
+        <Dialog open={createUserDialogOpen} onClose={closeCreateUserDialog} maxWidth="xs" fullWidth>
           <DialogTitle>Add Runtime User</DialogTitle>
           <DialogContent>
             {createUserError && (
@@ -850,16 +858,16 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => setCreateUserDialogOpen(false)}>Cancel</Button>
+            <Button onClick={closeCreateUserDialog}>Cancel</Button>
             <Button
               variant="contained"
               disabled={!newUserId.trim() || !newPassword.trim() || createMiUser.isPending}
               onClick={() => {
                 setCreateUserError(null);
                 createMiUser.mutate(
-                  { componentId, runtimeId: activeRuntimeId, userId: newUserId.trim(), password: newPassword, isAdmin: newIsAdmin },
+                  { componentId, runtimeId: activeRuntimeId, username: newUserId.trim(), password: newPassword, isAdmin: newIsAdmin },
                   {
-                    onSuccess: () => setCreateUserDialogOpen(false),
+                    onSuccess: closeCreateUserDialog,
                     onError: (err) => setCreateUserError(err.message ?? 'Failed to create user'),
                   },
                 );

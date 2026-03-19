@@ -200,7 +200,7 @@ type Mutation {
   rotateComponentEnvironmentJwtSecret(componentId: String!, environmentId: String!): String!
 
   # MI Runtime User Management Mutations
-  addMiUser(componentId: String!, runtimeId: String!, userId: String!, password: String!, isAdmin: Boolean): MiUserOperationResponse!
+  addMiUser(componentId: String!, runtimeId: String!, username: String!, password: String!, isAdmin: Boolean): MiUserOperationResponse!
   deleteMiUser(componentId: String!, runtimeId: String!, username: String!): MiUserOperationResponse!
 }
 
@@ -1333,7 +1333,7 @@ type UpdateLogLevelResponse {
 # MI Runtime User Management Types
 # ============================================
 type MiUser {
-  userId: String!
+  username: String!
   isAdmin: Boolean!
 }
 
@@ -1342,6 +1342,6 @@ type MiUsersResponse {
 }
 
 type MiUserOperationResponse {
-  userId: String!
+  username: String!
   status: String!
 }

@@ -3403,7 +3403,7 @@ service /graphql on graphqlListener {
             return error("Runtime does not belong to the specified integration");
         }
 
-        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId);
+        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId, envId = runtime.environment.id);
         if !check auth:hasAnyPermission(userContext.userId,
                 [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Insufficient permissions to view MI users");
@@ -3463,14 +3463,14 @@ service /graphql on graphqlListener {
                     }
                 }
             }
-            enrichedUsers.push({userId: userIdStr, isAdmin});
+            enrichedUsers.push({username: userIdStr, isAdmin});
         }
 
         log:printInfo("Successfully fetched MI users from runtime", runtimeId = runtimeId, userCount = enrichedUsers.length());
         return {users: enrichedUsers};
     }
 
-    isolated remote function addMiUser(graphql:Context context, string componentId, string runtimeId, string userId, string password, boolean isAdmin = false) returns types:MiUserOperationResponse|error {
+    isolated remote function addMiUser(graphql:Context context, string componentId, string runtimeId, string username, string password, boolean isAdmin = false) returns types:MiUserOperationResponse|error {
         types:UserContextV2 userContext = check extractUserContext(context);
 
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
@@ -3481,14 +3481,14 @@ service /graphql on graphqlListener {
             return error("Runtime does not belong to the specified integration");
         }
 
-        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId);
+        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId, envId = runtime.environment.id);
         if !check auth:hasAnyPermission(userContext.userId,
                 [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Insufficient permissions to create MI users");
         }
 
-        if userId.trim().length() == 0 {
-            return error("userId must be a non-empty string");
+        if username.trim().length() == 0 {
+            return error("username must be a non-empty string");
         }
         if password.trim().length() == 0 {
             return error("password must be a non-empty string");
@@ -3504,15 +3504,15 @@ service /graphql on graphqlListener {
         }
 
         string bearerToken = check storage:issueRuntimeHmacToken(runtimeId);
-        json createPayload = {userId, password, isAdmin};
-        log:printInfo("Creating MI user on runtime management API", runtimeId = runtimeId, userId = userId, isAdmin = isAdmin);
+        json createPayload = {userId: username, password, isAdmin};
+        log:printInfo("Creating MI user on runtime management API", runtimeId = runtimeId, username = username, isAdmin = isAdmin);
 
         http:Response|error createResponse = mgmtClient->post("/management/users", createPayload, {
             "Authorization": string `Bearer ${bearerToken}`,
             "Content-Type": "application/json"
         });
         if createResponse is error {
-            log:printError("Failed to create MI user on runtime management API", createResponse, runtimeId = runtimeId, userId = userId);
+            log:printError("Failed to create MI user on runtime management API", createResponse, runtimeId = runtimeId, username = username);
             return error("Failed to create user on runtime");
         }
 
@@ -3531,8 +3531,8 @@ service /graphql on graphqlListener {
             return error(string `MI management API returned status ${createResponse.statusCode}`);
         }
 
-        log:printInfo("Successfully created MI user on runtime", userId = userId, runtimeId = runtimeId);
-        return {userId, status: "Added"};
+        log:printInfo("Successfully created MI user on runtime", username = username, runtimeId = runtimeId);
+        return {username, status: "Added"};
     }
 
     isolated remote function deleteMiUser(graphql:Context context, string componentId, string runtimeId, string username) returns types:MiUserOperationResponse|error {
@@ -3546,7 +3546,7 @@ service /graphql on graphqlListener {
             return error("Runtime does not belong to the specified integration");
         }
 
-        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId);
+        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId, envId = runtime.environment.id);
         if !check auth:hasAnyPermission(userContext.userId,
                 [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
             return error("Insufficient permissions to delete MI users");
@@ -3561,10 +3561,16 @@ service /graphql on graphqlListener {
             return error("Failed to create management API client");
         }
 
-        string bearerToken = check storage:issueRuntimeHmacToken(runtimeId);
-        log:printInfo("Deleting MI user on runtime management API", runtimeId = runtimeId, username = username);
+        string trimmedUsername = username.trim();
+        if trimmedUsername.length() == 0 {
+            return error("username must be a non-empty string");
+        }
+        string encodedUsername = check url:encode(trimmedUsername, "UTF-8");
 
-        http:Response|error deleteResponse = mgmtClient->delete(string `/management/users/${username}`, (), {
+        string bearerToken = check storage:issueRuntimeHmacToken(runtimeId);
+        log:printInfo("Deleting MI user on runtime management API", runtimeId = runtimeId, username = trimmedUsername);
+
+        http:Response|error deleteResponse = mgmtClient->delete(string `/management/users/${encodedUsername}`, (), {
             "Authorization": string `Bearer ${bearerToken}`
         });
         if deleteResponse is error {
@@ -3580,7 +3586,7 @@ service /graphql on graphqlListener {
         }
 
         log:printInfo("Successfully deleted MI user on runtime", username = username, runtimeId = runtimeId);
-        return {userId: username, status: "Deleted"};
+        return {username, status: "Deleted"};
     }
 }
 
