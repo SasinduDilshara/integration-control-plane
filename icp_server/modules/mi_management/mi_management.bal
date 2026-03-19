@@ -288,11 +288,9 @@ public isolated function getArtifactSource(http:Client mgmtClient, string hmacTo
     ArtifactWithConfig artifact = check getArtifactsWithSource(mgmtClient, hmacToken, artifactType, artifactName, packageName, templateType);
 
     // Extract configuration field for artifacts that have it
-    if artifact is ArtifactWithConfig {
-        string? config = artifact.configuration;
-        if config is string && config.length() > 0 {
-            return config;
-        }
+    string? config = artifact.configuration;
+    if config is string && config.length() > 0 {
+        return config;
     }
 
     // Fallback: return full artifact metadata as JSON
@@ -424,5 +422,112 @@ public isolated function fetchLogFileContent(http:Client mgmtClient, string hmac
         [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`
     });
     return respResult;
+}
+
+// ============================================================
+// Registry Resources API functions
+// ============================================================
+
+// Response type for registry directory listing (actual MI API structure)
+type MgmtRegistryFileItem record {
+    string name;
+    string mediaType;
+    json[] properties;
+};
+
+type MgmtRegistryDirectoryResponse record {
+    int count;
+    MgmtRegistryFileItem[] list;
+};
+
+type MgmtRegistryProperty record {
+    string name;
+    string value;
+};
+
+type MgmtRegistryMetadataResponse record {
+    string name;
+    string mediaType;
+};
+
+type MgmtRegistryPropertiesResponse record {
+    int count;
+    MgmtRegistryProperty[] list;
+};
+
+// Fetch registry directory contents from the MI management API
+// GET /management/registry-resources?path={path}
+public isolated function fetchRegistryDirectory(http:Client mgmtClient, string hmacToken, string path, boolean? expand = ()) returns types:RegistryDirectoryResponse|error {
+    string encodedPath = check url:encode(path, "UTF-8");
+    string apiPath = string `${MGMT_API_PATH}/registry-resources?path=${encodedPath}`;
+    log:printDebug("Calling MI management API", path = apiPath);
+
+    MgmtRegistryDirectoryResponse respResult = check mgmtClient->get(apiPath, {
+        [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`,
+        [HEADER_ACCEPT]: CONTENT_TYPE_JSON
+    });
+
+    types:RegistryDirectoryItem[] items = [];
+
+    foreach MgmtRegistryFileItem fileItem in respResult.list {
+        boolean isDirectory = fileItem.mediaType == "directory";
+
+        items.push({
+            name: fileItem.name,
+            mediaType: fileItem.mediaType,
+            isDirectory: isDirectory,
+            properties: []
+        });
+    }
+
+    return {count: respResult.count, items: items};
+}
+
+// Fetch registry file content from the MI management API
+// GET /management/registry-resources/content?path={path}
+public isolated function fetchRegistryFileContent(http:Client mgmtClient, string hmacToken, string path) returns string|error {
+    string encodedPath = check url:encode(path, "UTF-8");
+    string apiPath = string `${MGMT_API_PATH}/registry-resources/content?path=${encodedPath}`;
+    log:printDebug("Calling MI management API", path = apiPath);
+    string respResult = check mgmtClient->get(apiPath, {
+        [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`
+    });
+    return respResult;
+}
+
+// Fetch registry resource metadata from the MI management API
+// GET /management/registry-resources/metadata?path={path}
+public isolated function fetchRegistryResourceMetadata(http:Client mgmtClient, string hmacToken, string path) returns types:RegistryResourceMetadata|error {
+    string encodedPath = check url:encode(path, "UTF-8");
+    string apiPath = string `${MGMT_API_PATH}/registry-resources/metadata?path=${encodedPath}`;
+    log:printDebug("Calling MI management API", path = apiPath);
+    MgmtRegistryMetadataResponse respResult = check mgmtClient->get(apiPath, {
+        [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`,
+        [HEADER_ACCEPT]: CONTENT_TYPE_JSON
+    });
+    return {name: respResult.name, mediaType: respResult.mediaType};
+}
+
+// Fetch registry resource properties from the MI management API
+// GET /management/registry-resources/properties?path={path}
+public isolated function fetchRegistryResourceProperties(http:Client mgmtClient, string hmacToken, string path, string? propertyName = ()) returns types:RegistryPropertiesResponse|error {
+    string encodedPath = check url:encode(path, "UTF-8");
+    string apiPath = string `${MGMT_API_PATH}/registry-resources/properties?path=${encodedPath}`;
+    if propertyName is string && propertyName.trim() != "" {
+        string encodedName = check url:encode(propertyName, "UTF-8");
+        apiPath = string `${apiPath}&name=${encodedName}`;
+    }
+    log:printDebug("Calling MI management API", path = apiPath);
+    MgmtRegistryPropertiesResponse respResult = check mgmtClient->get(apiPath, {
+        [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`,
+        [HEADER_ACCEPT]: CONTENT_TYPE_JSON
+    });
+
+    types:RegistryProperty[] props = [];
+    foreach MgmtRegistryProperty prop in respResult.list {
+        props.push({name: prop.name, value: prop.value});
+    }
+
+    return {count: respResult.count, properties: props};
 }
 
