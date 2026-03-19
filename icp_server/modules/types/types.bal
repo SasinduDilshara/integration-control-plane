@@ -2276,3 +2276,21 @@ public type UpdateLogLevelResponse record {|
     string message;
     string[] commandIds; // For BI: command IDs, For MI: empty array (immediate update)
 |};
+
+// ============================================================
+// MI Runtime User Management Types
+// ============================================================
+
+public type MIUser record {|
+    string username;
+    boolean isAdmin;
+|};
+
+public type MIUsersResponse record {|
+    MIUser[] users;
+|};
+
+public type MIUserOperationResponse record {|
+    string username;
+    string status;
+|};

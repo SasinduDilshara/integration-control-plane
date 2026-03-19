@@ -30,9 +30,13 @@ import {
   DialogContentText,
   DialogTitle,
   Divider,
+  Drawer,
   FormControlLabel,
   IconButton,
   InputAdornment,
+  List,
+  ListItem,
+  ListItemText,
   Snackbar,
   Alert,
   Stack,
@@ -41,12 +45,13 @@ import {
   Tooltip,
   Typography,
 } from '@wso2/oxygen-ui';
-import { RefreshCw, ListFilter, LayoutGrid, Settings, Copy, Check, Play, ShieldAlert } from '@wso2/oxygen-ui-icons-react';
+import { RefreshCw, ListFilter, LayoutGrid, Settings, Copy, Check, Play, ShieldAlert, Plus, X, Trash2, UserPlus } from '@wso2/oxygen-ui-icons-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useArtifacts, useRefreshEnvironmentArtifacts, type GqlArtifact, type GqlEnvironment } from '../api/queries';
+import { useArtifacts, useRefreshEnvironmentArtifacts, useRuntimes, useComponentRuntimes, type GqlArtifact, type GqlEnvironment } from '../api/queries';
 import { useUpdateArtifactTracingStatus, useUpdateArtifactStatisticsStatus } from '../api/artifactToggleMutations';
 import { useUpdateArtifactStatus, useUpdateListenerState, useTriggerTask, useGenerateComponentEnvironmentJwtSecret, useRotateComponentEnvironmentJwtSecret } from '../api/mutations';
+import { useListMiUsers, useCreateMiUser, useDeleteMiUser } from '../api/miUsers';
 import { ArtifactApiDefinition, ServiceResources, AutomationExecutions, ProxyApiReference } from './ArtifactTabs';
 import { ArtifactTypeSelector } from './ArtifactDetail';
 import Authorized from './Authorized';
@@ -539,11 +544,29 @@ export default function Environment({
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<'entryPoints' | 'allArtifacts'>('entryPoints');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
+  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false);
 
+  // MI users state
+  const [selectedRuntimeId, setSelectedRuntimeId] = useState('');
+  const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
+  const [deleteUserTarget, setDeleteUserTarget] = useState<string | null>(null);
+  const [newUserId, setNewUserId] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [newIsAdmin, setNewIsAdmin] = useState(false);
+  const [createUserError, setCreateUserError] = useState<string | null>(null);
+  const [deleteUserError, setDeleteUserError] = useState<string | null>(null);
+
   const generateSecretMutation = useGenerateComponentEnvironmentJwtSecret();
   const rotateSecretMutation = useRotateComponentEnvironmentJwtSecret();
+
+  const { data: runtimes = [], error: runtimesError, isLoading: runtimesLoading } = useComponentRuntimes(env.id, projectId, componentId, componentType === 'MI' && settingsPanelOpen && !!env.id && !!projectId && !!componentId);
+  const validatedRuntimeId = runtimes.some((r) => r.runtimeId === selectedRuntimeId) ? selectedRuntimeId : '';
+  const activeRuntimeId = validatedRuntimeId || (runtimes.length === 1 ? runtimes[0].runtimeId : '');
+  const createMiUser = useCreateMiUser();
+  const deleteMiUser = useDeleteMiUser();
+  const { data: miUsers = [], error: miUsersError, isLoading: miUsersLoading } = useListMiUsers(componentId, activeRuntimeId, componentType === 'MI' && settingsPanelOpen && !!activeRuntimeId);
 
   // The currently displayed secret — updated by both generate and rotate.
   const activeSecret = rotateSecretMutation.data ?? generateSecretMutation.data ?? '';
@@ -604,6 +627,14 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
     }
   };
 
+  const closeCreateUserDialog = () => {
+    setCreateUserDialogOpen(false);
+    setNewUserId('');
+    setNewPassword('');
+    setNewIsAdmin(false);
+    setCreateUserError(null);
+  };
+
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
@@ -622,14 +653,21 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
               />
             </IconButton>
             <Authorized permissions={Permissions.INTEGRATION_MANAGE}>
-              <Button variant="contained" startIcon={<Settings size={16} />} onClick={handleOpenConfigDialog}>
-                Configure Runtime
+              <Button variant="contained" startIcon={<Plus size={16} />} onClick={handleOpenConfigDialog}>
+                Add Runtime
               </Button>
+            </Authorized>
+            <Authorized permissions={[Permissions.INTEGRATION_EDIT, Permissions.INTEGRATION_MANAGE]}>
+              <Tooltip title="Settings">
+                <IconButton size="small" onClick={() => setSettingsPanelOpen(true)} aria-label="Settings">
+                  <Settings size={16} />
+                </IconButton>
+              </Tooltip>
             </Authorized>
           </Stack>
         </Stack>
         <Dialog open={configDialogOpen} onClose={() => setConfigDialogOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Configure Runtime - {env.name}</DialogTitle>
+          <DialogTitle>Add Runtime - {env.name}</DialogTitle>
           <DialogContent>
             <DialogContentText sx={{ mb: 2 }}>Add the following configuration to your runtime's {componentType === 'BI' ? 'Config.toml' : 'deployment.toml'} file:</DialogContentText>
             {secretError && (
@@ -654,17 +692,6 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
               }}>
               {secretLoading ? 'Loading configuration…' : generateTomlConfig(activeSecret)}
             </Box>
-            <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ mt: 1 }}>
-              <Authorized permissions={Permissions.INTEGRATION_MANAGE}>
-                <Tooltip title="Generate a new secret. Existing runtimes must be restarted with the new value.">
-                  <span>
-                    <Button size="small" color="error" variant="outlined" startIcon={<ShieldAlert size={14} />} disabled={secretLoading} onClick={() => setRotateConfirmOpen(true)}>
-                      Rotate Secret
-                    </Button>
-                  </span>
-                </Tooltip>
-              </Authorized>
-            </Stack>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setConfigDialogOpen(false)}>Close</Button>
@@ -691,6 +718,215 @@ secret = "${secret || '<generating…>'}"\n# icp_url = "https://icp-server:9443"
             </Authorized>
           </DialogActions>
         </Dialog>
+        {/* Settings side panel */}
+        <Drawer anchor="right" open={settingsPanelOpen} onClose={() => setSettingsPanelOpen(false)} sx={{ '& .MuiDrawer-paper': { width: 400, p: 3, boxSizing: 'border-box' } }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Settings — {env.name}
+            </Typography>
+            <IconButton size="small" onClick={() => setSettingsPanelOpen(false)} aria-label="Close settings">
+              <X size={16} />
+            </IconButton>
+          </Stack>
+
+          {/* JWT Secret section */}
+          <Authorized permissions={Permissions.INTEGRATION_MANAGE}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              JWT Secret
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Rotate the HMAC secret used by runtimes to authenticate with this environment. Existing runtimes must be restarted with the new value.
+            </Typography>
+            <Tooltip title="Generate a new secret. Existing runtimes must be restarted with the new value.">
+              <span>
+                <Button fullWidth size="small" color="error" variant="outlined" startIcon={<ShieldAlert size={14} />} onClick={() => setRotateConfirmOpen(true)}>
+                  Rotate Secret
+                </Button>
+              </span>
+            </Tooltip>
+          </Authorized>
+
+          {/* MI Users section */}
+          {componentType === 'MI' && (
+            <>
+              <Divider sx={{ my: 3 }} />
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                  Runtime Users
+                </Typography>
+                <Tooltip title="Add user">
+                  <span>
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setNewUserId('');
+                        setNewPassword('');
+                        setNewIsAdmin(false);
+                        setCreateUserError(null);
+                        setCreateUserDialogOpen(true);
+                      }}
+                      disabled={!activeRuntimeId}
+                      aria-label="Add user">
+                      <UserPlus size={16} />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Stack>
+
+              {runtimes.length > 1 && (
+                <Autocomplete
+                  size="small"
+                  options={runtimes}
+                  getOptionLabel={(r) => r.runtimeId}
+                  value={runtimes.find((r) => r.runtimeId === activeRuntimeId) ?? null}
+                  onChange={(_, v) => setSelectedRuntimeId(v?.runtimeId ?? '')}
+                  renderInput={(params) => <TextField {...params} label="Runtime" placeholder="Select runtime" />}
+                  sx={{ mb: 2 }}
+                />
+              )}
+
+              {runtimesError && (
+                <Typography variant="body2" color="error">
+                  Failed to load runtimes: {runtimesError.message}
+                </Typography>
+              )}
+
+              {!runtimesError && !runtimesLoading && !activeRuntimeId && (
+                <Typography variant="body2" color="text.secondary">
+                  No runtimes available.
+                </Typography>
+              )}
+
+              {activeRuntimeId && miUsersLoading && <CircularProgress size={20} sx={{ display: 'block', mx: 'auto', mt: 2 }} />}
+
+              {activeRuntimeId && !miUsersLoading && miUsersError && (
+                <Typography variant="body2" color="error">
+                  Failed to load users: {miUsersError.message}
+                </Typography>
+              )}
+
+              {activeRuntimeId && !miUsersLoading && !miUsersError && miUsers.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  No users found.
+                </Typography>
+              )}
+
+              {activeRuntimeId && !miUsersLoading && miUsers.length > 0 && (
+                <List dense disablePadding>
+                  {miUsers.map((u) => (
+                    <ListItem
+                      key={u.username}
+                      disableGutters
+                      secondaryAction={
+                        <Tooltip title={`Delete ${u.username}`}>
+                          <IconButton size="small" color="error" onClick={() => setDeleteUserTarget(u.username)} aria-label={`Delete ${u.username}`}>
+                            <Trash2 size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      }>
+                      <ListItemText
+                        primary={
+                          <Stack direction="row" alignItems="center" gap={1}>
+                            <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
+                              {u.username}
+                            </Typography>
+                            {u.isAdmin && <Chip label="Admin" size="small" color="primary" sx={{ fontSize: 10, height: 18 }} />}
+                          </Stack>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </>
+          )}
+        </Drawer>
+
+        {/* Create MI User dialog */}
+        <Dialog open={createUserDialogOpen} onClose={closeCreateUserDialog} maxWidth="xs" fullWidth>
+          <DialogTitle>Add Runtime User</DialogTitle>
+          <DialogContent>
+            {createUserError && (
+              <Alert severity="error" onClose={() => setCreateUserError(null)} sx={{ mb: 2 }}>
+                {createUserError}
+              </Alert>
+            )}
+            <Stack gap={2} sx={{ mt: 1 }}>
+              <TextField label="Username" required fullWidth size="small" value={newUserId} onChange={(e) => setNewUserId(e.target.value)} autoFocus />
+              <TextField label="Password" required type="password" fullWidth size="small" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+              <FormControlLabel control={<Switch size="small" checked={newIsAdmin} onChange={(e) => setNewIsAdmin(e.target.checked)} />} label="Admin user" labelPlacement="start" sx={{ m: 0, gap: 1, justifyContent: 'space-between' }} />
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={closeCreateUserDialog}>Cancel</Button>
+            <Button
+              variant="contained"
+              disabled={!newUserId.trim() || !newPassword.trim() || createMiUser.isPending}
+              onClick={() => {
+                setCreateUserError(null);
+                createMiUser.mutate(
+                  { componentId, runtimeId: activeRuntimeId, username: newUserId.trim(), password: newPassword, isAdmin: newIsAdmin },
+                  {
+                    onSuccess: closeCreateUserDialog,
+                    onError: (err) => setCreateUserError(err.message ?? 'Failed to create user'),
+                  },
+                );
+              }}>
+              {createMiUser.isPending ? 'Creating…' : 'Create'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Delete MI User confirmation dialog */}
+        <Dialog
+          open={deleteUserTarget !== null}
+          onClose={() => {
+            setDeleteUserTarget(null);
+            setDeleteUserError(null);
+          }}
+          maxWidth="xs"
+          fullWidth>
+          <DialogTitle>Delete User</DialogTitle>
+          <DialogContent>
+            {deleteUserError && (
+              <Alert severity="error" onClose={() => setDeleteUserError(null)} sx={{ mb: 2 }}>
+                {deleteUserError}
+              </Alert>
+            )}
+            <DialogContentText>
+              Are you sure you want to delete user <strong>{deleteUserTarget}</strong> from the runtime? This action cannot be undone.
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions>
+            <Button
+              onClick={() => {
+                setDeleteUserTarget(null);
+                setDeleteUserError(null);
+              }}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              disabled={deleteMiUser.isPending}
+              onClick={() => {
+                if (!deleteUserTarget) return;
+                deleteMiUser.mutate(
+                  { componentId, runtimeId: activeRuntimeId, username: deleteUserTarget },
+                  {
+                    onSuccess: () => {
+                      setDeleteUserTarget(null);
+                      setDeleteUserError(null);
+                    },
+                    onError: (err) => setDeleteUserError(err.message),
+                  },
+                );
+              }}>
+              {deleteMiUser.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
         <Divider sx={{ my: 2 }} />
         {componentType === 'MI' && (
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>

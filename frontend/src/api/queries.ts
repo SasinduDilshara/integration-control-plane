@@ -202,6 +202,23 @@ export function useRuntimes(envId: string, projectId: string, componentId: strin
   });
 }
 
+const COMPONENT_RUNTIMES_QUERY = `
+  query GetComponentRuntimes($environmentId: String!, $projectId: String!, $componentId: String!) {
+    runtimes(environmentId: $environmentId, projectId: $projectId, componentId: $componentId) {
+      runtimeId, runtimeType, status, version,
+      platformName, platformVersion, platformHome,
+      osName, osVersion, registrationTime, lastHeartbeat
+    }
+  }`;
+
+export function useComponentRuntimes(envId: string, projectId: string, componentId: string, enabled = true) {
+  return useQuery({
+    queryKey: ['componentRuntimes', envId, projectId, componentId],
+    queryFn: () => gql<{ runtimes: GqlRuntime[] }>(COMPONENT_RUNTIMES_QUERY, { environmentId: envId, projectId, componentId }).then((d) => d.runtimes),
+    enabled: enabled && !!envId && !!projectId && !!componentId,
+  });
+}
+
 const PROJECT_RUNTIMES_QUERY = `
   query GetProjectRuntimes($environmentId: String!, $projectId: String!) {
     runtimes(environmentId: $environmentId, projectId: $projectId) {
