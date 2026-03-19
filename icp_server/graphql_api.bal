@@ -24,6 +24,7 @@ import ballerina/graphql;
 import ballerina/http;
 import ballerina/lang.value;
 import ballerina/log;
+import ballerina/url;
 
 // Helper type for pre-validating runtimes in updateLogLevel
 type ValidatedRuntime record {|
@@ -3386,5 +3387,201 @@ service /graphql on graphqlListener {
         types:MgmtDataServiceInfo dataServiceInfo = check mi_management:fetchDataServiceArtifact(mgmtClient, hmacToken, dataServiceName);
         return dataServiceInfo;
     }
+
+    // ============================================================
+    // MI Runtime User Management
+    // ============================================================
+
+    isolated resource function get getMiUsers(graphql:Context context, string componentId, string runtimeId) returns types:MiUsersResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+        if runtime is () {
+            return error("Runtime not found");
+        }
+        if runtime.component.id != componentId {
+            return error("Runtime does not belong to the specified integration");
+        }
+
+        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId);
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            return error("Insufficient permissions to view MI users");
+        }
+
+        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+        http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl);
+        if mgmtClient is error {
+            log:printError("Failed to create management API client", mgmtClient);
+            return error("Failed to create management API client");
+        }
+
+        string bearerToken = check storage:issueRuntimeHmacToken(runtimeId);
+        log:printInfo("Fetching MI users from runtime management API", runtimeId = runtimeId);
+
+        http:Response|error listResponse = mgmtClient->get("/management/users", {
+            "Authorization": string `Bearer ${bearerToken}`,
+            "Accept": "application/json"
+        });
+        if listResponse is error {
+            log:printError("Failed to fetch MI users from runtime management API", listResponse, runtimeId = runtimeId);
+            return error("Failed to fetch users from runtime");
+        }
+        if listResponse.statusCode != http:STATUS_OK {
+            return error(string `MI management API returned status ${listResponse.statusCode}`);
+        }
+
+        json listBody = check listResponse.getJsonPayload();
+        json[] userList = [];
+        json|error listField = listBody.list;
+        if listField is json[] {
+            userList = listField;
+        }
+
+        types:MiUser[] enrichedUsers = [];
+        foreach json u in userList {
+            json|error userIdJson = u.userId;
+            if userIdJson is error {
+                continue;
+            }
+            string userIdStr = userIdJson.toString();
+            string encodedUsername = check url:encode(userIdStr, "UTF-8");
+
+            boolean isAdmin = false;
+            http:Response|error detailResponse = mgmtClient->get(string `/management/users/${encodedUsername}`, {
+                "Authorization": string `Bearer ${bearerToken}`,
+                "Accept": "application/json"
+            });
+            if detailResponse is http:Response && detailResponse.statusCode == http:STATUS_OK {
+                json|error detailBody = detailResponse.getJsonPayload();
+                if detailBody is json {
+                    json|error isAdminField = detailBody.isAdmin;
+                    if isAdminField is boolean {
+                        isAdmin = isAdminField;
+                    }
+                }
+            }
+            enrichedUsers.push({userId: userIdStr, isAdmin});
+        }
+
+        log:printInfo("Successfully fetched MI users from runtime", runtimeId = runtimeId, userCount = enrichedUsers.length());
+        return {users: enrichedUsers};
+    }
+
+    isolated remote function addMiUser(graphql:Context context, string componentId, string runtimeId, string userId, string password, boolean isAdmin = false) returns types:MiUserOperationResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+        if runtime is () {
+            return error("Runtime not found");
+        }
+        if runtime.component.id != componentId {
+            return error("Runtime does not belong to the specified integration");
+        }
+
+        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId);
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            return error("Insufficient permissions to create MI users");
+        }
+
+        if userId.trim().length() == 0 {
+            return error("userId must be a non-empty string");
+        }
+        if password.trim().length() == 0 {
+            return error("password must be a non-empty string");
+        }
+
+        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+        http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl);
+        if mgmtClient is error {
+            log:printError("Failed to create management API client", mgmtClient);
+            return error("Failed to create management API client");
+        }
+
+        string bearerToken = check storage:issueRuntimeHmacToken(runtimeId);
+        json createPayload = {userId, password, isAdmin};
+        log:printInfo("Creating MI user on runtime management API", runtimeId = runtimeId, userId = userId, isAdmin = isAdmin);
+
+        http:Response|error createResponse = mgmtClient->post("/management/users", createPayload, {
+            "Authorization": string `Bearer ${bearerToken}`,
+            "Content-Type": "application/json"
+        });
+        if createResponse is error {
+            log:printError("Failed to create MI user on runtime management API", createResponse, runtimeId = runtimeId, userId = userId);
+            return error("Failed to create user on runtime");
+        }
+
+        if createResponse.statusCode == http:STATUS_BAD_REQUEST {
+            json|error errBody = createResponse.getJsonPayload();
+            string message = "Invalid user creation request";
+            if errBody is json {
+                json|error msgField = errBody.message;
+                if msgField is string {
+                    message = msgField;
+                }
+            }
+            return error(message);
+        }
+        if createResponse.statusCode != http:STATUS_OK {
+            return error(string `MI management API returned status ${createResponse.statusCode}`);
+        }
+
+        log:printInfo("Successfully created MI user on runtime", userId = userId, runtimeId = runtimeId);
+        return {userId, status: "Added"};
+    }
+
+    isolated remote function deleteMiUser(graphql:Context context, string componentId, string runtimeId, string username) returns types:MiUserOperationResponse|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
+        if runtime is () {
+            return error("Runtime not found");
+        }
+        if runtime.component.id != componentId {
+            return error("Runtime does not belong to the specified integration");
+        }
+
+        types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, integrationId = componentId);
+        if !check auth:hasAnyPermission(userContext.userId,
+                [auth:PERMISSION_INTEGRATION_EDIT, auth:PERMISSION_INTEGRATION_MANAGE], scope) {
+            return error("Insufficient permissions to delete MI users");
+        }
+
+        string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+        http:Client|error mgmtClient = artifactsApiAllowInsecureTLS
+            ? new (baseUrl, {secureSocket: {enable: false}})
+            : new (baseUrl);
+        if mgmtClient is error {
+            log:printError("Failed to create management API client", mgmtClient);
+            return error("Failed to create management API client");
+        }
+
+        string bearerToken = check storage:issueRuntimeHmacToken(runtimeId);
+        log:printInfo("Deleting MI user on runtime management API", runtimeId = runtimeId, username = username);
+
+        http:Response|error deleteResponse = mgmtClient->delete(string `/management/users/${username}`, (), {
+            "Authorization": string `Bearer ${bearerToken}`
+        });
+        if deleteResponse is error {
+            log:printError("Failed to delete MI user on runtime management API", deleteResponse, runtimeId = runtimeId, username = username);
+            return error("Failed to delete user on runtime");
+        }
+
+        if deleteResponse.statusCode == http:STATUS_NOT_FOUND {
+            return error(string `User '${username}' not found on runtime`);
+        }
+        if deleteResponse.statusCode != http:STATUS_OK {
+            return error(string `MI management API returned status ${deleteResponse.statusCode}`);
+        }
+
+        log:printInfo("Successfully deleted MI user on runtime", username = username, runtimeId = runtimeId);
+        return {userId: username, status: "Deleted"};
+    }
 }
+
 

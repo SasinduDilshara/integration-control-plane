@@ -135,6 +135,9 @@ type Query {
   # Log File Queries
   logFilesByRuntime(runtimeId: String!, searchKey: String): LogFilesResponse!
   logFileContent(runtimeId: String!, fileName: String!): String!
+
+  # MI Runtime User Management Queries
+  getMiUsers(componentId: String!, runtimeId: String!): MiUsersResponse!
 }
 
 # ============================================
@@ -195,6 +198,10 @@ type Mutation {
   generateComponentEnvironmentJwtSecret(componentId: String!, environmentId: String!): String!
   # Generates a brand-new secret, invalidating the previous one. All runtimes must be reconfigured.
   rotateComponentEnvironmentJwtSecret(componentId: String!, environmentId: String!): String!
+
+  # MI Runtime User Management Mutations
+  addMiUser(componentId: String!, runtimeId: String!, userId: String!, password: String!, isAdmin: Boolean): MiUserOperationResponse!
+  deleteMiUser(componentId: String!, runtimeId: String!, username: String!): MiUserOperationResponse!
 }
 
 # ============================================
@@ -1320,4 +1327,21 @@ type UpdateLogLevelResponse {
   success: Boolean!
   message: String!
   commandIds: [String!]!
+}
+
+# ============================================
+# MI Runtime User Management Types
+# ============================================
+type MiUser {
+  userId: String!
+  isAdmin: Boolean!
+}
+
+type MiUsersResponse {
+  users: [MiUser!]!
+}
+
+type MiUserOperationResponse {
+  userId: String!
+  status: String!
 }
