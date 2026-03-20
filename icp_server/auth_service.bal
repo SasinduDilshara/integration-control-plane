@@ -139,13 +139,12 @@ service /auth on httpListener {
                 if authResult?.isSuperAdmin == true {
                     string|error superAdminsGroupId = storage:getSuperAdminsGroupId();
                     if superAdminsGroupId is error {
-                        log:printError("Could not resolve Super Admins group; user will not receive super-admin",
+                        log:printError("Could not resolve Super Admins group; aborting user bootstrap",
                                 superAdminsGroupId, username = username);
-                    } else {
-                        initialGroupIds = [superAdminsGroupId];
-                        log:printInfo("Assigning new LDAP user to Super Admins group on first login",
-                                username = username);
+                        return utils:createInternalServerError("Could not resolve Super Admins group");
                     }
+                    initialGroupIds = [superAdminsGroupId];
+                    log:printInfo("Assigning new LDAP user to Super Admins group on first login", username = username);
                 }
 
                 json|error? createResult = storage:createUserV2(userId, username, displayName, initialGroupIds);
