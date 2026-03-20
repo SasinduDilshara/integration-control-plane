@@ -173,14 +173,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                   <ListingTable.Cell align="right">
                     <Authorized permissions={Permissions.USER_MANAGE_USERS}>
                       {capabilities.includes('password_reset') && (
-                        <Tooltip
-                          title={
-                            u.isOidcUser
-                              ? 'Cannot reset password of OIDC user'
-                              : u.groups.some((g) => g.groupName === 'Super Admins') && u.userId !== currentUserId
-                                ? 'Cannot reset password of another super admin'
-                                : 'Reset Password'
-                          }>
+                        <Tooltip title={u.isOidcUser ? 'Cannot reset password of OIDC user' : u.groups.some((g) => g.groupName === 'Super Admins') && u.userId !== currentUserId ? 'Cannot reset password of another super admin' : 'Reset Password'}>
                           <span>
                             <IconButton
                               size="small"
@@ -237,14 +230,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                           </IconButton>
                         </span>
                       </Tooltip>
-                      <Tooltip
-                        title={
-                          u.groups.some((g) => g.groupName === 'Super Admins')
-                            ? 'Cannot delete super admins'
-                            : u.userId === currentUserId
-                              ? 'Cannot delete your own account'
-                              : 'Delete'
-                        }>
+                      <Tooltip title={u.groups.some((g) => g.groupName === 'Super Admins') ? 'Cannot delete super admins' : u.userId === currentUserId ? 'Cannot delete your own account' : 'Delete'}>
                         <span>
                           <IconButton
                             size="small"
