@@ -193,9 +193,7 @@ function AddRuntimeModal({ env, onClose }: { env: GqlEnvironment; onClose: () =>
                 {error}
               </Alert>
             )}
-            <DialogContentText sx={{ mb: 2 }}>
-              Generate a new secret for this environment. The secret will be shown once — copy it before closing.
-            </DialogContentText>
+            <DialogContentText sx={{ mb: 2 }}>Generate a new secret for this environment. The secret will be shown once — copy it before closing.</DialogContentText>
             <Button variant="contained" onClick={handleGenerate} disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Generating...' : 'Generate Secret'}
             </Button>
@@ -209,9 +207,7 @@ function AddRuntimeModal({ env, onClose }: { env: GqlEnvironment; onClose: () =>
               <Tab label="MI" />
               <Tab label="BI" />
             </Tabs>
-            <DialogContentText sx={{ mb: 1 }}>
-              Add the following configuration to your runtime's {tab === 0 ? 'deployment.toml' : 'Config.toml'} file:
-            </DialogContentText>
+            <DialogContentText sx={{ mb: 1 }}>Add the following configuration to your runtime's {tab === 0 ? 'deployment.toml' : 'Config.toml'} file:</DialogContentText>
             <Box sx={{ position: 'relative' }}>
               <Box
                 component="pre"
@@ -224,8 +220,7 @@ function AddRuntimeModal({ env, onClose }: { env: GqlEnvironment; onClose: () =>
                   fontFamily: 'monospace',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-all',
-                }}
-              >
+                }}>
                 {config}
               </Box>
               <IconButton size="small" onClick={handleCopy} sx={{ position: 'absolute', top: 8, right: 8 }} aria-label="Copy">
@@ -415,7 +410,7 @@ export default function OrgRuntimes(_scope: OrgScope): JSX.Element {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="contained" color="error" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate(deleting.runtimeId, { onSuccess: () => setDeleting(null) })}>
+            <Button variant="contained" color="error" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate({ runtimeId: deleting.runtimeId }, { onSuccess: () => setDeleting(null) })}>
               Delete
             </Button>
           </DialogActions>
