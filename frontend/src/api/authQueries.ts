@@ -2,6 +2,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { authGet, authPost, authPut, authDelete } from './auth';
 import type { User, Role, RoleDetail, Group, GroupRoleMapping, GroupUser, PermissionsResponse, RoleGroupMapping } from './auth';
 
+export function useAuthCapabilities() {
+  return useQuery({
+    queryKey: ['authCapabilities'],
+    queryFn: () => authGet<{ capabilities: string[] }>('/capabilities').then((d) => d.capabilities),
+    staleTime: Infinity,
+  });
+}
+
 export function useCurrentUser(orgHandler: string, userId: string) {
   return useQuery({
     queryKey: ['currentUser', orgHandler, userId],

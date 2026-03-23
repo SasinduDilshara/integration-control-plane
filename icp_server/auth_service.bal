@@ -35,6 +35,32 @@ final readonly & jwt:IssuerSignatureConfig jwtSignatureConfig;
 }
 service /auth on httpListener {
 
+    // Returns the user-management operations supported by the active user store.
+    // The frontend uses this to show or hide UI features (e.g. create user, change password).
+    @http:ResourceConfig {
+        auth: [
+            {
+                jwtValidatorConfig: {
+                    issuer: frontendJwtIssuer,
+                    audience: frontendJwtAudience,
+                    signatureConfig: {
+                        secret: resolvedFrontendJwtHMACSecret
+                    }
+                }
+            }
+        ]
+    }
+    resource function get capabilities() returns http:Ok {
+        string[] caps;
+        if ldapUserStoreEnabled {
+            caps = ["authenticate"];
+        } else {
+            caps = ["authenticate", "password_change", "password_reset",
+                    "unlock_account", "create"];
+        }
+        return <http:Ok>{body: {capabilities: caps}};
+    }
+
     isolated resource function post login(types:Credentials credentials, http:Request req) returns http:Ok|http:Unauthorized|http:TooManyRequests|http:InternalServerError|error {
         log:printInfo("Login attempt for user", username = credentials.username);
         // Call the authentication backend to verify credentials
@@ -103,18 +129,37 @@ service /auth on httpListener {
         types:User|error userDetails = storage:getUserDetailsById(userId);
         if userDetails is error {
             if userDetails is sql:NoRowsError {
-                // New user
+                // New user — resolve initial group assignments before creating the record.
                 log:printInfo(string `User ${username} authenticated but not found in users table, creating user record`);
-                json|error? createResult = storage:createUserV2(userId, username, displayName, []);
-                if createResult is error {
-                    log:printError("Error creating user in database", createResult, username = username);
-                    return utils:createInternalServerError("Error creating user record");
+
+                // If the auth backend signals that this user should be a super-admin
+                // (e.g. because of an LDAP admin role), add them to the built-in
+                // "Super Admins" group on first login.
+                string[] initialGroupIds = [];
+                if authResult?.isSuperAdmin == true {
+                    string|error superAdminsGroupId = storage:getSuperAdminsGroupId();
+                    if superAdminsGroupId is error {
+                        log:printError("Could not resolve Super Admins group; aborting user bootstrap",
+                                superAdminsGroupId, username = username);
+                        return utils:createInternalServerError("Could not resolve Super Admins group");
+                    }
+                    initialGroupIds = [superAdminsGroupId];
+                    log:printInfo("Assigning new LDAP user to Super Admins group on first login", username = username);
                 }
 
-                // Fetch the newly created user details
+                json|error? createResult = storage:createUserV2(userId, username, displayName, initialGroupIds);
+                if createResult is error {
+                    if !createResult.message().includes("already exists") {
+                        log:printError("Error creating user in database", createResult, username = username);
+                        return utils:createInternalServerError("Error creating user record");
+                    }
+                    log:printInfo("Concurrent first-login detected; re-fetching existing user record", username = username);
+                }
+
+                // Fetch the newly created (or concurrently created) user details
                 userDetails = storage:getUserDetailsById(userId);
                 if userDetails is error {
-                    log:printError("Error getting newly created user details", userDetails);
+                    log:printError("Error getting user details after creation", userDetails);
                     return utils:createInternalServerError("Error getting user details");
                 }
 

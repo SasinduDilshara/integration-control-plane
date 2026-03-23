@@ -23,11 +23,12 @@ import { useNavigate, useLocation } from 'react-router';
 import SearchField from '../../components/SearchField';
 import { Permissions } from '../../constants/permissions';
 import Authorized from '../../components/Authorized';
-import { useUsers, useDeleteUser, useResetPassword, useRevokeUserTokens, useUnlockAccount } from '../../api/authQueries';
+import { useUsers, useDeleteUser, useResetPassword, useRevokeUserTokens, useUnlockAccount, useAuthCapabilities } from '../../api/authQueries';
 import type { User } from '../../api/auth';
 import { newOrgUserUrl, editOrgUserUrl } from '../../paths';
 import { Loading } from './shared';
 import { useFiltered } from './utils';
+import { useAuth } from '../../auth/AuthContext';
 
 function ResetPasswordDialog({ username, password, onClose }: { username: string; password: string; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -79,7 +80,9 @@ function ResetPasswordDialog({ username, password, onClose }: { username: string
 export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
+  const { userId: currentUserId } = useAuth();
   const { data: users, isLoading } = useUsers(orgHandler);
+  const { data: capabilities = [] } = useAuthCapabilities();
   const deleteMutation = useDeleteUser(orgHandler);
   const resetPasswordMutation = useResetPassword(orgHandler);
   const revokeTokensMutation = useRevokeUserTokens(orgHandler);
@@ -119,11 +122,13 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
         <ListingTable.Toolbar
           searchSlot={<SearchField value={search} onChange={setSearch} />}
           actions={
-            <Authorized permissions={Permissions.USER_MANAGE_USERS}>
-              <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => navigate(newOrgUserUrl(orgHandler))}>
-                Create User
-              </Button>
-            </Authorized>
+            capabilities.includes('create') && (
+              <Authorized permissions={Permissions.USER_MANAGE_USERS}>
+                <Button variant="contained" startIcon={<Plus size={18} />} onClick={() => navigate(newOrgUserUrl(orgHandler))}>
+                  Create User
+                </Button>
+              </Authorized>
+            )
           }
         />
         <ListingTable>
@@ -166,70 +171,81 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                   <ListingTable.Cell>{u.username}</ListingTable.Cell>
                   <ListingTable.Cell>{u.groupCount > 0 ? u.groups.map((g) => <Chip key={g.groupId} label={g.groupName} size="small" sx={{ mr: 0.5 }} />) : <>—</>}</ListingTable.Cell>
                   <ListingTable.Cell align="right">
-                    {!u.isSuperAdmin && (
-                      <Authorized permissions={Permissions.USER_MANAGE_USERS}>
-                        <Tooltip title={u.isOidcUser ? 'Cannot reset password of OIDC user' : 'Reset Password'}>
+                    <Authorized permissions={Permissions.USER_MANAGE_USERS}>
+                      {capabilities.includes('password_reset') && (
+                        <Tooltip title={u.isOidcUser ? 'Cannot reset password of OIDC user' : u.groups.some((g) => g.groupName === 'Super Admins') && u.userId !== currentUserId ? 'Cannot reset password of another super admin' : 'Reset Password'}>
+                          <span>
+                            <IconButton
+                              size="small"
+                              aria-label="Reset Password"
+                              disabled={u.isOidcUser || (u.groups.some((g) => g.groupName === 'Super Admins') && u.userId !== currentUserId)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setResettingUserId(u.userId);
+                              }}>
+                              <Key size={16} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      )}
+                      {capabilities.includes('unlock_account') && !u.isOidcUser && (
+                        <Tooltip title="Unlock Account">
                           <IconButton
                             size="small"
-                            aria-label={u.isOidcUser ? 'Cannot reset password of OIDC user' : 'Reset Password'}
-                            disabled={u.isOidcUser}
+                            aria-label="Unlock Account"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setResettingUserId(u.userId);
+                              setUnlockingUserId(u.userId);
                             }}>
-                            <Key size={16} />
+                            <LockOpen size={16} />
                           </IconButton>
                         </Tooltip>
-                        <Tooltip title="Revoke Sessions">
+                      )}
+                      {!u.groups.some((g) => g.groupName === 'Super Admins') && (
+                        <>
+                          <Tooltip title="Edit">
+                            <IconButton
+                              size="small"
+                              aria-label="Edit user"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(editOrgUserUrl(orgHandler, u.userId));
+                              }}>
+                              <Pencil size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      )}
+                      <Tooltip title={u.userId === currentUserId ? 'Cannot revoke your own sessions' : 'Revoke Sessions'}>
+                        <span>
                           <IconButton
                             size="small"
                             aria-label="Revoke Sessions"
+                            disabled={u.userId === currentUserId}
                             onClick={(e) => {
                               e.stopPropagation();
                               setRevokingUserId(u.userId);
                             }}>
                             <LogOut size={16} />
                           </IconButton>
-                        </Tooltip>
-                        {/* Unlock is credential-store only; hide for OIDC users */}
-                        {!u.isOidcUser && (
-                          <Tooltip title="Unlock Account">
-                            <IconButton
-                              size="small"
-                              aria-label="Unlock Account"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setUnlockingUserId(u.userId);
-                              }}>
-                              <LockOpen size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        <Tooltip title="Edit">
-                          <IconButton
-                            size="small"
-                            aria-label="Edit user"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(editOrgUserUrl(orgHandler, u.userId));
-                            }}>
-                            <Pencil size={16} />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Delete">
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={u.groups.some((g) => g.groupName === 'Super Admins') ? 'Cannot delete super admins' : u.userId === currentUserId ? 'Cannot delete your own account' : 'Delete'}>
+                        <span>
                           <IconButton
                             size="small"
                             color="error"
                             aria-label="Delete user"
+                            disabled={u.groups.some((g) => g.groupName === 'Super Admins') || u.userId === currentUserId}
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeletingUserId(u.userId);
                             }}>
                             <Trash2 size={16} />
                           </IconButton>
-                        </Tooltip>
-                      </Authorized>
-                    )}
+                        </span>
+                      </Tooltip>
+                    </Authorized>
                   </ListingTable.Cell>
                 </ListingTable.Row>
               ))

@@ -67,7 +67,7 @@ configurable int maxRefreshTokensPerUser = 10; // Maximum number of active refre
 
 // Authentication backend configuration 
 configurable string authBackendUrl = "https://localhost:9447";
-
+configurable string ldapAuthBackendUrl = "https://localhost:9450";
 // SSO (OIDC) configuration
 configurable boolean ssoEnabled = false;
 configurable string ssoIssuer = "";

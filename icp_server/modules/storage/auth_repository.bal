@@ -92,6 +92,22 @@ public isolated function getGroupById(string groupId) returns types:Group|error 
     return group;
 }
 
+// Return the group_id of the built-in "Super Admins" group for the default org.
+// This group is seeded by the DB init scripts and is always present.
+public isolated function getSuperAdminsGroupId() returns string|error {
+    record {|string group_id;|}|sql:Error row = dbClient->queryRow(
+        `SELECT group_id FROM user_groups
+         WHERE group_name = 'Super Admins' AND org_uuid = ${DEFAULT_ORG_ID}`
+    );
+    if row is sql:NoRowsError {
+        return error("Super Admins group not found in database");
+    }
+    if row is sql:Error {
+        return row;
+    }
+    return row.group_id;
+}
+
 // Get all groups for an organization
 public isolated function getGroupsByOrgId(int orgId) returns types:Group[]|error {
     log:printDebug(string `Fetching groups for orgId: ${orgId}`);

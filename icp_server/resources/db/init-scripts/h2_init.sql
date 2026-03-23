@@ -635,22 +635,11 @@ WHERE permission_name IN (
     'observability_mgt:view_insights'
 );
 
--- Insert default admin user (required for group assignments)
-INSERT INTO users (user_id, username, display_name, is_super_admin)
-VALUES ('550e8400-e29b-41d4-a716-446655440000', 'admin', 'System Administrator', TRUE);
-
 -- Create default groups
 INSERT INTO user_groups (group_id, group_name, org_uuid, description) VALUES
 (RANDOM_UUID(), 'Super Admins', 1, 'Group for super administrators with full access'),
 (RANDOM_UUID(), 'Administrators', 1, 'Group for administrators'),
 (RANDOM_UUID(), 'Developers', 1, 'Group for developers');
-
--- Assign super admin user to Super Admins group
-INSERT INTO group_user_mapping (group_id, user_uuid)
-VALUES (
-    (SELECT group_id FROM user_groups WHERE group_name = 'Super Admins'),
-    '550e8400-e29b-41d4-a716-446655440000'
-);
 
 -- Map Super Admins group to Super Admin role at org level
 INSERT INTO group_role_mapping (group_id, role_id, org_uuid)
@@ -1576,7 +1565,7 @@ VALUES (
         'sample-org',
         'sample-repo',
         'main',
-        '550e8400-e29b-41d4-a716-446655440000',
+        NULL,
         'System Administrator'
     ),
     (
@@ -1592,7 +1581,7 @@ VALUES (
         'test-org',
         'test-repo',
         'develop',
-        '550e8400-e29b-41d4-a716-446655440000',
+        NULL,
         'System Administrator'
     );
 
@@ -1612,7 +1601,7 @@ VALUES (
         'Sample Integration',
         'BI',
         'Sample integration for testing',
-        '550e8400-e29b-41d4-a716-446655440000',
+        NULL,
         '650e8400-e29b-41d4-a716-446655440001'
     );
 
@@ -1644,7 +1633,7 @@ VALUES (
         'dev-sandbox',
         FALSE,
         'dev',
-        '550e8400-e29b-41d4-a716-446655440000'
+        NULL
     ),
     (
         '750e8400-e29b-41d4-a716-446655440002',
@@ -1658,24 +1647,6 @@ VALUES (
         'prod-sandbox',
         TRUE,
         'prod',
-        '550e8400-e29b-41d4-a716-446655440000'
+        NULL
     );
 
--- Insert sample refresh token for admin user (for testing)
-INSERT INTO
-    refresh_tokens (
-        token_id,
-        user_id,
-        token_hash,
-        expires_at,
-        user_agent,
-        ip_address
-    )
-VALUES (
-        '950e8400-e29b-41d4-a716-446655440001',
-        '550e8400-e29b-41d4-a716-446655440000',
-        'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-        DATEADD ('DAY', 7, NOW()),
-        'Mozilla/5.0 (Test Browser)',
-        '127.0.0.1'
-    );

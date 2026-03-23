@@ -64,6 +64,57 @@ frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs25
 #                                # Useful to limit the number of devices/sessions per user
 
 # =============================================================================
+# LDAP CONFIGURATION
+# =============================================================================
+# Uncomment and fill in the settings below to use an LDAP directory as the user store.
+# Only ldapUserStoreEnabled needs to be changed for a basic setup; all other values
+# have sensible defaults that can be tuned to match your directory schema.
+
+# --- Activation ---
+# ldapUserStoreEnabled = false        # Set to true to activate the LDAP user store
+
+# --- LDAP server connection ---
+# ldapHostName = "localhost"
+# ldapPort = 10389                    # Use 636 for LDAPS
+# ldapConnectionName = "uid=admin,ou=system"
+# ldapConnectionPassword = "secret"
+
+# --- User search ---
+# ldapUserSearchBase = "ou=Users,dc=wso2,dc=org"
+# ldapUserNameAttribute = "uid"       # Use "sAMAccountName" for Active Directory
+# ldapUserSearchFilter = "(&(objectClass=person)(uid=?))"   # '?' is replaced with the username
+# ldapUserDNPattern = ""              # Optional: construct DN directly, e.g. "uid={0},ou=Users,dc=wso2,dc=org"
+# ldapDisplayNameAttribute = ""       # Attribute used as the display name in ICP; leave empty to use username
+
+# --- Role / group lookup ---
+# ldapReadGroups = true               # Set to false to skip group lookup entirely
+
+# Active Directory memberOf strategy (takes precedence when set):
+# ldapMemberOfAttribute = ""          # e.g. "memberOf"
+# ldapGroupNameAttribute = "cn"       # Attribute that holds the group name (used with memberOf strategy)
+
+# Standard LDAP group-search strategy (used when ldapMemberOfAttribute is empty):
+# ldapGroupSearchBase = "ou=Groups,dc=wso2,dc=org"
+# ldapGroupNameAttribute = "cn"
+# ldapGroupSearchFilter = "(objectClass=groupOfNames)"
+# ldapMembershipAttribute = "member"  # Use "uniqueMember" or "memberUid" for posixGroup schemas
+
+# --- Admin role mapping ---
+# Names of LDAP groups whose members are granted ICP super-admin on first login.
+# Comparison is case-sensitive and uses the ldapGroupNameAttribute value.
+# ldapAdminRoles = ["admin"]                 # e.g. ["icp-admins", "administrators"]
+
+# --- TLS (LDAPS) ---
+# ldapSslEnabled = false
+# ldapTrustStorePath = ""             # Path to a JKS truststore for verifying the LDAP server's CA cert
+# ldapTrustStorePassword = ""
+
+# Secrets alias form (use with [icp_server.secrets] block below):
+# ldapConnectionPassword = "$secret{ldapConnectionPassword}"
+# ldapTrustStorePassword = "$secret{ldapTrustStorePassword}"
+
+
+# =============================================================================
 # SECRETS ALIAS CONFIGURATION
 # =============================================================================
 # frontendJwtHMACSecret = "$secret{secretJWTsecret}"
@@ -75,6 +126,8 @@ frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs25
 [icp_server.secrets]
 # secretJWTsecret = "encrypted-value-for-jwt-secret"
 # secCredsDbPassword = "encrypted-value-for-credentials-db-password"
+# ldapConnectionPassword = "encrypted-value-for-ldap-connection-password"
+# ldapTrustStorePassword = "encrypted-value-for-ldap-truststore-password"
 
 # =============================================================================
 # SSO (OIDC) CONFIGURATION

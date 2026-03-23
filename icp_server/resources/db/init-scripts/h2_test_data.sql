@@ -48,7 +48,7 @@ VALUES (
     'Sample Integration 2',
     'BI',
     'Second integration in Project 1 for testing',
-    '550e8400-e29b-41d4-a716-446655440000',
+    NULL,
     '650e8400-e29b-41d4-a716-446655440001'
 );
 
@@ -68,7 +68,7 @@ VALUES (
     'Project 2 Integration',
     'MI',
     'Integration in Project 2 for cross-project testing',
-    '550e8400-e29b-41d4-a716-446655440000',
+    NULL,
     '650e8400-e29b-41d4-a716-446655440002'
 );
 

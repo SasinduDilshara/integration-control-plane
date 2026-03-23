@@ -19,26 +19,30 @@ import icp_server.utils;
 
 import ballerina/jwt;
 import ballerina/log;
+import ballerina/http;
 
 function init() returns error? {
     // Initialize HTTP client to authentication backend using resolved TLS and JWT secrets
-    log:printInfo("Initializing ICP server");
-    authBackendClient = check new (authBackendUrl,
-        secureSocket = {
-            cert: {
-                path: truststorePath,
-                password: resolvedTruststorePassword
-            }
-        },
-        auth = {
-            issuer: userServiceJwtIssuer,
-            audience: userServiceJwtAudience,
-            expTime: 3600,
-            signatureConfig: {
-                algorithm: jwt:HS256,
-                config: resolvedUserServiceJwtHMACSecret
-            }
+    http:ClientSecureSocket authBackendSecureSocket = {
+        cert: {
+            path: truststorePath,
+            password: resolvedTruststorePassword
         }
+    };
+    http:JwtIssuerConfig authBackendJwtConfig = {
+        issuer: userServiceJwtIssuer,
+        audience: userServiceJwtAudience,
+        expTime: 3600,
+        signatureConfig: {
+            algorithm: jwt:HS256,
+            config: resolvedUserServiceJwtHMACSecret
+        }
+    };
+
+    log:printInfo("Initializing ICP server");
+    authBackendClient = check new (ldapUserStoreEnabled ? ldapAuthBackendUrl : authBackendUrl,
+        secureSocket = authBackendSecureSocket,
+        auth = authBackendJwtConfig
     );
 
     // Initialize JWT signature config used throughout auth_service.bal

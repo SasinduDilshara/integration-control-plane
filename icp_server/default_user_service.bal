@@ -137,6 +137,7 @@ service / on defaultAuthServiceListener {
                             authenticated: true,
                             userId: credentials.userId,
                             displayName: credentials.displayName,
+                            isSuperAdmin: credentials.username == "admin",
                             timestamp: time:utcToString(time:utcNow())
                         }
                     };
