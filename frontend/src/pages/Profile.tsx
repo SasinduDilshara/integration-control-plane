@@ -36,7 +36,7 @@ function getInitials(name: string): string {
 export default function Profile(): JSX.Element {
   const { userId, username, displayName, isOidcUser } = useAuth();
   const { data: user, isLoading } = useCurrentUser('default', userId);
-  const { data: capabilities } = useAuthCapabilities();
+  const { data: capabilities, isError: capError } = useAuthCapabilities();
 
   if (isLoading) {
     return <CircularProgress sx={{ display: 'block', mx: 'auto', my: 8 }} />;
@@ -86,7 +86,15 @@ export default function Profile(): JSX.Element {
         </CardContent>
       </Card>
 
-      {!isOidcUser && capabilities?.includes('password_change') !== false && <ChangePasswordSection />}
+      {!isOidcUser && (
+        capError ? (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Couldn't load available account actions. Refresh and try again.
+          </Alert>
+        ) : capabilities?.includes('password_change') ? (
+          <ChangePasswordSection />
+        ) : null
+      )}
     </Box>
   );
 }

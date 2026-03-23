@@ -149,14 +149,17 @@ service /auth on httpListener {
 
                 json|error? createResult = storage:createUserV2(userId, username, displayName, initialGroupIds);
                 if createResult is error {
-                    log:printError("Error creating user in database", createResult, username = username);
-                    return utils:createInternalServerError("Error creating user record");
+                    if !createResult.message().includes("already exists") {
+                        log:printError("Error creating user in database", createResult, username = username);
+                        return utils:createInternalServerError("Error creating user record");
+                    }
+                    log:printInfo("Concurrent first-login detected; re-fetching existing user record", username = username);
                 }
 
-                // Fetch the newly created user details
+                // Fetch the newly created (or concurrently created) user details
                 userDetails = storage:getUserDetailsById(userId);
                 if userDetails is error {
-                    log:printError("Error getting newly created user details", userDetails);
+                    log:printError("Error getting user details after creation", userDetails);
                     return utils:createInternalServerError("Error getting user details");
                 }
 
