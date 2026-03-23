@@ -40,7 +40,7 @@ type ObservabilitySecureSocketConfig record {|
 
 // Observability HTTP client configuration
 type ObservabilityClientConfig record {|
-    decimal timeout = 60; // Request timeout in seconds
+    decimal timeout = 5; // Request timeout in seconds - fail fast for browser compatibility
     int retryCount = 3; // Number of retry attempts
     decimal retryInterval = 2; // Retry interval in seconds
     decimal retryBackoffFactor = 2.0; // Exponential backoff multiplier
@@ -101,15 +101,10 @@ final http:Client? observabilityHttpClient = initObservabilityClient();
 
 isolated function initObservabilityClient() returns http:Client? {
     // Initialize HTTP client - connection errors will be handled per-request
+    // No retries to fail fast on unreachable backend
     http:Client|error httpClient = new (observabilityBackendURL,
         {
             timeout: observabilityClient.timeout,
-            retryConfig: {
-                count: observabilityClient.retryCount,
-                interval: observabilityClient.retryInterval,
-                backOffFactor: <float>observabilityClient.retryBackoffFactor,
-                maxWaitInterval: 20
-            },
             poolConfig: {
                 maxActiveConnections: observabilityClient.maxPoolSize
             },
@@ -162,7 +157,7 @@ service /icp/observability on observabilityListener {
         log:printInfo("Observability service started at " + serverHost + ":" + observabilityServerPort.toString());
     }
 
-    resource function post logs(http:Request request, types:ICPLogEntryRequest logRequest) returns types:LogEntriesResponse|http:ServiceUnavailable|error {
+    resource function post logs(http:Request request, types:ICPLogEntryRequest logRequest) returns types:LogEntriesResponse|http:Response|error {
         log:printInfo("Received log request: " + logRequest.toString());
 
         // Transform ICPLogEntryRequest to LogEntryRequest by resolving component/environment filters to runtime IDs
@@ -187,6 +182,18 @@ service /icp/observability on observabilityListener {
             };
         }
 
+        // Check if observability client is available before any runtime-type lookups
+        http:Client? httpClient = observabilityHttpClient;
+        if httpClient is () {
+            log:printWarn("Observability backend is not configured or unavailable");
+            http:Response unavailableResponse = new;
+            unavailableResponse.statusCode = 503;
+            unavailableResponse.setPayload({
+                message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
+            });
+            return unavailableResponse;
+        }
+
         // Resolve runtime types to request
         types:LogIndexRuntimeType componentType = check resolveComponentTypes(runtimeIdList);
         log:printDebug("Resolved component type: " + componentType.toString() + " for log filtering");
@@ -206,33 +213,33 @@ service /icp/observability on observabilityListener {
 
         log:printInfo("Invoking observability adapter with " + runtimeIdList.length().toString() + " runtime IDs");
 
-        // Check if observability client is available
-        http:Client? httpClient = observabilityHttpClient;
-        if httpClient is () {
-            log:printWarn("Observability backend is not configured or unavailable");
-            return <http:ServiceUnavailable>{
-                body: {
-                    message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
-                }
-            };
-        }
-
         // Generate fresh JWT token and invoke observability adapter service
         string token = check generateObservabilityToken();
         map<string|string[]> headers = {"Authorization": "Bearer " + token};
         types:LogEntriesResponse|error response = httpClient->post(string `/observability/logs/${componentType.toString()}`, adaptorRequest, headers);
         if response is error {
-            log:printWarn(string `Failed to fetch logs from observability backend: ${response.message()}`);
-            return <http:ServiceUnavailable>{
-                body: {
-                    message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
-                }
-            };
+            // Forward upstream 4xx/5xx errors with their status code and body
+            if response is http:ClientRequestError|http:RemoteServerError {
+                var detail = response.detail();
+                log:printWarn(string `Observability backend returned ${detail.statusCode}: ${response.message()}`);
+                http:Response errorResponse = new;
+                errorResponse.statusCode = detail.statusCode;
+                errorResponse.setPayload(detail.body);
+                return errorResponse;
+            }
+            // Connection or other client failures - return 503
+            log:printWarn(string `Failed to connect to observability backend: ${response.message()}`);
+            http:Response unavailableResponse = new;
+            unavailableResponse.statusCode = 503;
+            unavailableResponse.setPayload({
+                message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
+            });
+            return unavailableResponse;
         }
         return response;
     }
 
-    resource function post metrics(http:Request request, types:ICPMetricEntryRequest metricRequest) returns types:MetricEntriesResponse|http:ServiceUnavailable|error {
+    resource function post metrics(http:Request request, types:ICPMetricEntryRequest metricRequest) returns types:MetricEntriesResponse|http:Response|error {
 
         log:printInfo("Received metric request: " + metricRequest.toString());
 
@@ -258,6 +265,18 @@ service /icp/observability on observabilityListener {
             };
         }
 
+        // Check if observability client is available before any runtime-type lookups
+        http:Client? httpClient = observabilityHttpClient;
+        if httpClient is () {
+            log:printWarn("Observability backend is not configured or unavailable");
+            http:Response unavailableResponse = new;
+            unavailableResponse.statusCode = 503;
+            unavailableResponse.setPayload({
+                message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
+            });
+            return unavailableResponse;
+        }
+
         // Resolve runtime types to determine which index to query (same as logs)
         types:LogIndexRuntimeType componentType = check resolveComponentTypes(runtimeIdList);
         log:printDebug("Resolved component type: " + componentType.toString() + " for metrics filtering");
@@ -273,28 +292,28 @@ service /icp/observability on observabilityListener {
 
         log:printInfo("Invoking observability adapter with " + runtimeIdList.length().toString() + " runtime IDs for component type: " + componentType.toString());
 
-        // Check if observability client is available
-        http:Client? httpClient = observabilityHttpClient;
-        if httpClient is () {
-            log:printWarn("Observability backend is not configured or unavailable");
-            return <http:ServiceUnavailable>{
-                body: {
-                    message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
-                }
-            };
-        }
-
         // Generate fresh JWT token and invoke observability adapter service with component type path param
         string token = check generateObservabilityToken();
         map<string|string[]> headers = {"Authorization": "Bearer " + token};
         types:MetricEntriesResponse|error response = httpClient->post(string `/observability/metrics/${componentType.toString()}`, adaptorRequest, headers);
         if response is error {
-            log:printWarn(string `Failed to fetch metrics from observability backend: ${response.message()}`);
-            return <http:ServiceUnavailable>{
-                body: {
-                    message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
-                }
-            };
+            // Forward upstream 4xx/5xx errors with their status code and body
+            if response is http:ClientRequestError|http:RemoteServerError {
+                var detail = response.detail();
+                log:printWarn(string `Observability backend returned ${detail.statusCode}: ${response.message()}`);
+                http:Response errorResponse = new;
+                errorResponse.statusCode = detail.statusCode;
+                errorResponse.setPayload(detail.body);
+                return errorResponse;
+            }
+            // Connection or other client failures - return 503
+            log:printWarn(string `Failed to connect to observability backend: ${response.message()}`);
+            http:Response unavailableResponse = new;
+            unavailableResponse.statusCode = 503;
+            unavailableResponse.setPayload({
+                message: "Observability service is unavailable. Please ensure Observability backend is configured and running."
+            });
+            return unavailableResponse;
         }
         return response;
     }

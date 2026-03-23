@@ -95,6 +95,13 @@ function toLocalInput(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function isUnavailable(error: unknown): boolean {
+  if (!error) return false;
+  const status = (error as any).status;
+  const message = (error as Error).message ?? '';
+  return status === 503 || message.includes('Observability service is unavailable') || message.includes('OpenSearch service is unavailable');
+}
+
 function LogEntry({ log, expanded, onToggle }: { log: LogRow; expanded: boolean; onToggle: () => void }) {
   return (
     <>
@@ -185,10 +192,27 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
 
   const componentIds = !hasComponent(scope) && integrationFilter !== 'all' ? [integrationFilter] : allComponentIds;
 
+  // Calculate selected environments for request logic
+  const selectedEnvIds = envFilter.length > 0 ? envFilter : environments.map((e) => e.id);
+  const selectedEnvs = environments.filter((e) => selectedEnvIds.includes(e.id));
+  const primaryEnv = selectedEnvs[0];
+
+  // Derive selected component id from current selection (matching runtimeLinkComponent logic)
+  const selectedComponentId = useMemo(() => {
+    const isComponentScope = hasComponent(scope);
+    if (isComponentScope) return singleComponent?.id ?? '';
+    if (integrationFilter !== 'all') return integrationFilter;
+    return allComponentIds[0] ?? '';
+  }, [scope, singleComponent, integrationFilter, allComponentIds]);
+
+  // Derive selected environment id from current selection (matching request logic)
+  const selectedEnvId = useMemo(() => {
+    if (envFilter.length > 0) return envFilter[0];
+    return primaryEnv?.id ?? '';
+  }, [envFilter, primaryEnv]);
+
   // Fetch runtimes to check if they are MI type (for per-runtime log download link)
-  const firstComponentId = allComponentIds[0] ?? '';
-  const firstEnvId = environments[0]?.id ?? '';
-  const { data: runtimes = [] } = useRuntimes(firstEnvId, projectId, firstComponentId);
+  const { data: runtimes = [] } = useRuntimes(selectedEnvId, projectId, selectedComponentId);
   const hasMIRuntimes = useMemo(() => runtimes.some((r) => r.runtimeType === 'MI'), [runtimes]);
 
   // Determine which component to link to for per-runtime logs
@@ -198,12 +222,8 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
     if (integrationFilter !== 'all') {
       return allComponents.find((c) => c.id === integrationFilter);
     }
-    return allComponents[0];
-  }, [singleComponent, integrationFilter, allComponents]);
-
-  const selectedEnvIds = envFilter.length > 0 ? envFilter : environments.map((e) => e.id);
-  const selectedEnvs = environments.filter((e) => selectedEnvIds.includes(e.id));
-  const primaryEnv = selectedEnvs[0];
+    return undefined;
+  }, [scope, singleComponent, integrationFilter, allComponents]);
   const componentIdsKey = componentIds.join(',');
   const envIdsKey = selectedEnvIds.join(',');
   const levelFilterKey = levelFilter.join(',');
@@ -242,13 +262,13 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
 
   // Disable auto-fetch when observability service is unavailable
   useEffect(() => {
-    if (error && (error as Error).message?.includes('Observability service is unavailable')) {
+    if (isUnavailable(error)) {
       setAutoFetch(false);
     }
   }, [error]);
 
   const logs = useMemo(() => data?.pages.flat() ?? [], [data]);
-  const filtersDisabled = !!error;
+  const filtersDisabled = isUnavailable(error);
 
   const filteredLogs = logs;
 
@@ -433,7 +453,7 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
         <CircularProgress size={28} sx={{ display: 'block', mx: 'auto', my: 6 }} />
       ) : error ? (
         <Stack alignItems="center" gap={2} sx={{ py: 6 }}>
-          {(error as Error).message?.includes('Observability service is unavailable') ? (
+          {isUnavailable(error) ? (
             <>
               <ScrollText size={48} style={{ color: '#78909c' }} />
               <Typography variant="h6" textAlign="center">
@@ -446,11 +466,7 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
                 <Typography color="text.secondary" textAlign="center" sx={{ maxWidth: 600 }}>
                   You can still download{' '}
                   <Link
-                    to={
-                      hasComponent(scope)
-                        ? resourceUrl(scope, 'runtimes')
-                        : resourceUrl({ level: 'components', org: scope.org, project: scope.project, component: runtimeLinkComponent.handler }, 'runtimes')
-                    }
+                    to={hasComponent(scope) ? resourceUrl(scope, 'runtimes') : resourceUrl({ level: 'components', org: scope.org, project: scope.project, component: runtimeLinkComponent.handler }, 'runtimes')}
                     style={{ textDecoration: 'underline', cursor: 'pointer' }}>
                     per-runtime logs
                   </Link>

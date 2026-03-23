@@ -217,6 +217,13 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+function isUnavailable(error: unknown): boolean {
+  if (!error) return false;
+  const status = (error as any).status;
+  const message = (error as Error).message ?? '';
+  return status === 503 || message.includes('Observability service is unavailable') || message.includes('OpenSearch service is unavailable');
+}
+
 const COLORS = ['#4caf50', '#2196f3', '#ff9800', '#e91e63', '#9c27b0'];
 
 function StatCard({ title, value, color }: { title: string; value: string; color?: string }) {
@@ -284,7 +291,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
   const allInboundMetrics = useMemo(() => metricsData?.inboundMetrics ?? [], [metricsData]);
 
   const inboundMetrics = allInboundMetrics;
-  const filtersDisabled = !!error;
+  const filtersDisabled = isUnavailable(error);
 
   const { requestsData, latencyData, totalRequests, errorCount, errorPercentage, latestP95 } = useMemo(() => aggregate(inboundMetrics), [inboundMetrics]);
   const apis = useMemo(() => deriveApis(inboundMetrics, runtimeComponentMap), [inboundMetrics, runtimeComponentMap]);
@@ -377,7 +384,7 @@ export default function Metrics(scope: ProjectScope | ComponentScope): JSX.Eleme
         <CircularProgress size={28} sx={{ display: 'block', mx: 'auto', my: 6 }} />
       ) : error ? (
         <Stack alignItems="center" gap={2} sx={{ py: 6 }}>
-          {(error as Error).message?.includes('Observability service is unavailable') ? (
+          {isUnavailable(error) ? (
             <>
               <BarChart3 size={48} style={{ color: '#78909c' }} />
               <Typography variant="h6" textAlign="center">

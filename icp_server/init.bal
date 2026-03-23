@@ -20,7 +20,6 @@ import icp_server.utils;
 import ballerina/http;
 import ballerina/jwt;
 import ballerina/log;
-import ballerina/http;
 
 function init() returns error? {
     // Initialize HTTP client to authentication backend using resolved TLS and JWT secrets
