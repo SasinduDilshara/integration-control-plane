@@ -237,7 +237,70 @@ export function useProjectRuntimes(envId: string, projectId: string) {
   });
 }
 
-export { RUNTIMES_QUERY, PROJECT_RUNTIMES_QUERY };
+const ORG_RUNTIMES_QUERY = `
+  query GetOrgRuntimes($environmentId: String!) {
+    runtimes(environmentId: $environmentId) {
+      runtimeId, runtimeType, status, version,
+      platformName, platformVersion, platformHome,
+      osName, osVersion, registrationTime, lastHeartbeat,
+      component { displayName }
+    }
+  }`;
+
+export { RUNTIMES_QUERY, PROJECT_RUNTIMES_QUERY, ORG_RUNTIMES_QUERY };
+
+// ── Component-level Bound Secrets ──
+
+export interface GqlBoundSecretRuntime {
+  runtimeId: string;
+  status: string;
+}
+
+export interface GqlBoundSecret {
+  keyId: string;
+  createdAt: string;
+  runtimes: GqlBoundSecretRuntime[];
+}
+
+export const COMPONENT_SECRETS_QUERY = `
+  query GetComponentSecrets($componentId: String!, $environmentId: String!) {
+    componentSecrets(componentId: $componentId, environmentId: $environmentId) {
+      keyId, createdAt, runtimes { runtimeId, status }
+    }
+  }`;
+
+export function useComponentSecrets(componentId: string, environmentId: string) {
+  return useQuery({
+    queryKey: ['componentSecrets', componentId, environmentId],
+    queryFn: () => gql<{ componentSecrets: GqlBoundSecret[] }>(COMPONENT_SECRETS_QUERY, { componentId, environmentId }).then((d) => d.componentSecrets),
+    enabled: !!componentId && !!environmentId,
+  });
+}
+
+// ── Org Secrets ──
+
+export interface GqlOrgSecret {
+  keyId: string;
+  environmentId: string;
+  environmentName: string;
+  bound: boolean;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+const ORG_SECRETS_QUERY = `
+  query GetOrgSecrets($environmentId: String) {
+    orgSecrets(environmentId: $environmentId) {
+      keyId, environmentId, environmentName, bound, createdAt, createdBy
+    }
+  }`;
+
+export function useOrgSecrets(environmentId?: string) {
+  return useQuery({
+    queryKey: ['orgSecrets', environmentId],
+    queryFn: () => gql<{ orgSecrets: GqlOrgSecret[] }>(ORG_SECRETS_QUERY, environmentId ? { environmentId } : {}).then((d) => d.orgSecrets),
+  });
+}
 
 export interface GqlArtifactType {
   artifactType: string;

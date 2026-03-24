@@ -948,32 +948,41 @@ BEGIN
 END;
 GO
 
--- Per-component-per-environment JWT HMAC secret
--- Generated when a component is first deployed to an environment; used to
--- validate incoming heartbeat JWTs from that specific component+environment pair.
-CREATE TABLE component_environment_secrets (
-    component_id CHAR(36) NOT NULL,
-    environment_id CHAR(36) NOT NULL,
-    jwt_hmac_secret NVARCHAR (256) NOT NULL,
-    created_at DATETIME2 NOT NULL DEFAULT GETDATE (),
-    updated_at DATETIME2 NOT NULL DEFAULT GETDATE (),
-    PRIMARY KEY (component_id, environment_id),
-    CONSTRAINT fk_ces_component FOREIGN KEY (component_id) REFERENCES components (component_id) ON DELETE CASCADE,
-    CONSTRAINT fk_ces_environment FOREIGN KEY (environment_id) REFERENCES environments (environment_id) ON DELETE NO ACTION
+-- Org-level secrets with key_id for JWT HMAC authentication.
+-- Lazily bound to a project+component on first heartbeat (M2).
+CREATE TABLE org_secrets (
+    key_id          VARCHAR(16)   NOT NULL,
+    environment_id  CHAR(36)      NOT NULL,
+    key_material    NVARCHAR(256) NOT NULL,
+    project_id      CHAR(36)      NULL,
+    component_id    CHAR(36)      NULL,
+    project_handler NVARCHAR(255) NULL,
+    component_name  NVARCHAR(255) NULL,
+    runtime_type    NVARCHAR(8)   NULL CHECK (runtime_type IN ('MI', 'BI')),
+    bound_at        DATETIME2     NULL,
+    created_at      DATETIME2     NOT NULL DEFAULT GETDATE(),
+    created_by      CHAR(36)      NULL,
+    PRIMARY KEY (key_id),
+    CONSTRAINT fk_org_secrets_project     FOREIGN KEY (project_id)     REFERENCES projects (project_id)          ON DELETE CASCADE,
+    -- CASCADE/SET NULL blocked: MSSQL multiple-cascade-path (projects → components → org_secrets AND projects → org_secrets).
+    -- INSTEAD OF DELETE trigger also blocked (components is a cascade target from projects).
+    -- App layer must DELETE FROM org_secrets WHERE component_id = ? before deleting a component.
+    CONSTRAINT fk_org_secrets_component   FOREIGN KEY (component_id)   REFERENCES components (component_id)      ON DELETE NO ACTION,
+    CONSTRAINT fk_org_secrets_environment FOREIGN KEY (environment_id) REFERENCES environments (environment_id)   ON DELETE CASCADE,
+    CONSTRAINT fk_org_secrets_created_by  FOREIGN KEY (created_by)     REFERENCES users (user_id)                ON DELETE SET NULL
 );
 GO
 
-CREATE TRIGGER trg_component_environment_secrets_updated_at
-ON component_environment_secrets
-AFTER UPDATE
-AS
-BEGIN
-    SET NOCOUNT ON;
-    UPDATE component_environment_secrets
-    SET updated_at = GETDATE()
-    FROM component_environment_secrets ces
-    INNER JOIN inserted i ON ces.component_id = i.component_id AND ces.environment_id = i.environment_id;
-END;
+CREATE INDEX idx_org_secrets_environment ON org_secrets (environment_id);
+GO
+
+ALTER TABLE runtimes ADD key_id VARCHAR(16) NULL;
+GO
+
+-- SET NULL blocked: MSSQL multiple-cascade-path (projects → org_secrets → runtimes AND projects → runtimes).
+-- INSTEAD OF DELETE trigger also blocked (org_secrets is a cascade target from projects).
+-- App layer must UPDATE runtimes SET key_id = NULL WHERE key_id = ? before deleting/revoking a secret.
+ALTER TABLE runtimes ADD CONSTRAINT fk_runtime_key_id FOREIGN KEY (key_id) REFERENCES org_secrets (key_id) ON DELETE NO ACTION;
 GO
 
 -- Services deployed on a runtime

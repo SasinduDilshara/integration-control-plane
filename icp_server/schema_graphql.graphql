@@ -14,6 +14,10 @@ type Query {
   services(runtimeId: String!): [Service!]!
   listeners(runtimeId: String!): [Listener!]!
 
+  # Org Secret Queries
+  orgSecrets(environmentId: String): [OrgSecretListEntry!]!
+  componentSecrets(componentId: String!, environmentId: String!): [BoundSecretEntry!]!
+
   # Environment Queries
   environments(
     orgUuid: String
@@ -145,7 +149,7 @@ type Query {
 # ============================================
 type Mutation {
   # Runtime Mutations
-  deleteRuntime(runtimeId: String!): Boolean!
+  deleteRuntime(runtimeId: String!, revokeSecret: Boolean): DeleteRuntimeResult!
 
   # Environment Mutations
   createEnvironment(environment: EnvironmentInput!): Environment
@@ -193,15 +197,13 @@ type Mutation {
   # Logger Control Mutations
   updateLogLevel(input: UpdateLogLevelInput!): UpdateLogLevelResponse!
 
-  # Component-Environment JWT Secret Mutations
-  # Returns the existing secret when already provisioned; generates a new one on first call.
-  generateComponentEnvironmentJwtSecret(componentId: String!, environmentId: String!): String!
-  # Generates a brand-new secret, invalidating the previous one. All runtimes must be reconfigured.
-  rotateComponentEnvironmentJwtSecret(componentId: String!, environmentId: String!): String!
-
   # MI Runtime User Management Mutations
   addMIUser(componentId: String!, runtimeId: String!, username: String!, password: String!, isAdmin: Boolean): MIUserOperationResponse!
   deleteMIUser(componentId: String!, runtimeId: String!, username: String!): MIUserOperationResponse!
+
+  # Org-level Secret Mutations
+  createOrgSecret(environmentId: String!): String!
+  revokeOrgSecret(keyId: String!): Boolean!
 }
 
 # ============================================
@@ -714,6 +716,35 @@ type Environment {
   updatedAt: String
   updatedBy: String
   createdBy: String
+}
+
+# ============================================
+# Org Secret List Entry - Truncated secret view
+# ============================================
+type OrgSecretListEntry {
+  keyId: String!
+  environmentId: String!
+  environmentName: String!
+  bound: Boolean!
+  createdAt: String!
+  createdBy: String
+}
+
+type BoundSecretRuntime {
+  runtimeId: String!
+  status: String!
+}
+
+type BoundSecretEntry {
+  keyId: String!
+  createdAt: String!
+  runtimes: [BoundSecretRuntime!]!
+}
+
+type DeleteRuntimeResult {
+  deleted: Boolean!
+  orphanedKeyId: String
+  secretRevoked: Boolean!
 }
 
 # ============================================

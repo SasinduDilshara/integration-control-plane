@@ -91,16 +91,28 @@ export function useDeleteEnvironment() {
   });
 }
 
+interface DeleteRuntimeResult {
+  deleted: boolean;
+  orphanedKeyId: string | null;
+  secretRevoked: boolean;
+}
+
 const DELETE_RUNTIME = `
-  mutation DeleteRuntime($runtimeId: String!) {
-    deleteRuntime(runtimeId: $runtimeId)
+  mutation DeleteRuntime($runtimeId: String!, $revokeSecret: Boolean) {
+    deleteRuntime(runtimeId: $runtimeId, revokeSecret: $revokeSecret) {
+      deleted, orphanedKeyId, secretRevoked
+    }
   }`;
 
 export function useDeleteRuntime() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (runtimeId: string) => gql<{ deleteRuntime: string }>(DELETE_RUNTIME, { runtimeId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['runtimes'] }),
+    mutationFn: ({ runtimeId, revokeSecret }: { runtimeId: string; revokeSecret?: boolean }) => gql<{ deleteRuntime: DeleteRuntimeResult }>(DELETE_RUNTIME, { runtimeId, revokeSecret }).then((d) => d.deleteRuntime),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['runtimes'] });
+      qc.invalidateQueries({ queryKey: ['componentSecrets'] });
+      qc.invalidateQueries({ queryKey: ['orgSecrets'] });
+    },
   });
 }
 
@@ -267,35 +279,34 @@ export function useUpdateLogLevel() {
   });
 }
 
-// ── Component-Environment JWT Secrets ──
+// ── Org-level Secrets ──
 
-const GET_OR_GENERATE_COMPONENT_ENV_JWT_SECRET = `
-  mutation GenerateComponentEnvironmentJwtSecret($componentId: String!, $environmentId: String!) {
-    generateComponentEnvironmentJwtSecret(componentId: $componentId, environmentId: $environmentId)
+const CREATE_ORG_SECRET = `
+  mutation CreateOrgSecret($environmentId: String!) {
+    createOrgSecret(environmentId: $environmentId)
   }`;
 
-const ROTATE_COMPONENT_ENV_JWT_SECRET = `
-  mutation RotateComponentEnvironmentJwtSecret($componentId: String!, $environmentId: String!) {
-    rotateComponentEnvironmentJwtSecret(componentId: $componentId, environmentId: $environmentId)
+const REVOKE_ORG_SECRET = `
+  mutation RevokeOrgSecret($keyId: String!) {
+    revokeOrgSecret(keyId: $keyId)
   }`;
 
-export function useGenerateComponentEnvironmentJwtSecret() {
+export function useCreateOrgSecret() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ componentId, environmentId }: { componentId: string; environmentId: string }) =>
-      gql<{ generateComponentEnvironmentJwtSecret: string }>(GET_OR_GENERATE_COMPONENT_ENV_JWT_SECRET, {
-        componentId,
-        environmentId,
-      }).then((d) => d.generateComponentEnvironmentJwtSecret),
+    mutationFn: (environmentId: string) => gql<{ createOrgSecret: string }>(CREATE_ORG_SECRET, { environmentId }).then((d) => d.createOrgSecret),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['orgSecrets'] }),
   });
 }
 
-export function useRotateComponentEnvironmentJwtSecret() {
+export function useRevokeOrgSecret() {
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ componentId, environmentId }: { componentId: string; environmentId: string }) =>
-      gql<{ rotateComponentEnvironmentJwtSecret: string }>(ROTATE_COMPONENT_ENV_JWT_SECRET, {
-        componentId,
-        environmentId,
-      }).then((d) => d.rotateComponentEnvironmentJwtSecret),
+    mutationFn: (keyId: string) => gql<{ revokeOrgSecret: boolean }>(REVOKE_ORG_SECRET, { keyId }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orgSecrets'] });
+      qc.invalidateQueries({ queryKey: ['componentSecrets'] });
+    },
   });
 }
 

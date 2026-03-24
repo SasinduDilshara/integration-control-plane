@@ -215,7 +215,7 @@ public isolated function deleteUserV2(string userId, string currentUserId) retur
         sql:ExecutionResult result = check dbClient->execute(
             `DELETE FROM users WHERE user_id = ${userId}`
         );
-        
+
         // Revoke all refresh tokens for this user
         sql:ExecutionResult _ = check dbClient->execute(
             `DELETE FROM refresh_tokens WHERE user_id = ${userId}`

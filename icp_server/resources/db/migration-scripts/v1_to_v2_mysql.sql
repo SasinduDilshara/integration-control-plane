@@ -28,8 +28,10 @@ SELECT CONCAT('Found ', @old_user_count, ' user(s) in old database') AS status;
 
 -- ============================================================================
 -- BEGIN TRANSACTION
--- All DML below is atomic. If the script fails at any point, connect to the
--- database and run ROLLBACK to undo any partial changes before re-running.
+-- All DML below (Steps 1–3b) is atomic. If the script fails during these
+-- steps, connect to the database and run ROLLBACK to undo partial changes
+-- before re-running. Step 3c (DDL) runs after COMMIT because MySQL DDL
+-- causes an implicit commit and cannot be rolled back.
 -- ============================================================================
 
 SET autocommit = 0;
@@ -272,31 +274,6 @@ DEALLOCATE PREPARE stmt;
 SELECT CONCAT(ROW_COUNT(), ' user(s) assigned to Developers') AS status;
 
 -- ============================================================================
--- STEP 3c — Ensure component_environment_secrets table exists
--- This table was introduced in ICP v2; upgraded databases may not have it yet.
--- ============================================================================
-
-SELECT 'STEP 3c: Ensuring component_environment_secrets table ...' AS status;
-
-SET @sql = CONCAT('
-    CREATE TABLE IF NOT EXISTS `', @new_main_db, '`.component_environment_secrets (
-        component_id   CHAR(36)     NOT NULL,
-        environment_id CHAR(36)     NOT NULL,
-        jwt_hmac_secret VARCHAR(256) NOT NULL,
-        created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (component_id, environment_id),
-        CONSTRAINT fk_ces_component   FOREIGN KEY (component_id)   REFERENCES `', @new_main_db, '`.components   (component_id)   ON DELETE CASCADE,
-        CONSTRAINT fk_ces_environment FOREIGN KEY (environment_id) REFERENCES `', @new_main_db, '`.environments (environment_id) ON DELETE CASCADE
-    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
-');
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
-SELECT 'component_environment_secrets table ensured.' AS status;
-
--- ============================================================================
 -- STEP 4 — Summary report
 -- ============================================================================
 
@@ -328,6 +305,52 @@ DEALLOCATE PREPARE stmt;
 
 COMMIT;
 SET autocommit = 1;
+
+-- ============================================================================
+-- STEP 5 — Create org_secrets table and add key_id column to runtimes
+-- DDL runs outside the transaction because MySQL DDL causes an implicit
+-- commit. If this step fails, the DML migration (Steps 1–3b) is already
+-- committed — re-run only this step after fixing the issue.
+-- ============================================================================
+
+SELECT 'STEP 5: Creating org_secrets table ...' AS status;
+
+SET @sql = CONCAT('
+    CREATE TABLE `', @new_main_db, '`.org_secrets (
+        key_id          VARCHAR(16)  NOT NULL,
+        environment_id  CHAR(36)     NOT NULL,
+        key_material    VARCHAR(256) NOT NULL,
+        project_id      CHAR(36)     NULL,
+        component_id    CHAR(36)     NULL,
+        project_handler VARCHAR(255) NULL,
+        component_name  VARCHAR(255) NULL,
+        runtime_type    VARCHAR(8)   NULL,
+        bound_at        TIMESTAMP    NULL,
+        created_at      TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_by      CHAR(36)     NULL,
+        PRIMARY KEY (key_id),
+        CONSTRAINT fk_org_secrets_project     FOREIGN KEY (project_id)     REFERENCES `', @new_main_db, '`.projects      (project_id)      ON DELETE CASCADE,
+        CONSTRAINT fk_org_secrets_component   FOREIGN KEY (component_id)   REFERENCES `', @new_main_db, '`.components    (component_id)    ON DELETE CASCADE,
+        CONSTRAINT fk_org_secrets_environment FOREIGN KEY (environment_id) REFERENCES `', @new_main_db, '`.environments  (environment_id)  ON DELETE CASCADE,
+        CONSTRAINT fk_org_secrets_created_by  FOREIGN KEY (created_by)     REFERENCES `', @new_main_db, '`.users          (user_id)         ON DELETE SET NULL,
+        INDEX idx_org_secrets_environment (environment_id)
+    ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci
+');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SET @sql = CONCAT('
+    ALTER TABLE `', @new_main_db, '`.runtimes
+        ADD COLUMN key_id VARCHAR(16) NULL,
+        ADD CONSTRAINT fk_runtime_key_id FOREIGN KEY (key_id)
+            REFERENCES `', @new_main_db, '`.org_secrets (key_id) ON DELETE SET NULL
+');
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+SELECT 'org_secrets table and runtimes.key_id created.' AS status;
 
 -- ============================================================================
 -- DONE

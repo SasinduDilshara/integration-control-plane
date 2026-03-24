@@ -17,10 +17,11 @@
  */
 
 import {
+  Alert,
+  Box,
   Button,
   Card,
   CardContent,
-  Checkbox,
   Chip,
   CircularProgress,
   Dialog,
@@ -30,45 +31,40 @@ import {
   DialogTitle,
   Divider,
   Drawer,
-  FormControlLabel,
   IconButton,
   ListingTable,
   PageContent,
   PageTitle,
   Stack,
+  Tab,
   TablePagination,
+  Tabs,
   Typography,
 } from '@wso2/oxygen-ui';
-import { FileText, Trash2, X } from '@wso2/oxygen-ui-icons-react';
-import SearchField from '../components/SearchField';
-import { LogFilesDrawer } from '../components/LogFilesDrawer';
+import { Check, Copy, FileText, Plus, Server, Trash2, X } from '@wso2/oxygen-ui-icons-react';
 import { useState, type JSX } from 'react';
 import { useQueries } from '@tanstack/react-query';
 import { gql } from '../api/graphql';
-import { useProjectByHandler, useEnvironments, useComponentByHandler, useComponentSecrets, RUNTIMES_QUERY, PROJECT_RUNTIMES_QUERY, COMPONENT_SECRETS_QUERY, type GqlRuntime, type GqlBoundSecret } from '../api/queries';
-import { useDeleteRuntime, useRevokeOrgSecret } from '../api/mutations';
-import { hasComponent, type ProjectScope, type ComponentScope } from '../nav';
+import { useAllEnvironments, useOrgSecrets, ORG_RUNTIMES_QUERY, type GqlEnvironment, type GqlOrgSecret, type GqlRuntime } from '../api/queries';
+import { useCreateOrgSecret, useDeleteRuntime, useRevokeOrgSecret } from '../api/mutations';
 import { formatDistanceToNow } from '../utils/time';
+import SearchField from '../components/SearchField';
+import { LogFilesDrawer } from '../components/LogFilesDrawer';
+import EmptyListing from '../components/EmptyListing';
 import Authorized from '../components/Authorized';
 import { Permissions } from '../constants/permissions';
+import type { OrgScope } from '../nav';
 
 const drawerSx = {
   '& .MuiDrawer-paper': { width: '45%', maxWidth: 560, minWidth: 360, position: 'fixed', top: 64, height: 'calc(100% - 64px)', borderLeft: '1px solid', borderColor: 'divider' },
 };
 
-function formatPlatform(r: GqlRuntime): string {
-  if (!r.platformVersion) return r.platformName ?? '—';
-  return /^\d/.test(r.platformVersion) ? `${r.platformName} ${r.platformVersion}` : r.platformVersion;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
-}
-
-function BoundSecretDrawer({ componentId, environmentId, environmentName, onClose }: { componentId: string; environmentId: string; environmentName: string; onClose: () => void }) {
-  const { data: secrets = [], isLoading } = useComponentSecrets(componentId, environmentId);
+function SecretDrawer({ env, onClose }: { env: GqlEnvironment; onClose: () => void }) {
+  const { data: allSecrets = [], isLoading } = useOrgSecrets(env.id);
   const revokeMutation = useRevokeOrgSecret();
   const [revoking, setRevoking] = useState<string | null>(null);
+
+  const unboundSecrets = allSecrets.filter((s) => !s.bound);
 
   const confirmRevoke = (keyId: string) => {
     revokeMutation.mutate(keyId, { onSettled: () => setRevoking(null) });
@@ -78,7 +74,7 @@ function BoundSecretDrawer({ componentId, environmentId, environmentName, onClos
     <Drawer anchor="right" open variant="persistent" sx={drawerSx}>
       <Stack sx={{ p: 3, height: '100%', overflow: 'auto' }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-          <Typography variant="h6">Secrets — {environmentName}</Typography>
+          <Typography variant="h6">Secrets — {env.name}</Typography>
           <IconButton size="small" onClick={onClose} aria-label="close">
             <X size={18} />
           </IconButton>
@@ -87,43 +83,37 @@ function BoundSecretDrawer({ componentId, environmentId, environmentName, onClos
 
         {isLoading ? (
           <CircularProgress sx={{ mx: 'auto', my: 4 }} />
-        ) : secrets.length === 0 ? (
+        ) : unboundSecrets.length === 0 ? (
           <Typography color="text.secondary" sx={{ py: 4, textAlign: 'center' }}>
-            No bound secrets for this component in this environment.
+            No unbound secrets for this environment.
           </Typography>
         ) : (
-          <Stack gap={2}>
-            {secrets.map((secret) => (
-              <Card key={secret.keyId} variant="outlined">
-                <CardContent>
-                  <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-                    <Typography variant="subtitle2">
-                      <code>{secret.keyId}....</code>
-                    </Typography>
-                    <Stack direction="row" alignItems="center" gap={1}>
-                      <Typography variant="caption" color="text.secondary">
-                        {formatDistanceToNow(secret.createdAt)}
-                      </Typography>
-                      <IconButton size="small" color="error" aria-label={`Revoke ${secret.keyId}`} onClick={() => setRevoking(secret.keyId)}>
-                        <Trash2 size={16} />
-                      </IconButton>
-                    </Stack>
-                  </Stack>
-                  {secret.runtimes.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No runtimes using this secret
-                    </Typography>
-                  ) : (
-                    <Stack direction="row" gap={0.5} flexWrap="wrap">
-                      {secret.runtimes.map((rt) => (
-                        <Chip key={rt.runtimeId} label={rt.runtimeId} size="small" color={rt.status === 'RUNNING' ? 'success' : 'default'} />
-                      ))}
-                    </Stack>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
+          <ListingTable>
+            <ListingTable.Head>
+              <ListingTable.Row>
+                <ListingTable.Cell>Key ID</ListingTable.Cell>
+                <ListingTable.Cell>Created</ListingTable.Cell>
+                <ListingTable.Cell>Created By</ListingTable.Cell>
+                <ListingTable.Cell align="right">Action</ListingTable.Cell>
+              </ListingTable.Row>
+            </ListingTable.Head>
+            <ListingTable.Body>
+              {unboundSecrets.map((secret) => (
+                <ListingTable.Row key={secret.keyId}>
+                  <ListingTable.Cell>
+                    <code>{secret.keyId}....</code>
+                  </ListingTable.Cell>
+                  <ListingTable.Cell>{formatDistanceToNow(secret.createdAt)}</ListingTable.Cell>
+                  <ListingTable.Cell>{secret.createdBy ?? '—'}</ListingTable.Cell>
+                  <ListingTable.Cell align="right">
+                    <IconButton size="small" color="error" aria-label={`Revoke ${secret.keyId}`} onClick={() => setRevoking(secret.keyId)}>
+                      <Trash2 size={16} />
+                    </IconButton>
+                  </ListingTable.Cell>
+                </ListingTable.Row>
+              ))}
+            </ListingTable.Body>
+          </ListingTable>
         )}
       </Stack>
 
@@ -147,25 +137,121 @@ function BoundSecretDrawer({ componentId, environmentId, environmentName, onClos
   );
 }
 
-function EnvironmentRuntimeCard({
-  environmentName,
-  environmentId,
-  componentId,
-  runtimes,
-  onDelete,
-  onViewLogs,
-}: {
-  environmentName: string;
-  environmentId: string;
-  componentId: string | undefined;
-  runtimes: GqlRuntime[];
-  onDelete: (runtime: GqlRuntime) => void;
-  onViewLogs: (runtime: GqlRuntime) => void;
-}) {
+function miToml(envName: string, secret: string): string {
+  return `[icp_config]
+enabled = true
+environment = "${envName}"
+project = "<project name>"
+integration = "<integration name>"
+runtime = "<unique id for the runtime>"
+secret = "${secret}"
+# icp_url = "https://<hostname>:9443"`;
+}
+
+function biToml(envName: string, secret: string): string {
+  return `[wso2.icp.runtime.bridge]
+environment = "${envName}"
+project = "<project name>"
+integration = "<integration name>"
+runtime = "<unique id for the runtime>"
+secret = "${secret}"
+# serverUrl="https://<hostname>:9445"`;
+}
+
+function AddRuntimeModal({ env, onClose }: { env: GqlEnvironment; onClose: () => void }) {
+  const createMutation = useCreateOrgSecret();
+  const [secret, setSecret] = useState<string | null>(null);
+  const [tab, setTab] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = () => {
+    setError(null);
+    createMutation.mutate(env.id, {
+      onSuccess: (s) => setSecret(s),
+      onError: (e) => setError(e.message),
+    });
+  };
+
+  const config = secret ? (tab === 0 ? miToml(env.name, secret) : biToml(env.name, secret)) : null;
+
+  const handleCopy = async () => {
+    if (!config) return;
+    await navigator.clipboard.writeText(config);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Add Runtime — {env.name}</DialogTitle>
+      <DialogContent>
+        {!secret ? (
+          <>
+            {error && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+            <DialogContentText sx={{ mb: 2 }}>Generate a new secret for this environment. The secret will be shown once — copy it before closing.</DialogContentText>
+            <Button variant="contained" onClick={handleGenerate} disabled={createMutation.isPending}>
+              {createMutation.isPending ? 'Generating...' : 'Generate Secret'}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Copy this secret now. It will not be shown again.
+            </Alert>
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}>
+              <Tab label="MI" />
+              <Tab label="BI" />
+            </Tabs>
+            <DialogContentText sx={{ mb: 1 }}>Add the following configuration to your runtime's {tab === 0 ? 'deployment.toml' : 'Config.toml'} file:</DialogContentText>
+            <Box sx={{ position: 'relative' }}>
+              <Box
+                component="pre"
+                sx={{
+                  p: 2,
+                  bgcolor: 'action.hover',
+                  borderRadius: 1,
+                  overflow: 'auto',
+                  fontSize: 13,
+                  fontFamily: 'monospace',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                }}>
+                {config}
+              </Box>
+              <IconButton size="small" onClick={handleCopy} sx={{ position: 'absolute', top: 8, right: 8 }} aria-label="Copy">
+                {copied ? <Check size={16} /> : <Copy size={16} />}
+              </IconButton>
+            </Box>
+          </>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Close</Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function formatPlatform(r: GqlRuntime): string {
+  if (!r.platformVersion) return r.platformName ?? '—';
+  return /^\d/.test(r.platformVersion) ? `${r.platformName} ${r.platformVersion}` : r.platformVersion;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
+}
+
+function EnvironmentRuntimeCard({ env, runtimes, onDelete, onViewLogs }: { env: GqlEnvironment; runtimes: GqlRuntime[]; onDelete: (r: GqlRuntime) => void; onViewLogs: (r: GqlRuntime) => void }) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const filtered = runtimes.filter((r) => !query || r.runtimeId.toLowerCase().includes(query.toLowerCase()) || r.runtimeType.toLowerCase().includes(query.toLowerCase()) || (r.component?.displayName ?? '').toLowerCase().includes(query.toLowerCase()));
   const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
@@ -179,17 +265,20 @@ function EnvironmentRuntimeCard({
           <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
             <Stack direction="row" alignItems="center" gap={1}>
               <Typography variant="h5" component="h2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
-                {environmentName}
+                {env.name}
               </Typography>
               <Chip label={`${filtered.length} runtime${filtered.length !== 1 ? 's' : ''}`} size="small" color={filtered.length > 0 ? 'primary' : 'default'} />
             </Stack>
-            {componentId && (
-              <Authorized permissions={[Permissions.INTEGRATION_MANAGE]}>
+            <Authorized permissions={[Permissions.ENVIRONMENT_MANAGE, Permissions.ENVIRONMENT_MANAGE_NONPROD]}>
+              <Stack direction="row" gap={1}>
                 <Button variant="outlined" size="small" onClick={() => setDrawerOpen(true)}>
                   Manage Secrets
                 </Button>
-              </Authorized>
-            )}
+                <Button variant="contained" size="small" startIcon={<Plus size={16} />} onClick={() => setAddOpen(true)}>
+                  Add Runtime
+                </Button>
+              </Stack>
+            </Authorized>
           </Stack>
           <Divider sx={{ mb: 2 }} />
           <SearchField value={query} onChange={setQuery} placeholder="Search runtimes..." sx={{ mb: 2, width: '100%', maxWidth: 400 }} />
@@ -204,6 +293,7 @@ function EnvironmentRuntimeCard({
                   <ListingTable.Row>
                     <ListingTable.Cell>Runtime ID</ListingTable.Cell>
                     <ListingTable.Cell>Type</ListingTable.Cell>
+                    <ListingTable.Cell>Component</ListingTable.Cell>
                     <ListingTable.Cell>Status</ListingTable.Cell>
                     <ListingTable.Cell>Version</ListingTable.Cell>
                     <ListingTable.Cell>Platform</ListingTable.Cell>
@@ -218,6 +308,7 @@ function EnvironmentRuntimeCard({
                     <ListingTable.Row key={r.runtimeId}>
                       <ListingTable.Cell>{r.runtimeId}</ListingTable.Cell>
                       <ListingTable.Cell>{r.runtimeType}</ListingTable.Cell>
+                      <ListingTable.Cell>{r.component?.displayName ?? '—'}</ListingTable.Cell>
                       <ListingTable.Cell>
                         <Chip label={r.status} size="small" color={r.status === 'RUNNING' ? 'success' : 'default'} />
                       </ListingTable.Cell>
@@ -269,91 +360,42 @@ function EnvironmentRuntimeCard({
         </CardContent>
       </Card>
 
-      {drawerOpen && componentId && <BoundSecretDrawer componentId={componentId} environmentId={environmentId} environmentName={environmentName} onClose={() => setDrawerOpen(false)} />}
+      {drawerOpen && <SecretDrawer env={env} onClose={() => setDrawerOpen(false)} />}
+      {addOpen && <AddRuntimeModal env={env} onClose={() => setAddOpen(false)} />}
     </>
   );
 }
 
-function isSoleUser(secrets: GqlBoundSecret[], runtimeId: string): string | null {
-  for (const s of secrets) {
-    if (s.runtimes.length === 1 && s.runtimes[0].runtimeId === runtimeId) return s.keyId;
-  }
-  return null;
-}
-
-export default function Runtime(scope: ProjectScope | ComponentScope): JSX.Element {
-  const { data: project } = useProjectByHandler(scope.project);
-  const projectId = project?.id ?? '';
-  const { data: component } = useComponentByHandler(projectId, hasComponent(scope) ? scope.component : undefined);
-  const componentId = component?.id;
-  const { data: environments = [] } = useEnvironments(projectId);
-
+export default function OrgRuntimes(_scope: OrgScope): JSX.Element {
+  const { data: environments, isLoading: envsLoading } = useAllEnvironments();
   const [deleting, setDeleting] = useState<GqlRuntime | null>(null);
-  const [alsoRevoke, setAlsoRevoke] = useState(false);
   const [viewingLogs, setViewingLogs] = useState<GqlRuntime | null>(null);
   const deleteMutation = useDeleteRuntime();
 
   const runtimeQueries = useQueries({
-    queries: environments.map((env) => ({
-      queryKey: componentId ? ['runtimes', env.id, projectId, componentId] : ['runtimes', env.id, projectId],
-      queryFn: () => gql<{ runtimes: GqlRuntime[] }>(componentId ? RUNTIMES_QUERY : PROJECT_RUNTIMES_QUERY, componentId ? { environmentId: env.id, projectId, componentId } : { environmentId: env.id, projectId }).then((d) => d.runtimes),
-      enabled: hasComponent(scope) ? componentId !== undefined : true,
+    queries: (environments ?? []).map((env) => ({
+      queryKey: ['runtimes', env.id],
+      queryFn: () => gql<{ runtimes: GqlRuntime[] }>(ORG_RUNTIMES_QUERY, { environmentId: env.id }).then((d) => d.runtimes),
     })),
   });
 
-  const secretQueries = useQueries({
-    queries: environments.map((env) => ({
-      queryKey: ['componentSecrets', componentId ?? '', env.id],
-      queryFn: () => gql<{ componentSecrets: GqlBoundSecret[] }>(COMPONENT_SECRETS_QUERY, { componentId, environmentId: env.id }).then((d) => d.componentSecrets),
-      enabled: !!componentId,
-    })),
-  });
-
-  const isLoading = runtimeQueries.some((q) => q.isLoading);
-
-  const deletingEnvIndex = deleting ? environments.findIndex((_, i) => runtimeQueries[i]?.data?.some((r) => r.runtimeId === deleting.runtimeId)) : -1;
-  const deletingEnvSecrets = deletingEnvIndex >= 0 ? (secretQueries[deletingEnvIndex]?.data ?? []) : [];
-  const orphanedKeyId = deleting ? isSoleUser(deletingEnvSecrets, deleting.runtimeId) : null;
-
-  const handleStartDelete = (r: GqlRuntime) => {
-    setDeleting(r);
-    setAlsoRevoke(false);
-  };
-
-  const handleConfirmDelete = () => {
-    if (!deleting) return;
-    deleteMutation.mutate(
-      { runtimeId: deleting.runtimeId, revokeSecret: alsoRevoke || undefined },
-      {
-        onSuccess: () => {
-          setDeleting(null);
-          setAlsoRevoke(false);
-        },
-      },
-    );
-  };
+  const isLoading = envsLoading || runtimeQueries.some((q) => q.isLoading);
 
   return (
     <PageContent>
       <PageTitle>
-        <PageTitle.Header>Runtime</PageTitle.Header>
+        <PageTitle.Header>Runtimes</PageTitle.Header>
       </PageTitle>
 
       {isLoading ? (
         <CircularProgress sx={{ display: 'block', mx: 'auto', py: 8 }} />
+      ) : !environments?.length ? (
+        <EmptyListing icon={<Server size={48} />} title="No environments found" description="Create an environment first to register runtimes." />
       ) : (
-        <>
-          {environments.length === 0 ? (
-            <Typography color="text.secondary" sx={{ py: 8, textAlign: 'center' }}>
-              No environments found. Create an environment to register runtimes.
-            </Typography>
-          ) : (
-            environments.map((env, index) => {
-              const runtimes = runtimeQueries[index]?.data ?? [];
-              return <EnvironmentRuntimeCard key={env.id} environmentName={env.name} environmentId={env.id} componentId={componentId} runtimes={runtimes} onDelete={handleStartDelete} onViewLogs={setViewingLogs} />;
-            })
-          )}
-        </>
+        environments.map((env, index) => {
+          const runtimes = runtimeQueries[index]?.data ?? [];
+          return <EnvironmentRuntimeCard key={env.id} env={env} runtimes={runtimes} onDelete={setDeleting} onViewLogs={setViewingLogs} />;
+        })
       )}
 
       {viewingLogs && <LogFilesDrawer runtimeId={viewingLogs.runtimeId} onClose={() => setViewingLogs(null)} />}
@@ -365,21 +407,10 @@ export default function Runtime(scope: ProjectScope | ComponentScope): JSX.Eleme
             <DialogContentText>
               Are you sure you want to delete runtime <strong>{deleting.runtimeId}</strong>?
             </DialogContentText>
-            {orphanedKeyId && (
-              <FormControlLabel
-                sx={{ mt: 1 }}
-                control={<Checkbox checked={alsoRevoke} onChange={(_, v) => setAlsoRevoke(v)} />}
-                label={
-                  <Typography variant="body2">
-                    Also revoke secret <code>{orphanedKeyId}....</code> (no other runtimes use it)
-                  </Typography>
-                }
-              />
-            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button variant="contained" color="error" disabled={deleteMutation.isPending} onClick={handleConfirmDelete}>
+            <Button variant="contained" color="error" disabled={deleteMutation.isPending} onClick={() => deleteMutation.mutate({ runtimeId: deleting.runtimeId }, { onSuccess: () => setDeleting(null) })}>
               Delete
             </Button>
           </DialogActions>

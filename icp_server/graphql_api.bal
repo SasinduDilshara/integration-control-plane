@@ -57,6 +57,23 @@ isolated function extractUserContext(graphql:Context context) returns types:User
     return check auth:extractUserContextV2(authHeader);
 }
 
+isolated function authorizeEnvironmentAccess(string userId, string environmentId, string action) returns error? {
+    types:Environment env = check storage:getEnvironmentById(environmentId);
+    types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+    log:printDebug(string `authorizeEnvironmentAccess: userId=${userId}, envId=${environmentId}, critical=${env.critical}, action=${action}`);
+
+    if env.critical {
+        if !check auth:hasPermission(userId, auth:PERMISSION_ENVIRONMENT_MANAGE, scope) {
+            return error(string `Access denied: insufficient permissions to ${action} for production environment`);
+        }
+        return;
+    }
+    if !check auth:hasAnyPermission(userId,
+            [auth:PERMISSION_ENVIRONMENT_MANAGE, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD], scope) {
+        return error(string `Access denied: insufficient permissions to ${action}`);
+    }
+}
+
 // Helper function to fetch MI loggers from management API
 isolated function fetchMILoggersByRuntime(string runtimeId, types:Runtime runtime) returns types:Logger[]|error {
     // Build management API base URL
@@ -689,12 +706,24 @@ service /graphql on graphqlListener {
             actualProjectId = projectIdResult;
         }
 
-        // If projectId is still empty, we cannot proceed
+        // Step 2: Org-level query — environmentId only, no project/component context.
+        // Returns all runtimes for the environment (used by the org-level Runtimes page).
+        if actualProjectId == "" && environmentId is string {
+            // Org-level access: check environment management permissions
+            types:AccessScope scope = auth:buildScopeFromContext("", envId = environmentId);
+            if !check auth:hasAnyPermission(userContext.userId,
+                    [auth:PERMISSION_ENVIRONMENT_MANAGE, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD], scope) {
+                return [];
+            }
+            return check storage:getRuntimes(status, runtimeType, environmentId, (), componentId);
+        }
+
+        // If projectId is still empty and no environmentId, we cannot proceed
         if actualProjectId == "" {
             return error("Either projectId or componentId must be provided");
         }
 
-        // Step 2: If environmentId is specified, check access to that specific environment
+        // Step 3: If environmentId is specified, check access to that specific environment
         if environmentId is string {
             // Build scope with project, optional integration, and environment
             types:AccessScope scope = auth:buildScopeFromContext(actualProjectId, integrationId = componentId, envId = environmentId);
@@ -709,7 +738,7 @@ service /graphql on graphqlListener {
             return check storage:getRuntimes(status, runtimeType, environmentId, actualProjectId, componentId);
         }
 
-        // Step 3: If environmentId is NOT specified, resolve accessible environments
+        // Step 4: If environmentId is NOT specified, resolve accessible environments
         auth:EnvironmentAccessInfo envAccess = check auth:resolveEnvironmentAccess(
                 userContext.userId,
                 projectId = actualProjectId,
@@ -1482,30 +1511,45 @@ service /graphql on graphqlListener {
     }
 
     // Delete a runtime by ID
-    isolated remote function deleteRuntime(graphql:Context context, string runtimeId) returns boolean|error {
+    isolated remote function deleteRuntime(graphql:Context context, string runtimeId, boolean? revokeSecret = ()) returns types:DeleteRuntimeResult|error {
         types:UserContextV2 userContext = check extractUserContext(context);
+        log:printDebug(string `deleteRuntime: runtimeId=${runtimeId}, revokeSecret=${revokeSecret ?: false}, user=${userContext.userId}`);
 
-        // Fetch the runtime to get its context
         types:Runtime? runtime = check storage:getRuntimeById(runtimeId);
-
         if runtime is () {
             return error("Runtime not found");
         }
 
-        // Build scope from runtime's context
         types:AccessScope scope = auth:buildScopeFromContext(
                 runtime.component.projectId,
                 runtime.component.id,
                 runtime.environment.id
         );
-
-        // Check permission to delete this integration's runtime (mutation = explicit error)
         if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
             return error("Access denied: insufficient permissions to delete runtime");
         }
 
+        // Check if this runtime's secret becomes orphaned after deletion.
+        string? keyId = check storage:getKeyIdByRuntimeId(runtimeId);
+        string? orphanedKeyId = ();
+        if keyId is string {
+            int count = check storage:countRuntimesByKeyId(keyId);
+            if count <= 1 {
+                orphanedKeyId = keyId;
+            }
+        }
+
         check storage:deleteRuntime(runtimeId);
-        return true;
+        log:printInfo(string `deleteRuntime: deleted runtimeId=${runtimeId}`, userId = userContext.userId);
+
+        boolean secretRevoked = false;
+        if revokeSecret == true && orphanedKeyId is string {
+            check storage:revokeOrgSecret(orphanedKeyId);
+            secretRevoked = true;
+            log:printInfo(string `deleteRuntime: also revoked orphaned secret keyId=${orphanedKeyId}`, userId = userContext.userId);
+        }
+
+        return {deleted: true, orphanedKeyId: orphanedKeyId, secretRevoked: secretRevoked};
     }
 
     // Update listener state (enable/disable) by issuing control commands
@@ -2610,40 +2654,63 @@ service /graphql on graphqlListener {
         };
     }
 
-    // Get (or provision on first call) the JWT HMAC secret for a component+environment pair.
-    // Safe to call every time the "Configure Runtime" dialog opens — returns the existing
-    // secret when already provisioned, generates a new one only when none exists yet.
-    isolated remote function generateComponentEnvironmentJwtSecret(
-            graphql:Context context, string componentId, string environmentId
-    ) returns string|error {
+    // ----------- Org-level Secrets (M1)
+
+    isolated resource function get orgSecrets(graphql:Context context, string? environmentId) returns types:OrgSecretListEntry[]|error {
         types:UserContextV2 userContext = check extractUserContext(context);
+        log:printDebug(string `orgSecrets query by user=${userContext.userId}, environmentId=${environmentId ?: "all"}`);
 
-        string projectId = check storage:getProjectIdByComponentId(componentId);
-        types:AccessScope scope = auth:buildScopeFromContext(projectId, integrationId = componentId, envId = environmentId);
-
-        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
-            return error("Insufficient permissions to view or provision this component's JWT secret");
+        if environmentId is string {
+            check authorizeEnvironmentAccess(userContext.userId, environmentId, "view org secrets");
+        } else {
+            types:AccessScope scope = {orgUuid: storage:DEFAULT_ORG_ID};
+            if !check auth:hasAnyPermission(userContext.userId,
+                    [auth:PERMISSION_ENVIRONMENT_MANAGE, auth:PERMISSION_ENVIRONMENT_MANAGE_NONPROD], scope) {
+                return error("Access denied: insufficient permissions to view org secrets");
+            }
         }
 
-        return check storage:getOrGenerateComponentEnvironmentSecret(componentId, environmentId);
+        return check storage:listOrgSecrets(environmentId);
     }
 
-    // Rotate (replace) the JWT HMAC secret for a component+environment pair.
-    // All runtimes for this component+environment must be reconfigured with the new secret.
-    isolated remote function rotateComponentEnvironmentJwtSecret(
-            graphql:Context context, string componentId, string environmentId
-    ) returns string|error {
+    isolated resource function get componentSecrets(graphql:Context context, string componentId, string environmentId) returns types:BoundSecretEntry[]|error {
         types:UserContextV2 userContext = check extractUserContext(context);
+        log:printDebug(string `componentSecrets query by user=${userContext.userId}, componentId=${componentId}, environmentId=${environmentId}`);
 
-        string projectId = check storage:getProjectIdByComponentId(componentId);
-        types:AccessScope scope = auth:buildScopeFromContext(projectId, integrationId = componentId, envId = environmentId);
-
-        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
-            return error("Insufficient permissions to rotate this component's JWT secret");
+        types:Component? component = check storage:getComponentById(componentId);
+        if component is () {
+            return error("Integration not found");
         }
 
-        log:printInfo(string `JWT secret rotation requested for component: ${componentId}, environment: ${environmentId}`, userId = userContext.userId);
-        return check storage:generateComponentEnvironmentSecret(componentId, environmentId);
+        types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId, envId = environmentId);
+        if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+            return error("Access denied: insufficient permissions to view component secrets");
+        }
+
+        return check storage:listBoundSecrets(componentId, environmentId);
+    }
+
+    isolated remote function createOrgSecret(graphql:Context context, string environmentId) returns string|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+        log:printDebug(string `createOrgSecret by user=${userContext.userId}, environment=${environmentId}`);
+
+        check authorizeEnvironmentAccess(userContext.userId, environmentId, "create org secrets");
+
+        string secret = check storage:createOrgSecret(environmentId, userContext.userId);
+        log:printInfo(string `Org secret created for environment=${environmentId}`, userId = userContext.userId);
+        return secret;
+    }
+
+    isolated remote function revokeOrgSecret(graphql:Context context, string keyId) returns boolean|error {
+        types:UserContextV2 userContext = check extractUserContext(context);
+        log:printDebug(string `revokeOrgSecret by user=${userContext.userId}, keyId=${keyId}`);
+
+        types:OrgSecret secret = check storage:lookupOrgSecretByKeyId(keyId);
+        check authorizeEnvironmentAccess(userContext.userId, secret.environmentId, "revoke org secrets");
+
+        check storage:revokeOrgSecret(keyId);
+        log:printInfo(string `Org secret revoked keyId=${keyId}`, userId = userContext.userId);
+        return true;
     }
 
     // Mutation to trigger a task
