@@ -996,3 +996,29 @@ function testDeleteRole() returns error? {
     );
     test:assertEquals(getResponse.statusCode, 404, "Role should not exist after deletion");
 }
+
+// =============================================================================
+// Regression test: Issue #269 — Timestamp must not be duplicated in logs
+// The auth backend response body must NOT contain a 'timestamp' field;
+// the Ballerina log framework already prefixes every line with 'time=<ISO-8601>'.
+// =============================================================================
+
+@test:Config {
+    groups: ["auth-v2", "login", "regression"]
+}
+function testLoginResponseDoesNotContainTimestamp() returns error? {
+    json loginRequest = {
+        username: SUPER_ADMIN_USERNAME,
+        password: SUPER_ADMIN_PASSWORD
+    };
+
+    http:Response response = check authV2Client->post("/auth/login", loginRequest);
+    test:assertEquals(response.statusCode, 200, "Login should succeed with valid credentials");
+
+    json responseBody = check response.getJsonPayload();
+
+    // The 'timestamp' field must NOT be present in the login response.
+    // Its presence would cause duplicate timestamps in logs (issue #269).
+    json|error tsField = responseBody.timestamp;
+    test:assertTrue(tsField is error, "Login response must not include a 'timestamp' field (issue #269)");
+}

@@ -1910,9 +1910,8 @@ public type AuthenticateResponse record {
     boolean authenticated;
     string? userId;
     string? displayName;
-    string? timestamp;
     // Optional: auth backends that manage role-to-superadmin mapping (e.g. LDAP)
-    // may include this to signal the ICP server to grant superadmin on login.
+    // may indicate this to grant superadmin on login.
     boolean? isSuperAdmin;
 };
 

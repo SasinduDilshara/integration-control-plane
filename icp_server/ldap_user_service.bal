@@ -18,7 +18,6 @@ import ballerina/crypto;
 import ballerina/http;
 import ballerina/ldap;
 import ballerina/log;
-import ballerina/time;
 
 import icp_server.types;
 import icp_server.utils;
@@ -216,8 +215,7 @@ service object {
                 authenticated: true,
                 userId: userId,
                 displayName: displayName,
-                isSuperAdmin: isSuperAdmin,
-                timestamp: time:utcToString(time:utcNow())
+                isSuperAdmin: isSuperAdmin
             }
         };
     }

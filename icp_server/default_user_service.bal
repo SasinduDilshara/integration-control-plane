@@ -137,8 +137,7 @@ service / on defaultAuthServiceListener {
                             authenticated: true,
                             userId: credentials.userId,
                             displayName: credentials.displayName,
-                            isSuperAdmin: credentials.username == "admin",
-                            timestamp: time:utcToString(time:utcNow())
+                            isSuperAdmin: credentials.username == "admin"
                         }
                     };
                 }
@@ -422,7 +421,7 @@ isolated function clearLockoutAttrs(string userId) returns error? {
 
 isolated function recordFailedLogin(string userId, int currentFailedAttempts) returns error? {
     string now = time:utcToString(time:utcNow());
-    log:printDebug("Recording failed login", userId = userId, newCount = currentFailedAttempts + 1, timestamp = now);
+    log:printDebug("Recording failed login", userId = userId, newCount = currentFailedAttempts + 1);
     check upsertUserAttr(userId, FAILED_LOGIN_ATTEMPTS, (currentFailedAttempts + 1).toString());
     check upsertUserAttr(userId, LAST_FAILED_LOGIN_AT, now);
 }
