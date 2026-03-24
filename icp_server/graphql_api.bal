@@ -322,8 +322,11 @@ isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, 
                 continue;
             }
 
-            // Create a unique key for grouping (loggerName + componentName + logLevel)
-            string groupKey = loggerInfo.loggerName + "|" + loggerInfo.componentName + "|" + logLevelResult.toString();
+            // Create a unique key for grouping by componentName + logLevel only.
+            // Using componentName as the canonical identifier prevents duplicates
+            // when the MI API returns the same logical logger with slightly different
+            // loggerName formats (e.g. dashes vs dots). See issue #108.
+            string groupKey = loggerInfo.componentName + "|" + logLevelResult.toString();
 
             if loggerGroupMap.hasKey(groupKey) {
                 // Logger already exists, add this runtime ID to the group

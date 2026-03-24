@@ -227,6 +227,24 @@ VALUES (
 );
 
 -- ============================================================================
+-- BI RUNTIME LOG LEVELS (for logger display/filter/pagination tests - issue #108)
+-- ============================================================================
+
+-- Runtime 1 (Dev): two loggers at different levels
+INSERT INTO bi_runtime_log_levels (runtime_id, component_name, log_level)
+VALUES ('880e8400-e29b-41d4-a716-446655440001', 'io.ballerina.stdlib.http', 'INFO');
+
+INSERT INTO bi_runtime_log_levels (runtime_id, component_name, log_level)
+VALUES ('880e8400-e29b-41d4-a716-446655440001', 'io.ballerina.runtime', 'WARN');
+
+-- Runtime 2 (Prod): same loggers, should group with Runtime 1 where levels match
+INSERT INTO bi_runtime_log_levels (runtime_id, component_name, log_level)
+VALUES ('880e8400-e29b-41d4-a716-446655440002', 'io.ballerina.stdlib.http', 'INFO');
+
+INSERT INTO bi_runtime_log_levels (runtime_id, component_name, log_level)
+VALUES ('880e8400-e29b-41d4-a716-446655440002', 'io.ballerina.runtime', 'WARN');
+
+-- ============================================================================
 -- RBAC V2 USER GROUP ASSIGNMENTS
 -- ============================================================================
 

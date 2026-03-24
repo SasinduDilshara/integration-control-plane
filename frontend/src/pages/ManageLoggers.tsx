@@ -42,7 +42,7 @@ import {
   TextField,
   Typography,
 } from '@wso2/oxygen-ui';
-import { Maximize2, RefreshCw, X } from '@wso2/oxygen-ui-icons-react';
+import { Maximize2, RefreshCw, Search, X } from '@wso2/oxygen-ui-icons-react';
 import DataTable from '../components/DataTable';
 import { useState, type JSX } from 'react';
 import { useQueryClient, useQueries } from '@tanstack/react-query';
@@ -88,6 +88,8 @@ function LoggersList({ environmentId, componentId, componentType }: { environmen
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [runtimeFilter, setRuntimeFilter] = useState('');
   const [runtimeDrawer, setRuntimeDrawer] = useState<{ loggerName: string; runtimeIds: string[] } | null>(null);
 
   const handleLogLevelChange = async (uniqueKey: string, loggerName: string, componentName: string, runtimeIds: string[], newLevel: LogLevel) => {
@@ -135,10 +137,19 @@ function LoggersList({ environmentId, componentId, componentType }: { environmen
   const isMI = componentType === 'MI';
   const logLevels = isMI ? MI_LOG_LEVELS : BI_LOG_LEVELS;
 
-  // Pagination logic
-  const maxPage = Math.max(0, Math.ceil(loggers.length / rowsPerPage) - 1);
+  // Filter loggers by search term and runtime ID
+  const lowerSearch = searchTerm.toLowerCase();
+  const lowerRuntimeFilter = runtimeFilter.toLowerCase();
+  const filteredLoggers = loggers.filter((logger) => {
+    const matchesSearch = !searchTerm || (logger.loggerName ?? '').toLowerCase().includes(lowerSearch) || logger.componentName.toLowerCase().includes(lowerSearch);
+    const matchesRuntime = !runtimeFilter || logger.runtimeIds.some((id) => id.toLowerCase().includes(lowerRuntimeFilter));
+    return matchesSearch && matchesRuntime;
+  });
+
+  // Pagination on filtered results
+  const maxPage = Math.max(0, Math.ceil(filteredLoggers.length / rowsPerPage) - 1);
   const safePage = Math.min(page, maxPage);
-  const paginatedLoggers = loggers.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
+  const paginatedLoggers = filteredLoggers.slice(safePage * rowsPerPage, safePage * rowsPerPage + rowsPerPage);
 
   if (loggers.length === 0) {
     return (
@@ -152,6 +163,30 @@ function LoggersList({ environmentId, componentId, componentType }: { environmen
 
   return (
     <>
+      <Stack direction="row" gap={2} sx={{ mb: 2 }}>
+        <TextField
+          size="small"
+          placeholder="Search by logger or component name"
+          value={searchTerm}
+          onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+          sx={{ flex: 1 }}
+          InputProps={{ startAdornment: <Search size={16} style={{ marginRight: 8, opacity: 0.5 }} /> }}
+        />
+        <TextField
+          size="small"
+          placeholder="Filter by node ID"
+          value={runtimeFilter}
+          onChange={(e) => { setRuntimeFilter(e.target.value); setPage(0); }}
+          sx={{ width: 240 }}
+        />
+      </Stack>
+      {filteredLoggers.length === 0 && (searchTerm || runtimeFilter) ? (
+        <Box sx={{ p: 3, bgcolor: 'action.hover', borderRadius: 1, textAlign: 'center' }}>
+          <Typography variant="body2" color="text.secondary">
+            No loggers match the current filters
+          </Typography>
+        </Box>
+      ) : (
       <ListingTable.Container>
         <ListingTable>
           <ListingTable.Head>
@@ -207,7 +242,7 @@ function LoggersList({ environmentId, componentId, componentType }: { environmen
         <TablePagination
           sx={{ borderTop: '1px solid', borderColor: 'divider' }}
           component="div"
-          count={loggers.length}
+          count={filteredLoggers.length}
           page={safePage}
           onPageChange={(_, p) => setPage(p)}
           rowsPerPage={rowsPerPage}
@@ -218,6 +253,7 @@ function LoggersList({ environmentId, componentId, componentType }: { environmen
           rowsPerPageOptions={[5, 10, 25, 50]}
         />
       </ListingTable.Container>
+      )}
       <Snackbar open={snackbarOpen} autoHideDuration={6000} onClose={() => setSnackbarOpen(false)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}>
         <Alert onClose={() => setSnackbarOpen(false)} severity="success" variant="filled" sx={{ width: '100%' }}>
           Logger level update in progress, please refresh after sometime to view the change
