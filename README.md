@@ -77,8 +77,8 @@ unzip build/distribution/wso2-integration-control-plane-<version>.zip -d build/d
 cd build/distribution/wso2-integration-control-plane-<version>/bin
 
 # Start the server
-./icp.sh start    # Linux/macOS
-icp.bat start     # Windows
+./icp.sh    # Linux/macOS
+icp.bat    # Windows
 ```
 
 ## Development Setup

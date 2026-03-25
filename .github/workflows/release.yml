@@ -235,8 +235,8 @@ jobs:
           2. Extract the archive: `unzip wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip`
           3. Navigate to the bin directory: `cd wso2-integration-control-plane-${{ steps.version.outputs.version }}/bin`
           4. Run the server:
-             - Linux/macOS: `./icp.sh start`
-             - Windows: `icp.bat start`
+             - Linux/macOS: `./icp.sh`
+             - Windows: `icp.bat`
 
           ### System Requirements
 
