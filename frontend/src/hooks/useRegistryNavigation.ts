@@ -43,8 +43,8 @@ export function useRegistryNavigation(initialPath = 'registry') {
 
   const navigateToSegment = useCallback((index: number) => {
     setState((prev) => {
-      // index -1 means go to root (registry)
-      if (index === -1) {
+      // Any negative index means go to root (registry)
+      if (index < 0) {
         return {
           currentPath: 'registry',
           pathSegments: ['registry'],
