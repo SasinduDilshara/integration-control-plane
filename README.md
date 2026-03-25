@@ -62,7 +62,7 @@ Or use the build script:
 The distribution package will be created in:
 
 ```text
-build/distribution/wso2-integrator-icp-<version>/
+build/distribution/wso2-integration-control-plane-<version>/
 ```
 
 ### Running the Distribution
@@ -70,7 +70,7 @@ build/distribution/wso2-integrator-icp-<version>/
 After building, you can run the packaged distribution:
 
 ```bash
-cd build/distribution/wso2-integrator-icp-<version>/bin
+cd build/distribution/wso2-integration-control-plane-<version>/bin
 ./icp.sh start    # Linux/macOS
 icp.bat start     # Windows
 ```

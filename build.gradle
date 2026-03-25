@@ -161,7 +161,7 @@ task packageICP {
         
         def jarFile = file('icp_server/target/bin/icp_server.jar')
         def zipDir = file('build/distribution')
-        def zipFile = file("build/distribution/wso2-integrator-icp-${version}.zip")
+        def zipFile = file("build/distribution/wso2-integration-control-plane-${version}.zip")
         
         if (!zipDir.exists()) {
             zipDir.mkdirs()
@@ -170,7 +170,7 @@ task packageICP {
         if (jarFile.exists()) {
             // Create a temporary directory for packaging
             def tempDir = file('build/temp-package')
-            def rootDir = file("${tempDir}/wso2-integrator-icp-${version}")
+            def rootDir = file("${tempDir}/wso2-integration-control-plane-${version}")
             if (tempDir.exists()) {
                 delete tempDir
             }

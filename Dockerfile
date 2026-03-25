@@ -79,14 +79,14 @@ RUN apt-get update && \
 WORKDIR /home/wso2
 
 # Copy the distribution zip file from builder stage
-COPY --from=builder /app/build/distribution/wso2-integrator-icp-${ICP_VERSION}.zip /home/wso2/
+COPY --from=builder /app/build/distribution/wso2-integration-control-plane-${ICP_VERSION}.zip /home/wso2/
 
 # Unzip the distribution and remove the zip file
-RUN unzip wso2-integrator-icp-${ICP_VERSION}.zip && \
-    rm wso2-integrator-icp-${ICP_VERSION}.zip
+RUN unzip wso2-integration-control-plane-${ICP_VERSION}.zip && \
+    rm wso2-integration-control-plane-${ICP_VERSION}.zip
 
 # Set working directory to the unzipped distribution home
-WORKDIR /home/wso2/wso2-integrator-icp-${ICP_VERSION}
+WORKDIR /home/wso2/wso2-integration-control-plane-${ICP_VERSION}
 
 # Expose ports (HTTPS, GraphQL, Observability, OpenSearch Adaptor)
 EXPOSE 9445 9446 9448 9449
