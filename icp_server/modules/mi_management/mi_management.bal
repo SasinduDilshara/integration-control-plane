@@ -428,11 +428,10 @@ public isolated function fetchLogFileContent(http:Client mgmtClient, string hmac
 // Registry Resources API functions
 // ============================================================
 
-// Response type for registry directory listing (actual MI API structure)
 type MgmtRegistryFileItem record {
     string name;
     string mediaType;
-    json[] properties;
+    MgmtRegistryProperty[] properties;
 };
 
 type MgmtRegistryDirectoryResponse record {
@@ -468,18 +467,27 @@ public isolated function fetchRegistryDirectory(http:Client mgmtClient, string h
     });
 
     types:RegistryDirectoryItem[] items = [];
+    log:printDebug("Processing registry directory items", itemCount = respResult.count);
 
     foreach MgmtRegistryFileItem fileItem in respResult.list {
-        boolean isDirectory = fileItem.mediaType == "directory";
+        types:RegistryProperty[] mappedProperties = from var prop in fileItem.properties
+            select {name: prop.name, value: prop.value};
+
+        log:printDebug("Mapped registry item",
+            itemName = fileItem.name,
+            mediaType = fileItem.mediaType,
+            propertiesCount = mappedProperties.length()
+        );
 
         items.push({
             name: fileItem.name,
             mediaType: fileItem.mediaType,
-            isDirectory: isDirectory,
-            properties: []
+            isDirectory: fileItem.mediaType == "directory",
+            properties: mappedProperties
         });
     }
 
+    log:printDebug("Registry directory processing complete", totalItems = items.length());
     return {count: respResult.count, items: items};
 }
 

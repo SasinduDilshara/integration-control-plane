@@ -10,6 +10,13 @@ export function useRegistryNavigation(initialPath = 'registry') {
     // Remove leading slash if present and split into segments
     const cleanPath = initialPath.startsWith('/') ? initialPath.substring(1) : initialPath;
     const segments = cleanPath.split('/').filter((s) => s.length > 0);
+    // Normalize empty path to registry root
+    if (segments.length === 0) {
+      return {
+        currentPath: 'registry',
+        pathSegments: ['registry'],
+      };
+    }
     return {
       currentPath: segments.join('/'),
       pathSegments: segments,
@@ -20,6 +27,14 @@ export function useRegistryNavigation(initialPath = 'registry') {
     // Remove leading slash if present
     const cleanPath = path.startsWith('/') ? path.substring(1) : path;
     const segments = cleanPath.split('/').filter((s) => s.length > 0);
+    // Normalize empty path to registry root
+    if (segments.length === 0) {
+      setState({
+        currentPath: 'registry',
+        pathSegments: ['registry'],
+      });
+      return;
+    }
     setState({
       currentPath: segments.join('/'),
       pathSegments: segments,

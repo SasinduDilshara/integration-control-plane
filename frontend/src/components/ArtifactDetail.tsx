@@ -446,8 +446,19 @@ export function ArtifactDetail({ selected, onClose }: { selected: SelectedArtifa
         return <InboundEndpointParameters {...tabProps} />;
       case 'Executions':
         return <AutomationExecutions {...tabProps} />;
-      case 'Browse':
-        return <RegistryBrowser runtimeId={(artifact.runtimes as Array<{ runtimeId: string }> | undefined)?.[0]?.runtimeId ?? ''} />;
+      case 'Browse': {
+        const runtimeId = (artifact.runtimes as Array<{ runtimeId: string }> | undefined)?.[0]?.runtimeId;
+        if (!runtimeId) {
+          return (
+            <Stack sx={{ p: 3, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+              <Typography color="text.secondary" textAlign="center">
+                Registry browser is not available. No runtime is associated with this artifact.
+              </Typography>
+            </Stack>
+          );
+        }
+        return <RegistryBrowser runtimeId={runtimeId} />;
+      }
       default:
         return null;
     }
