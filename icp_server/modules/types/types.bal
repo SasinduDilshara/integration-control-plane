@@ -1076,34 +1076,6 @@ public type RegistryResource record {
     ArtifactRuntimeInfo[]? runtimes?;
 };
 
-// Registry Browser Types - For browsing registry contents
-public type RegistryProperty record {
-    string name;
-    string value;
-};
-
-public type RegistryDirectoryItem record {
-    string name;
-    string mediaType;
-    boolean isDirectory;
-    RegistryProperty[] properties = [];
-};
-
-public type RegistryDirectoryResponse record {
-    int count;
-    RegistryDirectoryItem[] items;
-};
-
-public type RegistryResourceMetadata record {
-    string name;
-    string mediaType;
-};
-
-public type RegistryPropertiesResponse record {
-    int count;
-    RegistryProperty[] properties;
-};
-
 // === Project & Component Types ===
 
 public type Project record {
@@ -2375,4 +2347,10 @@ public type MIUsersResponse record {|
 public type MIUserOperationResponse record {|
     string username;
     string status;
+|};
+
+public type ValidatedRuntime record {|
+    string runtimeId;
+    string componentId;
+    Runtime runtime;
 |};

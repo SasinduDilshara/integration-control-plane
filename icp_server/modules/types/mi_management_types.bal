@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/http;
+
 // MI Management API Response Types
 // These types reflect what the MI Management REST API returns
 // for single-artifact queries (name-filtered requests).
@@ -240,4 +242,44 @@ public type MgmtUpdateLoggerRequest record {
 // PATCH /management/logging - Response
 public type MgmtUpdateLoggerResponse record {
     string message;
+};
+
+// Registry API Client
+public type RegistryApiClient record {|
+    http:Client mgmtClient;
+    string hmacToken;
+|};
+
+// Validated Registry Access
+public type ValidatedRegistryAccess record {|
+    Runtime runtime;
+    string trimmedPath;
+|};
+
+// Registry Browser Types - For browsing registry contents
+public type RegistryProperty record {
+    string name;
+    string value;
+};
+
+public type RegistryDirectoryItem record {
+    string name;
+    string mediaType;
+    boolean isDirectory;
+    RegistryProperty[] properties = [];
+};
+
+public type RegistryDirectoryResponse record {
+    int count;
+    RegistryDirectoryItem[] items;
+};
+
+public type RegistryResourceMetadata record {
+    string name;
+    string mediaType;
+};
+
+public type RegistryPropertiesResponse record {
+    int count;
+    RegistryProperty[] properties;
 };

@@ -22,6 +22,7 @@ import ballerina/http;
 import ballerina/log;
 import ballerina/url;
 
+import wso2/icp_server.storage;
 import wso2/icp_server.types;
 
 // Path prefix for all Management API endpoints
@@ -424,36 +425,6 @@ public isolated function fetchLogFileContent(http:Client mgmtClient, string hmac
     return respResult;
 }
 
-// ============================================================
-// Registry Resources API functions
-// ============================================================
-
-type MgmtRegistryFileItem record {
-    string name;
-    string mediaType;
-    MgmtRegistryProperty[] properties;
-};
-
-type MgmtRegistryDirectoryResponse record {
-    int count;
-    MgmtRegistryFileItem[] list;
-};
-
-type MgmtRegistryProperty record {
-    string name;
-    string value;
-};
-
-type MgmtRegistryMetadataResponse record {
-    string name;
-    string mediaType;
-};
-
-type MgmtRegistryPropertiesResponse record {
-    int count;
-    MgmtRegistryProperty[] list;
-};
-
 // Fetch registry directory contents from the MI management API
 // GET /management/registry-resources?path={path}
 public isolated function fetchRegistryDirectory(http:Client mgmtClient, string hmacToken, string path, boolean? expand = ()) returns types:RegistryDirectoryResponse|error {
@@ -537,5 +508,19 @@ public isolated function fetchRegistryResourceProperties(http:Client mgmtClient,
     }
 
     return {count: respResult.count, properties: props};
+}
+
+public isolated function createRegistryManagementClient(types:Runtime runtime, string runtimeId, boolean allowInsecureTLS) returns types:RegistryApiClient|error {
+    log:printDebug("Creating registry management client", runtimeId = runtimeId, hostname = runtime.managementHostname, port = runtime.managementPort);
+
+    string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
+    http:Client mgmtClient = check (allowInsecureTLS
+        ? new (baseUrl, {secureSocket: {enable: false}})
+        : new (baseUrl));
+
+    string hmacToken = check storage:issueRuntimeHmacToken(runtimeId);
+
+    log:printDebug("Registry management client created", runtimeId = runtimeId, baseUrl = baseUrl);
+    return {mgmtClient, hmacToken};
 }
 

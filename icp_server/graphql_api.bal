@@ -26,13 +26,6 @@ import ballerina/lang.value;
 import ballerina/log;
 import ballerina/url;
 
-// Helper type for pre-validating runtimes in updateLogLevel
-type ValidatedRuntime record {|
-    string runtimeId;
-    string componentId;
-    types:Runtime runtime;
-|};
-
 // GraphQL listener configuration
 listener graphql:Listener graphqlListener = new (graphqlPort,
     configuration = {
@@ -503,7 +496,7 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
     string logLevelStr = input.logLevel.toString();
 
     // Phase 1: Pre-validate all runtimes and permissions (no side-effects)
-    ValidatedRuntime[] validatedRuntimes = [];
+    types:ValidatedRuntime[] validatedRuntimes = [];
 
     foreach string runtimeId in input.runtimeIds {
         // Fetch the runtime to get its context
@@ -549,7 +542,7 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
     int failureCount = 0;
     map<boolean> processedComponents = {};
 
-    foreach ValidatedRuntime validated in validatedRuntimes {
+    foreach types:ValidatedRuntime validated in validatedRuntimes {
         // Persist intended state for this component first (once per component)
         if !processedComponents.hasKey(validated.componentId) {
             error? stateResult = storage:upsertMILoggerIntendedState(
@@ -663,22 +656,12 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
     };
 }
 
-type ValidatedRegistryAccess record {|
-    types:Runtime runtime;
-    string trimmedPath;
-|};
-
-type RegistryApiClient record {|
-    http:Client mgmtClient;
-    string hmacToken;
-|};
-
 isolated function validateRegistryResourceAccess(
     types:UserContextV2 userContext,
     string runtimeId,
     string path,
     string operation
-) returns ValidatedRegistryAccess|error {
+) returns types:ValidatedRegistryAccess|error {
     log:printDebug(string `Validating registry access for ${operation}`, userId = userContext.userId, runtimeId = runtimeId, path = path);
 
     string trimmedPath = path.trim();
@@ -716,20 +699,6 @@ isolated function validateRegistryResourceAccess(
 
     log:printDebug(string `Access validated for ${operation}`, userId = userContext.userId, runtimeId = runtimeId, trimmedPath = trimmedPath);
     return {runtime, trimmedPath};
-}
-
-isolated function createRegistryManagementClient(types:Runtime runtime, string runtimeId) returns RegistryApiClient|error {
-    log:printDebug("Creating registry management client", runtimeId = runtimeId, hostname = runtime.managementHostname, port = runtime.managementPort);
-
-    string baseUrl = check storage:buildManagementBaseUrl(runtime.managementHostname, runtime.managementPort);
-    http:Client mgmtClient = check (artifactsApiAllowInsecureTLS
-        ? new (baseUrl, {secureSocket: {enable: false}})
-        : new (baseUrl));
-
-    string hmacToken = check storage:issueRuntimeHmacToken(runtimeId);
-
-    log:printDebug("Registry management client created", runtimeId = runtimeId, baseUrl = baseUrl);
-    return {mgmtClient, hmacToken};
 }
 
 @graphql:ServiceConfig {
@@ -1580,29 +1549,29 @@ service /graphql on graphqlListener {
 
     isolated resource function get registryDirectory(graphql:Context context, string runtimeId, string path, boolean? expand = ()) returns types:RegistryDirectoryResponse|error {
         types:UserContextV2 userContext = check extractUserContext(context);
-        ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry directory");
-        RegistryApiClient apiClient = check createRegistryManagementClient(validated.runtime, runtimeId);
+        types:ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry directory");
+        types:RegistryApiClient apiClient = check mi_management:createRegistryManagementClient(validated.runtime, runtimeId, artifactsApiAllowInsecureTLS);
         return check mi_management:fetchRegistryDirectory(apiClient.mgmtClient, apiClient.hmacToken, validated.trimmedPath, expand);
     }
 
     isolated resource function get registryFileContent(graphql:Context context, string runtimeId, string path) returns string|error {
         types:UserContextV2 userContext = check extractUserContext(context);
-        ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry file content");
-        RegistryApiClient apiClient = check createRegistryManagementClient(validated.runtime, runtimeId);
+        types:ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry file content");
+        types:RegistryApiClient apiClient = check mi_management:createRegistryManagementClient(validated.runtime, runtimeId, artifactsApiAllowInsecureTLS);
         return check mi_management:fetchRegistryFileContent(apiClient.mgmtClient, apiClient.hmacToken, validated.trimmedPath);
     }
 
     isolated resource function get registryResourceMetadata(graphql:Context context, string runtimeId, string path) returns types:RegistryResourceMetadata|error {
         types:UserContextV2 userContext = check extractUserContext(context);
-        ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry resource metadata");
-        RegistryApiClient apiClient = check createRegistryManagementClient(validated.runtime, runtimeId);
+        types:ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry resource metadata");
+        types:RegistryApiClient apiClient = check mi_management:createRegistryManagementClient(validated.runtime, runtimeId, artifactsApiAllowInsecureTLS);
         return check mi_management:fetchRegistryResourceMetadata(apiClient.mgmtClient, apiClient.hmacToken, validated.trimmedPath);
     }
 
     isolated resource function get registryResourceProperties(graphql:Context context, string runtimeId, string path) returns types:RegistryPropertiesResponse|error {
         types:UserContextV2 userContext = check extractUserContext(context);
-        ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry resource properties");
-        RegistryApiClient apiClient = check createRegistryManagementClient(validated.runtime, runtimeId);
+        types:ValidatedRegistryAccess validated = check validateRegistryResourceAccess(userContext, runtimeId, path, "registry resource properties");
+        types:RegistryApiClient apiClient = check mi_management:createRegistryManagementClient(validated.runtime, runtimeId, artifactsApiAllowInsecureTLS);
         return check mi_management:fetchRegistryResourceProperties(apiClient.mgmtClient, apiClient.hmacToken, validated.trimmedPath);
     }
 
