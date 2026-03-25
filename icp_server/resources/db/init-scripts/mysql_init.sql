@@ -1365,22 +1365,6 @@ VALUES (
         'main',
         NULL,
         'System Administrator'
-    ),
-    (
-        '650e8400-e29b-41d4-a716-446655440002',
-        1,
-        'Sample Project 2',
-        '1.1.0',
-        'sample-project-2',
-        'eu-west-1',
-        'Second sample project for testing',
-        'api-service',
-        'gitlab',
-        'test-org',
-        'test-repo',
-        'develop',
-        NULL,
-        'System Administrator'
     );
 
 INSERT INTO
