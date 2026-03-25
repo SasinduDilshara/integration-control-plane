@@ -52,26 +52,6 @@ VALUES (
     '650e8400-e29b-41d4-a716-446655440001'
 );
 
--- Component in Project 2 for cross-project testing
-INSERT INTO components (
-    component_id,
-    name,
-    display_name,
-    component_type,
-    description,
-    created_by,
-    project_id
-)
-VALUES (
-    '640e8400-e29b-41d4-a716-446655440003',
-    'project2-integration',
-    'Project 2 Integration',
-    'MI',
-    'Integration in Project 2 for cross-project testing',
-    NULL,
-    '650e8400-e29b-41d4-a716-446655440002'
-);
-
 -- ============================================================================
 -- RUNTIMES FOR TESTING ENDPOINTS
 -- ============================================================================
@@ -164,36 +144,6 @@ VALUES (
     '2201.9.0',
     CURRENT_TIMESTAMP,
     DATEADD('HOUR', -1, CURRENT_TIMESTAMP)
-);
-
--- Runtime 4: Project 2, Component 3, Dev env, RUNNING
-INSERT INTO runtimes (
-    runtime_id,
-    name,
-    project_id,
-    component_id,
-    environment_id,
-    runtime_type,
-    status,
-    version,
-    platform_name,
-    platform_version,
-    registration_time,
-    last_heartbeat
-)
-VALUES (
-    '880e8400-e29b-41d4-a716-446655440004',
-    'project2-integration-dev-runtime',
-    '650e8400-e29b-41d4-a716-446655440002',
-    '640e8400-e29b-41d4-a716-446655440003',
-    '750e8400-e29b-41d4-a716-446655440001',
-    'MI',
-    'RUNNING',
-    '1.0.0',
-    'micro-integrator',
-    '4.3.0',
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
 );
 
 -- Runtime 5: Project 1, Component 2, Prod env, FAILED (for testing failure scenarios)
@@ -343,12 +293,10 @@ FETCH FIRST 1 ROWS ONLY;
 --
 -- Projects:
 --   - Sample Project (650e8400-e29b-41d4-a716-446655440001)
---   - Sample Project 2 (650e8400-e29b-41d4-a716-446655440002)
 --
 -- Components:
 --   - sample-integration (640e8400-e29b-41d4-a716-446655440001) in Project 1
 --   - sample-integration-2 (640e8400-e29b-41d4-a716-446655440002) in Project 1
---   - project2-integration (640e8400-e29b-41d4-a716-446655440003) in Project 2
 --
 -- Environments:
 --   - dev (750e8400-e29b-41d4-a716-446655440001)
