@@ -59,18 +59,24 @@ Or use the build script:
 ./build.sh
 ```
 
-The distribution package will be created in:
+The distribution package will be created as:
 
 ```text
-build/distribution/wso2-integrator-icp-<version>/
+build/distribution/wso2-integration-control-plane-<version>.zip
 ```
 
 ### Running the Distribution
 
-After building, you can run the packaged distribution:
+After building, extract and run the packaged distribution:
 
 ```bash
-cd build/distribution/wso2-integrator-icp-<version>/bin
+# Extract the distribution
+unzip build/distribution/wso2-integration-control-plane-<version>.zip -d build/distribution
+
+# Navigate to the bin directory
+cd build/distribution/wso2-integration-control-plane-<version>/bin
+
+# Start the server
 ./icp.sh start    # Linux/macOS
 icp.bat start     # Windows
 ```

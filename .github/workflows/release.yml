@@ -138,7 +138,7 @@ jobs:
 
       - name: Verify distribution package
         run: |
-          DIST_FILE="build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip"
+          DIST_FILE="build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip"
           if [ -f "$DIST_FILE" ]; then
             echo "✓ Distribution package found: $DIST_FILE"
             ls -lh "$DIST_FILE"
@@ -152,7 +152,7 @@ jobs:
 
       - name: Extract distribution for scanning
         run: |
-          DIST_FILE="build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip"
+          DIST_FILE="build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip"
           EXTRACT_DIR="build/distribution/extracted"
           mkdir -p "$EXTRACT_DIR"
           unzip -q "$DIST_FILE" -d "$EXTRACT_DIR"
@@ -231,9 +231,9 @@ jobs:
 
           ### Download & Installation
 
-          1. Download the `wso2-integrator-icp-${{ steps.version.outputs.version }}.zip` file below
-          2. Extract the archive: `unzip wso2-integrator-icp-${{ steps.version.outputs.version }}.zip`
-          3. Navigate to the bin directory: `cd wso2-integrator-icp-${{ steps.version.outputs.version }}/bin`
+          1. Download the `wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip` file below
+          2. Extract the archive: `unzip wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip`
+          3. Navigate to the bin directory: `cd wso2-integration-control-plane-${{ steps.version.outputs.version }}/bin`
           4. Run the server:
              - Linux/macOS: `./icp.sh start`
              - Windows: `icp.bat start`
@@ -267,11 +267,11 @@ jobs:
       - name: Calculate checksums
         run: |
           cd build/distribution
-          sha256sum wso2-integrator-icp-${{ steps.version.outputs.version }}.zip > wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.sha256
-          md5sum wso2-integrator-icp-${{ steps.version.outputs.version }}.zip > wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.md5
+          sha256sum wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip > wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.sha256
+          md5sum wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip > wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.md5
           echo "Checksums:"
-          cat wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.sha256
-          cat wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.md5
+          cat wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.sha256
+          cat wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.md5
 
       - name: Dry Run Summary
         if: inputs.dry_run
@@ -284,7 +284,7 @@ jobs:
           echo "**Pre-release**: ${{ inputs.prerelease || steps.version.outputs.is_prerelease == 'true' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts Ready" >> $GITHUB_STEP_SUMMARY
-          echo "✓ Distribution ZIP ($(du -h build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip | cut -f1))" >> $GITHUB_STEP_SUMMARY
+          echo "✓ Distribution ZIP ($(du -h build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip | cut -f1))" >> $GITHUB_STEP_SUMMARY
           echo "✓ SHA256 checksum" >> $GITHUB_STEP_SUMMARY
           echo "✓ MD5 checksum" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -296,9 +296,9 @@ jobs:
         with:
           name: icp-distribution-${{ steps.version.outputs.version }}
           path: |
-            build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip
-            build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.sha256
-            build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.md5
+            build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip
+            build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.sha256
+            build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.md5
           retention-days: 30
 
       - name: Create GitHub Release
@@ -310,9 +310,9 @@ jobs:
           name: WSO2 Integration Control Plane v${{ steps.version.outputs.version }}
           body_path: release_notes.md
           files: |
-            build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip
-            build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.sha256
-            build/distribution/wso2-integrator-icp-${{ steps.version.outputs.version }}.zip.md5
+            build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip
+            build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.sha256
+            build/distribution/wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip.md5
           draft: false
           prerelease: ${{ inputs.prerelease || steps.version.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
@@ -325,7 +325,7 @@ jobs:
           echo "## ✅ Release Created Successfully" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Distribution Package**: wso2-integrator-icp-${{ steps.version.outputs.version }}.zip" >> $GITHUB_STEP_SUMMARY
+          echo "**Distribution Package**: wso2-integration-control-plane-${{ steps.version.outputs.version }}.zip" >> $GITHUB_STEP_SUMMARY
           echo "**Release URL**: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts Published" >> $GITHUB_STEP_SUMMARY
