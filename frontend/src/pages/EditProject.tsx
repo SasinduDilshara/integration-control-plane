@@ -113,15 +113,7 @@ function EditProjectForm({ project, orgHandler }: { project: GqlProject; orgHand
           <DialogContentText sx={{ mt: 2, mb: 1 }}>
             Type <strong>{project.name}</strong> to confirm:
           </DialogContentText>
-          <TextField
-            fullWidth
-            label="Confirm project name"
-            value={confirmText}
-            onChange={(e) => setConfirmText(e.target.value)}
-            placeholder={project.name}
-            autoFocus
-            helperText={`Type "${project.name}" to enable deletion`}
-          />
+          <TextField fullWidth label="Confirm project name" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={project.name} autoFocus helperText={`Type "${project.name}" to enable deletion`} />
           {deleteError && (
             <Alert severity="error" sx={{ mt: 2 }}>
               {deleteError}
