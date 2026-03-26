@@ -45,6 +45,8 @@ See `specs/Testing_guidelines.md` — includes test file listing, test framework
 
 See `specs/Contributing_guidelines.md` for full PR process, checklists, database change procedures, and feature addition guides.
 
+If you are doing a code change, you **SHOULD** read the `specs/Contributing_guidelines.md` document in its entirety. It contains all coding rules, file naming conventions, backend/frontend guidelines, git conventions, and security requirements.
+
 ### PR Process
 
 - Follow the PR template in `pull_request_template.md`.
