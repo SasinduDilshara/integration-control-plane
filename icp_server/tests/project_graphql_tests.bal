@@ -16,6 +16,8 @@
 
 import ballerina/test;
 import icp_server.auth;
+import icp_server.storage;
+import icp_server.types;
 
 // Project IDs from test data
 const string PROJECT_2_ID = "650e8400-e29b-41d4-a716-446655440002";
@@ -291,4 +293,64 @@ function testDeleteProjectNoPermission() returns error? {
 
     // Should return error
     test:assertTrue(response.errors is json, "Mutation should return errors without manage permission");
+}
+
+// =============================================================================
+// Test 8: Delete project - Cleans up project-scoped admin groups
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "delete-project"],
+    dependsOn: [testCreateProjectGroupAssignment]
+}
+function testDeleteProjectCleansUpGroups() returns error? {
+    // Verify a project was created in earlier test
+    test:assertTrue(createdProjectId.length() > 0, "Project ID should be set from testCreateProjectSuccess");
+
+    // Verify the project admin group exists before deletion
+    string expectedGroupName = "test-project-graphql Admins";
+    types:Group[] groupsBefore = check storage:getGroupsByOrgId(1);
+    boolean groupExistsBefore = false;
+    foreach types:Group g in groupsBefore {
+        if g.groupName == expectedGroupName {
+            groupExistsBefore = true;
+            break;
+        }
+    }
+    test:assertTrue(groupExistsBefore, "Project admin group should exist before deletion");
+
+    // Delete the project
+    string mutation = string `
+        mutation DeleteProject($projectId: String!) {
+            deleteProject(orgId: 1, projectId: $projectId) {
+                status
+                details
+            }
+        }
+    `;
+
+    json variables = {
+        projectId: createdProjectId
+    };
+
+    json response = check executeGraphQL(mutation, orgAdminToken, variables);
+
+    // Verify no errors
+    test:assertFalse(response.errors is json, "Delete mutation should not return errors");
+
+    json data = check response.data;
+    json deleteResult = check data.deleteProject;
+    string status = check deleteResult.status;
+    test:assertEquals(status, "success", "Delete should succeed");
+
+    // Verify the project admin group is cleaned up after deletion
+    types:Group[] groupsAfter = check storage:getGroupsByOrgId(1);
+    boolean groupExistsAfter = false;
+    foreach types:Group g in groupsAfter {
+        if g.groupName == expectedGroupName {
+            groupExistsAfter = true;
+            break;
+        }
+    }
+    test:assertFalse(groupExistsAfter, "Project admin group should be removed after project deletion");
 }

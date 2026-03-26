@@ -341,16 +341,29 @@ public isolated function updateProjectWithInput(types:ProjectUpdateInput project
 
 // Delete a project by ID (this will cascade delete all components, runtimes, roles, and user role assignments)
 public isolated function deleteProject(string projectId) returns error? {
-    sql:ParameterizedQuery deleteQuery = `DELETE FROM projects WHERE project_id = ${projectId}`;
-    var result = dbClient->execute(deleteQuery);
-    if result is sql:Error {
-        log:printError(string `Failed to delete project ${projectId}`, 'error = result);
-        match classifySqlError(result) {
-            FOREIGN_KEY_VIOLATION => { return error("Cannot delete project because it has dependent resources", result); }
-            _ => { return error("An unexpected error occurred. Please contact your administrator.", result); }
+    transaction {
+        // Clean up project-scoped groups before deleting the project
+        check cleanupProjectScopedGroups(projectId);
+
+        sql:ParameterizedQuery deleteQuery = `DELETE FROM projects WHERE project_id = ${projectId}`;
+        sql:ExecutionResult result = check dbClient->execute(deleteQuery);
+
+        if result.affectedRowCount == 0 {
+            fail error(string `Project not found: ${projectId}`);
         }
+
+        check commit;
+        log:printInfo(string `Successfully deleted project ${projectId}`);
+    } on fail error e {
+        log:printError(string `Failed to delete project ${projectId}`, 'error = e);
+        if e is sql:Error {
+            match classifySqlError(e) {
+                FOREIGN_KEY_VIOLATION => { return error("Cannot delete project because it has dependent resources", e); }
+                _ => { return error("An unexpected error occurred. Please contact your administrator.", e); }
+            }
+        }
+        return e;
     }
-    log:printInfo(string `Successfully deleted project ${projectId}`);
     return ();
 }
 
