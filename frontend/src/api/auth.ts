@@ -12,7 +12,16 @@ async function authFetch<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(body || `Request failed (${res.status})`);
+    let message = body || `Request failed (${res.status})`;
+    try {
+      const json = JSON.parse(body);
+      if (typeof json.message === 'string') {
+        message = json.message;
+      }
+    } catch {
+      // body is not JSON — use raw text as-is
+    }
+    throw new Error(message);
   }
   const text = await res.text();
   return text ? JSON.parse(text) : (undefined as T);

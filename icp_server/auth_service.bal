@@ -907,7 +907,7 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function post orgs/[string orgHandle]/groups(@http:Payload types:GroupInput groupInput, http:Request req) returns http:Created|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+    isolated resource function post orgs/[string orgHandle]/groups(@http:Payload types:GroupInput groupInput, http:Request req) returns http:Created|http:BadRequest|http:Conflict|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Creating new group", orgHandle = orgHandle, groupName = groupInput.groupName);
 
         // Permission check: org-level manage groups
@@ -948,6 +948,13 @@ service /auth on httpListener {
         string|error groupId = storage:createGroup(inputWithOrg);
         if groupId is error {
             log:printError("Error creating group", groupId, groupName = groupInput.groupName);
+            if groupId.message().includes("already exists") {
+                return <http:Conflict>{
+                    body: {
+                        message: groupId.message()
+                    }
+                };
+            }
             return utils:createInternalServerError("Failed to create group");
         }
 
@@ -1031,7 +1038,7 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function put orgs/[string orgHandle]/groups/[string groupId](@http:Payload types:GroupInput groupInput, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+    isolated resource function put orgs/[string orgHandle]/groups/[string groupId](@http:Payload types:GroupInput groupInput, http:Request req) returns http:Ok|http:BadRequest|http:Conflict|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Updating group", orgHandle = orgHandle, groupId = groupId);
 
         // Permission check: org-level manage groups
@@ -1061,6 +1068,13 @@ service /auth on httpListener {
                 return <http:NotFound>{
                     body: {
                         message: "Group not found"
+                    }
+                };
+            }
+            if updateResult.message().includes("already exists") {
+                return <http:Conflict>{
+                    body: {
+                        message: updateResult.message()
                     }
                 };
             }
@@ -1094,7 +1108,7 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId](http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+    isolated resource function delete orgs/[string orgHandle]/groups/[string groupId](http:Request req) returns http:Ok|http:BadRequest|http:Conflict|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Deleting group", orgHandle = orgHandle, groupId = groupId);
 
         // Permission check: org-level manage groups
@@ -1116,8 +1130,34 @@ service /auth on httpListener {
             };
         }
 
-        // TODO: Check if group has members or role assignments
-        // For now, delete will cascade due to foreign key constraints
+        // Guard: prevent deletion of the built-in Super Admins group
+        string|error superAdminsGroupId = storage:getSuperAdminsGroupId();
+        if superAdminsGroupId is error {
+            log:printError("Could not resolve Super Admins group ID", superAdminsGroupId);
+            return utils:createInternalServerError("Could not resolve Super Admins group");
+        }
+        if groupId == superAdminsGroupId {
+            log:printWarn("Attempted to delete the Super Admins group", groupId = groupId, userId = userContext.userId);
+            return <http:Forbidden>{
+                body: {
+                    message: "The Super Admins group cannot be deleted"
+                }
+            };
+        }
+
+        // Check if group has mapped roles before deleting
+        int|error roleMappingCount = storage:getGroupRoleMappingCount(groupId);
+        if roleMappingCount is error {
+            log:printError("Error checking role mappings", roleMappingCount, groupId = groupId);
+            return utils:createInternalServerError("Error checking role mappings");
+        }
+        if roleMappingCount > 0 {
+            return <http:Conflict>{
+                body: {
+                    message: "Cannot delete a group with mapped roles. Remove all role mappings first."
+                }
+            };
+        }
 
         // Delete the group
         error? deleteResult = storage:deleteGroup(groupId);
@@ -1760,6 +1800,27 @@ service /auth on httpListener {
             };
         }
 
+        // Guard: prevent removing the org-level Super Admin role from the Super Admins group
+        string|error superAdminsGroupId = storage:getSuperAdminsGroupId();
+        if superAdminsGroupId is error {
+            log:printError("Could not resolve Super Admins group ID", superAdminsGroupId);
+            return utils:createInternalServerError("Could not resolve Super Admins group");
+        }
+        string|error superAdminRoleId = storage:getSuperAdminRoleId();
+        if superAdminRoleId is error {
+            log:printError("Could not resolve Super Admin role ID", superAdminRoleId);
+            return utils:createInternalServerError("Could not resolve Super Admin role");
+        }
+        if groupId == superAdminsGroupId && mapping.roleId == superAdminRoleId && mapping.projectUuid is () {
+            log:printWarn("Attempted to remove Super Admin role from Super Admins group",
+                    mappingId = mappingId, groupId = groupId, userId = userContext.userId);
+            return <http:Forbidden>{
+                body: {
+                    message: "Cannot remove the Super Admin role from the Super Admins group"
+                }
+            };
+        }
+
         // Remove the role mapping
         error? result = storage:removeRoleFromGroup(mappingId);
         if result is error {
@@ -2049,6 +2110,9 @@ service /auth on httpListener {
         // Validate required fields
         if username.trim().length() == 0 {
             return utils:createBadRequestError("Username is required");
+        }
+        if !re`^[a-zA-Z0-9_.]+$`.isFullMatch(username) {
+            return utils:createBadRequestError("Username may only contain letters, digits, underscores, and dots");
         }
         if password.trim().length() == 0 {
             return utils:createBadRequestError("Password is required");
@@ -2688,7 +2752,7 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function delete orgs/[string orgHandle]/roles/[string roleId](http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+    isolated resource function delete orgs/[string orgHandle]/roles/[string roleId](http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:Conflict|http:InternalServerError|error {
         log:printInfo("Deleting role", orgHandle = orgHandle, roleId = roleId);
 
         // Permission check: org-level role management
@@ -2710,8 +2774,20 @@ service /auth on httpListener {
             };
         }
 
-        // TODO: Check if role is assigned to any groups
-        // For now, delete will cascade due to foreign key constraints
+        // Guard: prevent deletion of roles that are still mapped to groups
+        int|error groupMappingCount = storage:getRoleMappedGroupCount(roleId);
+        if groupMappingCount is error {
+            log:printError("Error checking group mappings for role", groupMappingCount, roleId = roleId);
+            return utils:createInternalServerError("Error checking role group assignments");
+        }
+        if groupMappingCount > 0 {
+            log:printWarn("Attempted to delete role with active group mappings", roleId = roleId, groupCount = groupMappingCount);
+            return <http:Conflict>{
+                body: {
+                    message: string `Role is assigned to ${groupMappingCount} group(s) and cannot be deleted. Remove the role from all groups first.`
+                }
+            };
+        }
 
         // Delete the role
         error? deleteResult = storage:deleteRoleV2(roleId);

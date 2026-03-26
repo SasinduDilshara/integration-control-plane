@@ -18,9 +18,10 @@
 
 import { Alert, Button, Grid, IconButton, PageContent, Stack, TextField, Typography } from '@wso2/oxygen-ui';
 import { ArrowLeft, Edit } from '@wso2/oxygen-ui-icons-react';
-import { useState, type JSX } from 'react';
+import { useState, useEffect, useRef, type JSX } from 'react';
 import { useNavigate } from 'react-router';
 import { useCreateProject, type CreateProjectInput } from '../api/mutations';
+import { useProjectHandlerAvailability } from '../api/queries';
 import { resourceUrl, narrow, type OrgScope } from '../nav';
 
 function toHandler(name: string) {
@@ -37,9 +38,23 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
   const [handler, setHandler] = useState('');
   const [handlerEdited, setHandlerEdited] = useState(false);
   const [description, setDescription] = useState('');
+  const [debouncedHandler, setDebouncedHandler] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mutation = useCreateProject();
 
   const effectiveHandler = handlerEdited ? handler : toHandler(displayName);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedHandler(effectiveHandler), 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [effectiveHandler]);
+
+  const handlerMissing = !effectiveHandler.trim() && (!!displayName.trim() || handlerEdited);
+  const availability = useProjectHandlerAvailability(1, debouncedHandler);
+  const handlerTaken = debouncedHandler !== '' && availability.data?.handlerUnique === false;
 
   const errorMessage = mutation.error?.message?.toLowerCase() || '';
   const isDuplicateError = !!mutation.error && (/already taken/i.test(mutation.error.message) || errorMessage.includes('already exists') || errorMessage.includes('duplicate'));
@@ -109,6 +124,8 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
             }}
             fullWidth
             disabled={!handlerEdited}
+            error={handlerMissing || handlerTaken}
+            helperText={handlerMissing ? 'Name must include at least one letter or number.' : handlerTaken ? 'This handler is already taken. Please choose a different one.' : undefined}
             slotProps={{
               htmlInput: { 'aria-label': 'Name' },
               input: {
@@ -138,7 +155,7 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
         <Button variant="outlined" onClick={() => navigate(resourceUrl(scope, 'overview'))}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={submit} disabled={!displayName.trim() || mutation.isPending}>
+        <Button variant="contained" onClick={submit} disabled={!displayName.trim() || handlerMissing || mutation.isPending || handlerTaken}>
           Create
         </Button>
       </Stack>

@@ -30,12 +30,79 @@ import type { Role } from '../../api/auth';
 import { Loading } from './shared';
 import { useFiltered } from './utils';
 
-function RoleUserCount({ orgHandler, roleId, projectId, componentId }: { orgHandler: string; roleId: string; projectId?: string; componentId?: string }) {
-  const { data: roleGroups = [], isLoading: loadingGroups } = useRoleGroups(orgHandler, roleId, projectId, componentId);
+function RoleRow({
+  r,
+  orgHandler,
+  projectId,
+  componentId,
+  effectiveReadOnly,
+  getRoleDetailUrl,
+  onDeleteClick,
+}: {
+  r: Role;
+  orgHandler: string;
+  projectId?: string;
+  componentId?: string;
+  effectiveReadOnly: boolean;
+  getRoleDetailUrl: (roleId: string) => string;
+  onDeleteClick: (r: Role) => void;
+}) {
+  const navigate = useNavigate();
+  const { data: roleGroups = [], isLoading: loadingGroups } = useRoleGroups(orgHandler, r.roleId, projectId, componentId);
   const { data: users = [], isLoading: loadingUsers } = useUsers(orgHandler);
-  if (loadingGroups || loadingUsers) return <>—</>;
+  const hasGroupMappings = roleGroups.length > 0;
   const roleGroupIds = new Set(roleGroups.map((g) => g.groupId));
-  return <>{users.filter((u) => u.groups.some((g) => roleGroupIds.has(g.groupId))).length}</>;
+  const assignedUserCount = loadingGroups || loadingUsers ? null : users.filter((u) => u.groups.some((g) => roleGroupIds.has(g.groupId))).length;
+
+  return (
+    <ListingTable.Row
+      key={r.roleId}
+      clickable
+      hover
+      tabIndex={0}
+      aria-label={`View details for ${r.roleName}`}
+      onClick={() => navigate(getRoleDetailUrl(r.roleId))}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          if (e.key === ' ') e.preventDefault();
+          navigate(getRoleDetailUrl(r.roleId));
+        }
+      }}>
+      <ListingTable.Cell>{r.roleName}</ListingTable.Cell>
+      <ListingTable.Cell>{r.description}</ListingTable.Cell>
+      <ListingTable.Cell>{assignedUserCount === null ? <>—</> : assignedUserCount}</ListingTable.Cell>
+      <ListingTable.Cell align="right">
+        <Tooltip title="Edit">
+          <IconButton
+            size="small"
+            aria-label={`Edit ${r.roleName}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(getRoleDetailUrl(r.roleId));
+            }}>
+            <Pencil size={16} />
+          </IconButton>
+        </Tooltip>
+        {!effectiveReadOnly && (
+          <Tooltip title={hasGroupMappings ? 'Cannot delete roles assigned to groups' : 'Delete'}>
+            <span>
+              <IconButton
+                size="small"
+                color="error"
+                disabled={hasGroupMappings}
+                aria-label={`Delete ${r.roleName}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteClick(r);
+                }}>
+                <Trash2 size={16} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+      </ListingTable.Cell>
+    </ListingTable.Row>
+  );
 }
 
 export function RolesTab({ orgHandler, projectId, projectHandler, componentHandler, readOnly }: { orgHandler: string; projectId?: string; projectHandler?: string; componentHandler?: string; readOnly?: boolean }): JSX.Element {
@@ -108,54 +175,7 @@ export function RolesTab({ orgHandler, projectId, projectHandler, componentHandl
                 </ListingTable.Cell>
               </ListingTable.Row>
             ) : (
-              paginated.map((r) => (
-                <ListingTable.Row
-                  key={r.roleId}
-                  clickable
-                  hover
-                  tabIndex={0}
-                  aria-label={`View details for ${r.roleName}`}
-                  onClick={() => navigate(getRoleDetailUrl(r.roleId))}
-                  onKeyDown={(e) => {
-                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                      if (e.key === ' ') e.preventDefault();
-                      navigate(getRoleDetailUrl(r.roleId));
-                    }
-                  }}>
-                  <ListingTable.Cell>{r.roleName}</ListingTable.Cell>
-                  <ListingTable.Cell>{r.description}</ListingTable.Cell>
-                  <ListingTable.Cell>
-                    <RoleUserCount orgHandler={orgHandler} roleId={r.roleId} projectId={projectId} componentId={componentId} />
-                  </ListingTable.Cell>
-                  <ListingTable.Cell align="right">
-                    <Tooltip title="Edit">
-                      <IconButton
-                        size="small"
-                        aria-label={`Edit ${r.roleName}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(getRoleDetailUrl(r.roleId));
-                        }}>
-                        <Pencil size={16} />
-                      </IconButton>
-                    </Tooltip>
-                    {!effectiveReadOnly && (
-                      <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          aria-label={`Delete ${r.roleName}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingRole(r);
-                          }}>
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </ListingTable.Cell>
-                </ListingTable.Row>
-              ))
+              paginated.map((r) => <RoleRow key={r.roleId} r={r} orgHandler={orgHandler} projectId={projectId} componentId={componentId} effectiveReadOnly={effectiveReadOnly} getRoleDetailUrl={getRoleDetailUrl} onDeleteClick={setDeletingRole} />)
             )}
           </ListingTable.Body>
         </ListingTable>

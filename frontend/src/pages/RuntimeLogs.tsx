@@ -40,7 +40,7 @@ const TIME_PRESETS: { label: string; hours: number }[] = [
 ];
 const DEFAULT_HOURS = 720; // 30 days fallback when filter cleared
 const AUTO_FETCH_INTERVAL = 10_000;
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 500;
 
 const LEVEL_COLORS: Record<string, string> = { ERROR: '#e53935', WARN: '#f9a825', INFO: '#1e88e5', DEBUG: '#78909c' };
 
@@ -449,6 +449,12 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
         </Stack>
       )}
 
+      {filteredLogs.length > 0 && !isLoading && (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5, textAlign: 'right' }}>
+          {filteredLogs.length} {filteredLogs.length === 1 ? 'entry' : 'entries'} loaded{hasNextPage ? ' — scroll or click "Load more" for additional results' : ''}
+        </Typography>
+      )}
+
       {isLoading ? (
         <CircularProgress size={28} sx={{ display: 'block', mx: 'auto', my: 6 }} />
       ) : error ? (
@@ -494,9 +500,14 @@ export default function RuntimeLogs(scope: ProjectScope | ComponentScope): JSX.E
           ))}
           <div ref={sentinelRef} />
           {isFetchingNextPage && <CircularProgress size={20} sx={{ display: 'block', mx: 'auto', my: 1 }} />}
+          {hasNextPage && !isFetchingNextPage && (
+            <Button variant="text" size="small" onClick={() => fetchNextPage()} sx={{ display: 'block', mx: 'auto', my: 1 }}>
+              Load more
+            </Button>
+          )}
           {!hasNextPage && filteredLogs.length > 0 && (
             <Typography variant="body2" color="text.secondary" textAlign="center" sx={{ py: 1 }}>
-              End of logs
+              Showing {filteredLogs.length} log {filteredLogs.length === 1 ? 'entry' : 'entries'}
             </Typography>
           )}
         </Stack>

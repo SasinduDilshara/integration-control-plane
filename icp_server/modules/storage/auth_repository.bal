@@ -108,6 +108,22 @@ public isolated function getSuperAdminsGroupId() returns string|error {
     return row.group_id;
 }
 
+// Return the role_id of the built-in "Super Admin" role for the default org.
+// This role is seeded by the DB init scripts and is always present.
+public isolated function getSuperAdminRoleId() returns string|error {
+    record {|string role_id;|}|sql:Error row = dbClient->queryRow(
+        `SELECT role_id FROM roles_v2
+         WHERE role_name = 'Super Admin' AND org_id = ${DEFAULT_ORG_ID}`
+    );
+    if row is sql:NoRowsError {
+        return error("Super Admin role not found in database");
+    }
+    if row is sql:Error {
+        return row;
+    }
+    return row.role_id;
+}
+
 // Get all groups for an organization
 public isolated function getGroupsByOrgId(int orgId) returns types:Group[]|error {
     log:printDebug(string `Fetching groups for orgId: ${orgId}`);
@@ -153,6 +169,38 @@ public isolated function updateGroup(string groupId, types:GroupInput input) ret
 
     log:printInfo(string `Successfully updated group ${groupId}`);
     return ();
+}
+
+// Get the number of groups a role is mapped to
+public isolated function getRoleMappedGroupCount(string roleId) returns int|error {
+    log:printDebug(string `Counting group mappings for role: ${roleId}`);
+
+    int|sql:Error result = dbClient->queryRow(
+        `SELECT COUNT(*) FROM group_role_mapping WHERE role_id = ${roleId}`
+    );
+
+    if result is sql:Error {
+        log:printError(string `Failed to count group mappings for role ${roleId}`, 'error = result);
+        return error("Failed to count group mappings", result);
+    }
+
+    return result;
+}
+
+// Get role mapping count for a group
+public isolated function getGroupRoleMappingCount(string groupId) returns int|error {
+    log:printDebug(string `Counting role mappings for group: ${groupId}`);
+
+    int|sql:Error result = dbClient->queryRow(
+        `SELECT COUNT(*) FROM group_role_mapping WHERE group_id = ${groupId}`
+    );
+
+    if result is sql:Error {
+        log:printError(string `Failed to count role mappings for group ${groupId}`, 'error = result);
+        return error("Failed to count role mappings", result);
+    }
+
+    return result;
 }
 
 // Delete a group

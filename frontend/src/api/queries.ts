@@ -85,6 +85,32 @@ export function useProjectByHandler(handler: string) {
   });
 }
 
+const PROJECT_HANDLER_AVAILABILITY_QUERY = `
+  query ProjectHandlerAvailability($orgId: Int!, $projectHandlerCandidate: String!) {
+    projectHandlerAvailability(orgId: $orgId, projectHandlerCandidate: $projectHandlerCandidate) {
+      handlerUnique
+      alternateHandlerCandidate
+    }
+  }
+`;
+
+export interface GqlProjectHandlerAvailability {
+  handlerUnique: boolean;
+  alternateHandlerCandidate: string | null;
+}
+
+export function useProjectHandlerAvailability(orgId: number, handler: string) {
+  return useQuery({
+    queryKey: ['project', 'handler-availability', orgId, handler],
+    queryFn: () =>
+      gql<{ projectHandlerAvailability: GqlProjectHandlerAvailability }>(PROJECT_HANDLER_AVAILABILITY_QUERY, {
+        orgId,
+        projectHandlerCandidate: handler,
+      }).then((d) => d.projectHandlerAvailability),
+    enabled: !!handler,
+  });
+}
+
 export function useComponents(orgHandler: string, projectId: string) {
   return useQuery({
     queryKey: ['components', orgHandler, projectId],

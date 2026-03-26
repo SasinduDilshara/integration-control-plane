@@ -36,9 +36,13 @@ export default function CreateUser(): JSX.Element {
   const backUrl = orgAccessControlUrl(orgHandler, 'users');
 
   const submit = () => {
+    const USERNAME_PATTERN = /^[a-zA-Z0-9_.]+$/;
     let valid = true;
     if (!username.trim()) {
       setUsernameError('Username is required');
+      valid = false;
+    } else if (!USERNAME_PATTERN.test(username.trim())) {
+      setUsernameError('Username may only contain letters, digits, underscores ( _ ), and dots ( . )');
       valid = false;
     } else {
       setUsernameError('');

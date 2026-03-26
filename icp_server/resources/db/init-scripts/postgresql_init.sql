@@ -106,12 +106,12 @@ CREATE TABLE projects (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_projects_owner FOREIGN KEY (owner_id) REFERENCES users (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_projects_org FOREIGN KEY (org_id) REFERENCES organizations (org_id) ON DELETE RESTRICT,
-    CONSTRAINT uk_project_name_org UNIQUE (org_id, name) -- Allow same name in different orgs
+    CONSTRAINT uk_project_name_org UNIQUE (org_id, name), -- Allow same name in different orgs
+    CONSTRAINT uk_project_handler_org UNIQUE (org_id, handler) -- Enforce unique handler per org
 );
 
 CREATE INDEX idx_proj_owner_id ON projects(owner_id);
 CREATE INDEX idx_proj_org_id ON projects(org_id);
-CREATE INDEX idx_proj_handler ON projects(handler);
 
 CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -176,7 +176,8 @@ CREATE TABLE user_groups (
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_user_groups_org FOREIGN KEY (org_uuid) REFERENCES organizations(org_id) ON DELETE CASCADE
+    CONSTRAINT fk_user_groups_org FOREIGN KEY (org_uuid) REFERENCES organizations(org_id) ON DELETE CASCADE,
+    CONSTRAINT unique_group_name_org UNIQUE (group_name, org_uuid)
 );
 
 CREATE INDEX idx_ug_org_uuid ON user_groups(org_uuid);
