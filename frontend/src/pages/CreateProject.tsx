@@ -52,8 +52,7 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
     };
   }, [effectiveHandler]);
 
-  const handlerMissing = !effectiveHandler.trim() && (!!displayName.trim() || handlerEdited);
-
+  const handlerMissing = !effectiveHandler.trim();
   const availability = useProjectHandlerAvailability(1, debouncedHandler);
   const handlerTaken = debouncedHandler !== '' && availability.data?.handlerUnique === false;
 
