@@ -32,7 +32,7 @@ Using `agents.md > Deployment`:
 
 If setup fails, **report the failure and stop** — do not proceed with a broken environment.
 
-## Step 3: Reproduce the Bug
+## Step 3: Reproduce the Bug (**THIS IS A MANDATORY STEP**, REPRODUCE THS ISSUE ALWAYS, INSTEAD OF RELYING ON CODE INSPECTION ALONE)
 
 Using `agents.md > Feature Inventory`, locate the feature referenced in the issue.
 
@@ -55,7 +55,7 @@ Search for existing unit and integration tests covering the affected code path. 
 
 ## Step 6: Write the Output Artifact
 
-Create the directory `.ai/` at the repo root if it doesn't exist. Write the analysis to `.ai/issue-analysis.md` using this exact format:
+Create the directory `.ai/` at the repo root if it doesn't exist. Write the analysis to `.ai/issue-analysis_<issue_number>.md` using this exact format:
 
 ```markdown
 # Issue Analysis — [Issue #ID]: [Issue Title]
@@ -77,8 +77,7 @@ Create the directory `.ai/` at the repo root if it doesn't exist. Write the anal
 - **Logs/Evidence:** [attached or inline]
 
 ## Root Cause Hypothesis
-Brief analysis of what is likely causing the bug based on code inspection
-and reproduction results.
+Brief analysis of what is likely causing the bug based on reproduction results.
 
 ## Test Coverage Assessment
 - **Existing tests covering this path:** [list with pass/fail status]
