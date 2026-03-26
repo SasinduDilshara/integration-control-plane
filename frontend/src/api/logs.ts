@@ -109,11 +109,18 @@ export async function fetchLogs(req: LogsRequest): Promise<LogRow[]> {
   }
 }
 
+function shiftTimestamp(ts: string, sort: 'asc' | 'desc'): string {
+  const ms = new Date(ts).getTime();
+  return new Date(sort === 'desc' ? ms - 1 : ms + 1).toISOString();
+}
+
 export function useInfiniteLogs(req: LogsRequest | null, refetchInterval: number | false = false) {
   return useInfiniteQuery({
     queryKey: ['logs', req],
     queryFn: async ({ pageParam }) => {
-      const pageReq = pageParam ? { ...req!, ...(req!.sort === 'desc' ? { endTime: pageParam } : { startTime: pageParam }) } : req!;
+      const pageReq = pageParam
+        ? { ...req!, ...(req!.sort === 'desc' ? { endTime: shiftTimestamp(pageParam, 'desc') } : { startTime: shiftTimestamp(pageParam, 'asc') }) }
+        : req!;
       return fetchLogs(pageReq);
     },
     initialPageParam: undefined as string | undefined,
