@@ -37,6 +37,8 @@ If setup fails, **report the failure and stop** — do not proceed with a broken
 Using `agents.md > Feature Inventory`, locate the feature referenced in the issue.
 
 1. Follow the reproduction steps from the issue (or infer reasonable steps if not provided).
+2. Use Deployment instructions in the CLAUDE.md and the `specs/Deployement.md` to execute the reproduction steps.
+3. **If the issue is involving frontend, then you should run the backend and frontend locally, and use the frontend to reproduce the issue**. **If the issue is involving only backend, then you can run the backend and use curl or Postman to reproduce the issue**.
 2. Capture all logs, error output, and HTTP responses.
 3. Record expected vs. actual behavior.
 
