@@ -76,12 +76,15 @@ function GroupRow({ g, orgHandler, projectId, componentId, effectiveReadOnly, ge
           </IconButton>
         </Tooltip>
         {!effectiveReadOnly && (
-          <Tooltip title={hasRoleMappings ? "Cannot delete groups with mapped roles" : "Delete"}>
+          <Tooltip title={
+            g.groupName === 'Super Admins' ? "The Super Admins group cannot be deleted" :
+            hasRoleMappings ? "Cannot delete groups with mapped roles" : "Delete"
+          }>
             <span>
               <IconButton
                 size="small"
                 color="error"
-                disabled={hasRoleMappings}
+                disabled={g.groupName === 'Super Admins' || hasRoleMappings}
                 aria-label={`Delete ${g.groupName}`}
                 onClick={(e) => {
                   e.stopPropagation();

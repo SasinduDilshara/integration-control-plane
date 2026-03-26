@@ -1130,6 +1130,21 @@ service /auth on httpListener {
             };
         }
 
+        // Guard: prevent deletion of the built-in Super Admins group
+        string|error superAdminsGroupId = storage:getSuperAdminsGroupId();
+        if superAdminsGroupId is error {
+            log:printError("Could not resolve Super Admins group ID", superAdminsGroupId);
+            return utils:createInternalServerError("Could not resolve Super Admins group");
+        }
+        if groupId == superAdminsGroupId {
+            log:printWarn("Attempted to delete the Super Admins group", groupId = groupId, userId = userContext.userId);
+            return <http:Forbidden>{
+                body: {
+                    message: "The Super Admins group cannot be deleted"
+                }
+            };
+        }
+
         // Check if group has mapped roles before deleting
         int|error roleMappingCount = storage:getGroupRoleMappingCount(groupId);
         if roleMappingCount is error {
@@ -1781,6 +1796,27 @@ service /auth on httpListener {
             return <http:Forbidden>{
                 body: {
                     message: "You do not have permission to remove roles at this scope"
+                }
+            };
+        }
+
+        // Guard: prevent removing the org-level Super Admin role from the Super Admins group
+        string|error superAdminsGroupId = storage:getSuperAdminsGroupId();
+        if superAdminsGroupId is error {
+            log:printError("Could not resolve Super Admins group ID", superAdminsGroupId);
+            return utils:createInternalServerError("Could not resolve Super Admins group");
+        }
+        string|error superAdminRoleId = storage:getSuperAdminRoleId();
+        if superAdminRoleId is error {
+            log:printError("Could not resolve Super Admin role ID", superAdminRoleId);
+            return utils:createInternalServerError("Could not resolve Super Admin role");
+        }
+        if groupId == superAdminsGroupId && mapping.roleId == superAdminRoleId && mapping.projectUuid is () {
+            log:printWarn("Attempted to remove Super Admin role from Super Admins group",
+                    mappingId = mappingId, groupId = groupId, userId = userContext.userId);
+            return <http:Forbidden>{
+                body: {
+                    message: "Cannot remove the Super Admin role from the Super Admins group"
                 }
             };
         }

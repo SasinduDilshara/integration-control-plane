@@ -108,6 +108,22 @@ public isolated function getSuperAdminsGroupId() returns string|error {
     return row.group_id;
 }
 
+// Return the role_id of the built-in "Super Admin" role for the default org.
+// This role is seeded by the DB init scripts and is always present.
+public isolated function getSuperAdminRoleId() returns string|error {
+    record {|string role_id;|}|sql:Error row = dbClient->queryRow(
+        `SELECT role_id FROM roles_v2
+         WHERE role_name = 'Super Admin' AND org_id = ${DEFAULT_ORG_ID}`
+    );
+    if row is sql:NoRowsError {
+        return error("Super Admin role not found in database");
+    }
+    if row is sql:Error {
+        return row;
+    }
+    return row.role_id;
+}
+
 // Get all groups for an organization
 public isolated function getGroupsByOrgId(int orgId) returns types:Group[]|error {
     log:printDebug(string `Fetching groups for orgId: ${orgId}`);

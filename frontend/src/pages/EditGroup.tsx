@@ -425,14 +425,22 @@ export function GroupDetailView({ orgHandler, group, onBack, projectId, componen
                       </ListingTable.Cell>
                       {canModifyRoles && (
                         <ListingTable.Cell align="right">
-                          <Tooltip title={componentId ? (!r.integrationUuid ? 'Org/Project-level mapping' : 'Remove') : projectId && !r.projectUuid ? 'Org-level mapping' : 'Remove'}>
+                          <Tooltip title={
+                          group.groupName === 'Super Admins' && r.roleName === 'Super Admin' && !r.projectUuid
+                            ? 'Cannot remove the Super Admin role from the Super Admins group'
+                            : componentId ? (!r.integrationUuid ? 'Org/Project-level mapping' : 'Remove')
+                            : projectId && !r.projectUuid ? 'Org-level mapping' : 'Remove'
+                        }>
                             <span style={{ display: 'inline-flex' }}>
                               <IconButton
                                 size="small"
                                 color="error"
                                 aria-label={`Remove ${r.roleName} from group`}
                                 onClick={() => setRemovingRole({ id: r.id, roleName: r.roleName })}
-                                disabled={componentId ? !r.integrationUuid : Boolean(projectId && !r.projectUuid)}>
+                                disabled={
+                                  (group.groupName === 'Super Admins' && r.roleName === 'Super Admin' && !r.projectUuid) ||
+                                  (componentId ? !r.integrationUuid : Boolean(projectId && !r.projectUuid))
+                                }>
                                 <Trash2 size={16} />
                               </IconButton>
                             </span>
