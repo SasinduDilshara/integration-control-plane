@@ -81,11 +81,9 @@ CREATE TABLE projects (
     CONSTRAINT fk_projects_owner FOREIGN KEY (owner_id) REFERENCES users (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_projects_org FOREIGN KEY (org_id) REFERENCES organizations (org_id) ON DELETE RESTRICT,
     UNIQUE KEY uk_project_name_org (org_id, name), -- Allow same name in different orgs
+    UNIQUE KEY uk_project_handler_org (org_id, handler),
     INDEX idx_owner_id (owner_id),
-    INDEX idx_org_id (org_id),
-    INDEX idx_handler (
-        handler
-    )
+    INDEX idx_org_id (org_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
 
 -- Components belong to projects; users create components.

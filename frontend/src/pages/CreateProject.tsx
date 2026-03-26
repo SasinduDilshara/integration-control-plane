@@ -48,7 +48,7 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
     mutation.error?.message === 'Failed to fetch'
       ? 'Unable to connect to the server. Please check that the server is running and try again.'
       : isDuplicateError
-        ? 'A project with this name already exists. Please choose a different name.'
+        ? 'A project with this name already exists. Please choose a different name or handler.'
         : mutation.error?.message;
 
   const resetError = () => {

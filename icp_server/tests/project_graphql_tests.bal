@@ -231,7 +231,279 @@ function testCreateProjectNoPermission() returns error? {
 }
 
 // =============================================================================
-// Test 6: Update project - Success with project_mgt:edit permission
+// Test 6: Create project - Fails with duplicate handler
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "create-project"],
+    dependsOn: [testCreateProjectSuccess]
+}
+function testCreateProjectDuplicateHandler() returns error? {
+    string mutation = string `
+        mutation CreateProject($project: ProjectInput!) {
+            createProject(project: $project) {
+                id
+                name
+            }
+        }
+    `;
+
+    // Use a DIFFERENT name but the SAME handler as the project created in testCreateProjectSuccess
+    json variables = {
+        project: {
+            name: "different-name-same-handler",
+            orgHandler: "default",
+            projectHandler: "test-project-graphql",
+            description: "This should fail due to duplicate handler",
+            orgId: 1
+        }
+    };
+
+    json response = check executeGraphQL(mutation, orgAdminToken, variables);
+
+    // Should return error
+    test:assertTrue(response.errors is json, "Mutation should return error for duplicate handler");
+
+    json[] errors = check response.errors.ensureType();
+    test:assertTrue(errors.length() > 0, "Should have at least one error");
+
+    // Verify the error message mentions handler
+    string errorMsg = (check errors[0].message).toString().toLowerAscii();
+    test:assertTrue(
+        errorMsg.includes("handler") && errorMsg.includes("already exists"),
+        string `Error should mention handler already exists, got: ${errorMsg}`
+    );
+}
+
+// =============================================================================
+// Test 7: Create project - Fails with duplicate handler from test data
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "create-project"]
+}
+function testCreateProjectDuplicateHandlerFromTestData() returns error? {
+    string mutation = string `
+        mutation CreateProject($project: ProjectInput!) {
+            createProject(project: $project) {
+                id
+                name
+            }
+        }
+    `;
+
+    // Use the handler from existing test data project "Sample Project"
+    json variables = {
+        project: {
+            name: "Another Project With Same Handler",
+            orgHandler: "default",
+            projectHandler: "sample-project",
+            description: "This should fail - sample-project handler already exists",
+            orgId: 1
+        }
+    };
+
+    json response = check executeGraphQL(mutation, orgAdminToken, variables);
+
+    // Should return error
+    test:assertTrue(response.errors is json, "Mutation should return error for duplicate handler from test data");
+
+    json[] errors = check response.errors.ensureType();
+    test:assertTrue(errors.length() > 0, "Should have at least one error");
+
+    string errorMsg = (check errors[0].message).toString().toLowerAscii();
+    test:assertTrue(
+        errorMsg.includes("handler") && errorMsg.includes("already exists"),
+        string `Error should mention handler already exists, got: ${errorMsg}`
+    );
+}
+
+// =============================================================================
+// Test 8: Create project - Duplicate handler includes alternate suggestion
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "create-project"]
+}
+function testCreateProjectDuplicateHandlerSuggestion() returns error? {
+    string mutation = string `
+        mutation CreateProject($project: ProjectInput!) {
+            createProject(project: $project) {
+                id
+                name
+            }
+        }
+    `;
+
+    json variables = {
+        project: {
+            name: "Suggestion Test",
+            orgHandler: "default",
+            projectHandler: "sample-project",
+            description: "This should fail and suggest an alternate handler",
+            orgId: 1
+        }
+    };
+
+    json response = check executeGraphQL(mutation, orgAdminToken, variables);
+
+    test:assertTrue(response.errors is json, "Mutation should return error for duplicate handler");
+
+    json[] errors = check response.errors.ensureType();
+    string errorMsg = (check errors[0].message).toString();
+
+    // Error message should include an alternate handler suggestion
+    test:assertTrue(
+        errorMsg.includes("Try"),
+        string `Error should include alternate handler suggestion, got: ${errorMsg}`
+    );
+}
+
+// =============================================================================
+// Test 9: Create project - Duplicate name rejected
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "create-project"],
+    dependsOn: [testCreateProjectSuccess]
+}
+function testCreateProjectDuplicateName() returns error? {
+    string mutation = string `
+        mutation CreateProject($project: ProjectInput!) {
+            createProject(project: $project) {
+                id
+                name
+            }
+        }
+    `;
+
+    // Same name as testCreateProjectSuccess but different handler
+    json variables = {
+        project: {
+            name: "test-project-graphql",
+            orgHandler: "default",
+            projectHandler: "different-handler",
+            description: "This should fail due to duplicate name",
+            orgId: 1
+        }
+    };
+
+    json response = check executeGraphQL(mutation, orgAdminToken, variables);
+
+    // Should return error for duplicate name (DB constraint)
+    test:assertTrue(response.errors is json, "Mutation should return error for duplicate name");
+
+    json[] errors = check response.errors.ensureType();
+    test:assertTrue(errors.length() > 0, "Should have at least one error");
+
+    string errorMsg = (check errors[0].message).toString().toLowerAscii();
+    test:assertTrue(
+        errorMsg.includes("already exists"),
+        string `Error should mention project already exists, got: ${errorMsg}`
+    );
+}
+
+// =============================================================================
+// Test 10: Original project unaffected after duplicate handler attempt
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "create-project"],
+    dependsOn: [testCreateProjectDuplicateHandlerFromTestData]
+}
+function testOriginalProjectUnaffectedAfterDuplicateAttempt() returns error? {
+    // After the duplicate handler attempt, verify the original project is still accessible
+    string query = string `
+        query {
+            projects {
+                id
+                name
+                handler
+            }
+        }
+    `;
+
+    json response = check executeGraphQL(query, orgAdminToken);
+
+    test:assertFalse(response.errors is json, "Query should not return errors");
+
+    json data = check response.data;
+    json projectsJson = check data.projects;
+    json[] projects = check projectsJson.ensureType();
+
+    // Count projects with handler "sample-project" — should be exactly 1
+    int sampleProjectCount = 0;
+    foreach json project in projects {
+        string handler = check project.handler;
+        if handler == "sample-project" {
+            sampleProjectCount += 1;
+        }
+    }
+    test:assertEquals(sampleProjectCount, 1, "There should be exactly one project with handler 'sample-project'");
+}
+
+// =============================================================================
+// Test 11: Handler availability - returns false for taken handler
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "handler-availability"]
+}
+function testHandlerAvailabilityTaken() returns error? {
+    string query = string `
+        query {
+            projectHandlerAvailability(orgId: 1, projectHandlerCandidate: "sample-project") {
+                handlerUnique
+                alternateHandlerCandidate
+            }
+        }
+    `;
+
+    json response = check executeGraphQL(query, orgAdminToken);
+
+    test:assertFalse(response.errors is json, "Query should not return errors");
+
+    json data = check response.data;
+    json availability = check data.projectHandlerAvailability;
+
+    boolean handlerUnique = check availability.handlerUnique;
+    test:assertFalse(handlerUnique, "Handler 'sample-project' should not be unique (already taken)");
+
+    // Should provide an alternate suggestion
+    json? alternate = check availability.alternateHandlerCandidate;
+    test:assertTrue(alternate is string, "Should provide an alternate handler candidate");
+}
+
+// =============================================================================
+// Test 12: Handler availability - returns true for available handler
+// =============================================================================
+
+@test:Config {
+    groups: ["project-graphql", "handler-availability"]
+}
+function testHandlerAvailabilityFree() returns error? {
+    string query = string `
+        query {
+            projectHandlerAvailability(orgId: 1, projectHandlerCandidate: "completely-new-handler") {
+                handlerUnique
+                alternateHandlerCandidate
+            }
+        }
+    `;
+
+    json response = check executeGraphQL(query, orgAdminToken);
+
+    test:assertFalse(response.errors is json, "Query should not return errors");
+
+    json data = check response.data;
+    json availability = check data.projectHandlerAvailability;
+
+    boolean handlerUnique = check availability.handlerUnique;
+    test:assertTrue(handlerUnique, "Handler 'completely-new-handler' should be unique (available)");
+}
+
+// =============================================================================
+// Test 13: Update project - Success with project_mgt:edit permission
 // =============================================================================
 
 @test:Config {
@@ -266,7 +538,7 @@ function testUpdateProjectSuccess() returns error? {
 }
 
 // =============================================================================
-// Test 7: Delete project - Fails without project_mgt:manage permission
+// Test 14: Delete project - Fails without project_mgt:manage permission
 // =============================================================================
 
 @test:Config {

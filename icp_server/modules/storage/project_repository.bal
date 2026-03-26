@@ -54,6 +54,15 @@ public isolated function createProject(types:ProjectInput project, types:UserCon
         return error("Project handler is required");
     }
 
+    // Check handler uniqueness before attempting insert
+    types:ProjectHandlerAvailability availability = check checkProjectHandlerAvailability(project.orgId, handler);
+    if !availability.handlerUnique {
+        string suggestion = availability.alternateHandlerCandidate is string
+            ? string ` Try "${<string>availability.alternateHandlerCandidate}" instead.`
+            : "";
+        return error(string `A project with this handler already exists in this organization.${suggestion}`);
+    }
+
     // Convert deployment pipeline IDs array to JSON string if provided
     string? deploymentPipelineIdsJson = ();
     string[]? pipelineIds = project?.deploymentPipelineIds;
@@ -146,7 +155,7 @@ public isolated function createProject(types:ProjectInput project, types:UserCon
         // RBAC setup errors arrive as plain errors with their own messages via `fail`.
         if e is sql:Error {
             match classifySqlError(e) {
-                DUPLICATE_KEY => { return error("A project with this name already exists in this organization", e); }
+                DUPLICATE_KEY => { return error("A project with this name or handler already exists in this organization", e); }
                 VALUE_TOO_LONG => { return error("The provided value exceeds the maximum allowed length", e); }
                 FOREIGN_KEY_VIOLATION => { return error("Cannot complete the operation due to a dependency constraint", e); }
                 _ => { return error("An unexpected error occurred. Please contact your administrator.", e); }
@@ -328,7 +337,7 @@ public isolated function updateProjectWithInput(types:ProjectUpdateInput project
         log:printError(string `Failed to update project ${project.id}`, 'error = e);
         if e is sql:Error {
             match classifySqlError(e) {
-                DUPLICATE_KEY => { return error("A project with this name already exists in this organization", e); }
+                DUPLICATE_KEY => { return error("A project with this name or handler already exists in this organization", e); }
                 VALUE_TOO_LONG => { return error("The provided value exceeds the maximum allowed length", e); }
                 _ => { return error("An unexpected error occurred. Please contact your administrator.", e); }
             }

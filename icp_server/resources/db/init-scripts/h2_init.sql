@@ -90,14 +90,13 @@ CREATE TABLE projects (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_projects_owner FOREIGN KEY (owner_id) REFERENCES users (user_id) ON DELETE SET NULL,
     CONSTRAINT fk_projects_org FOREIGN KEY (org_id) REFERENCES organizations (org_id) ON DELETE RESTRICT,
-    CONSTRAINT uk_project_name_org UNIQUE (org_id, name)
+    CONSTRAINT uk_project_name_org UNIQUE (org_id, name),
+    CONSTRAINT uk_project_handler_org UNIQUE (org_id, handler)
 );
 
 CREATE INDEX idx_projects_owner_id ON projects (owner_id);
 
 CREATE INDEX idx_projects_org_id ON projects (org_id);
-
-CREATE INDEX idx_projects_handler ON projects ( handler );
 
 CREATE TABLE components (
     component_id CHAR(36) PRIMARY KEY,
