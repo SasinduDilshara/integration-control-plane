@@ -2111,6 +2111,9 @@ service /auth on httpListener {
         if username.trim().length() == 0 {
             return utils:createBadRequestError("Username is required");
         }
+        if !re`^[a-zA-Z0-9_.]+$`.isFullMatch(username) {
+            return utils:createBadRequestError("Username may only contain letters, digits, underscores, and dots");
+        }
         if password.trim().length() == 0 {
             return utils:createBadRequestError("Password is required");
         }
