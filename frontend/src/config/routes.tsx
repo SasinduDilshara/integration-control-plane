@@ -6,6 +6,7 @@ import CreateRole from '../pages/CreateRole';
 import CreateGroup from '../pages/CreateGroup';
 import EditGroup from '../pages/EditGroup';
 import EditEnvironment from '../pages/EditEnvironment';
+import EditProject from '../pages/EditProject';
 import PublicLayout from '../layouts/PublicLayout';
 import PolicyLayout from '../layouts/PolicyLayout';
 import Login from '../pages/Login';
@@ -77,6 +78,7 @@ const routes: AppRoute[] = [
             children: [
               ...generateMatrixRoutes(MATRIX),
               { path: 'organizations/:orgHandler/projects/new', element: createElement(withScope(CreateProject, ['organizations'])) },
+              { path: 'organizations/:orgHandler/projects/:projectId/edit', element: <EditProject /> },
               { path: 'organizations/:orgHandler/projects/:projectHandler/components/new', element: createElement(withScope(CreateComponent, ['projects'])) },
               { path: 'organizations/:orgHandler/environments/new', element: createElement(withScope(CreateEnvironment, ['organizations'])) },
               { path: 'organizations/:orgHandler/environments/:envId/edit', element: <EditEnvironment /> },

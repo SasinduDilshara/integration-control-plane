@@ -40,6 +40,52 @@ export function useCreateProject() {
   });
 }
 
+export interface UpdateProjectInput {
+  id: string;
+  orgId: number;
+  name: string;
+  version: string;
+  description: string;
+}
+
+const UPDATE_PROJECT = `
+  mutation UpdateProject($project: ProjectUpdateInput!) {
+    updateProject(project: $project) {
+      id, orgId, name, version, createdDate, handler, extendedHandler, region,
+      description, owner, labels, defaultDeploymentPipelineId, deploymentPipelineIds,
+      type, gitProvider, gitOrganization, repository, branch, secretRef,
+      ownerId, createdBy, updatedAt, updatedBy
+    }
+  }`;
+
+const DELETE_PROJECT = `
+  mutation DeleteProject($orgId: Int!, $projectId: String!) {
+    deleteProject(orgId: $orgId, projectId: $projectId) {
+      status, details
+    }
+  }`;
+
+export function useUpdateProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProjectInput) =>
+      gql<{ updateProject: GqlProject }>(UPDATE_PROJECT, { project: input }).then((d) => d.updateProject),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.invalidateQueries({ queryKey: ['project'] });
+    },
+  });
+}
+
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ orgId, projectId }: { orgId: number; projectId: string }) =>
+      gql<{ deleteProject: { status: string; details: string } }>(DELETE_PROJECT, { orgId, projectId }).then((d) => d.deleteProject),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  });
+}
+
 // ── Environment CRUD ──
 
 export interface EnvironmentInput {
