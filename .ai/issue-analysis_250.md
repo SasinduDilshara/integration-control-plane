@@ -8,7 +8,7 @@
 
 ## Reproducibility
 - **Reproducible:** Yes
-- **Environment:** branch `main` (commit 3cc18df2), Ballerina 2201.13.1, macOS Darwin 24.0.0, H2 in-memory database
+- **Environment:** branch `main` (commit 3cc18df2), Ballerina 2201.13.1, macOS Darwin 24.0.0, H2 in-memory database (reproduced 2026-03-26)
 - **Steps Executed:**
   1. Built and started the ICP server (`cd icp_server && bal build && bal run`)
   2. Logged in as admin: `POST /auth/login` with `{"username":"admin","password":"admin"}`
@@ -32,6 +32,12 @@
 
   === Missing roleName → 400 Bad Request (correct) ===
   {"message":"data binding failed: required field 'roleName' not present in JSON"}
+
+  === PUT empty roleName → 500 Internal Server Error (should be 400) ===
+  {"message":"Failed to update role"}
+
+  === PUT whitespace roleName → 500 Internal Server Error (should be 400) ===
+  {"message":"Failed to update role"}
   ```
 
 ## Root Cause Hypothesis
