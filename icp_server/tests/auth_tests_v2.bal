@@ -339,6 +339,177 @@ function testCreateRole() returns error? {
     testRoleId = check responseBody.roleId;
 }
 
+// --- Negative tests: roleName validation on create ---
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWithEmptyName() returns error? {
+    json roleRequest = {
+        roleName: "",
+        description: "empty name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for empty roleName");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWithWhitespaceName() returns error? {
+    json roleRequest = {
+        roleName: "   ",
+        description: "whitespace name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for whitespace-only roleName");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWithTabNewlineName() returns error? {
+    json roleRequest = {
+        roleName: "\t\n",
+        description: "tab and newline name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for tab/newline-only roleName");
+}
+
+// --- Positive edge case: valid name with surrounding whitespace ---
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWithPaddedValidName() returns error? {
+    json roleRequest = {
+        roleName: "  Padded Role Name  ",
+        description: "name with leading/trailing spaces"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    // A non-empty trimmed name should be accepted
+    test:assertEquals(response.statusCode, 201, "Expected 201 for roleName with padding but valid content");
+}
+
+// --- Integration test: rejected role not persisted ---
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testCreateRoleWithEmptyName]
+}
+function testEmptyRoleNameNotPersisted() returns error? {
+    // List all roles and verify no role with empty name exists
+    http:Response response = check authV2Client->get(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 200, "Expected 200 for list roles");
+    json responseBody = check response.getJsonPayload();
+    json[] roles = check responseBody.ensureType();
+
+    foreach json role in roles {
+        string roleName = check role.roleName;
+        test:assertFalse(roleName.trim().length() == 0, "No role with empty or whitespace-only name should be persisted");
+    }
+}
+
+// --- Negative tests: roleName validation on update ---
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testUpdateRole]
+}
+function testUpdateRoleWithEmptyName() returns error? {
+    json updateRequest = {
+        roleName: "",
+        description: "empty name update"
+    };
+
+    http:Response response = check authV2Client->put(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles/${testRoleId}`,
+        updateRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for empty roleName on update");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testUpdateRole]
+}
+function testUpdateRoleWithWhitespaceName() returns error? {
+    json updateRequest = {
+        roleName: "   ",
+        description: "whitespace name update"
+    };
+
+    http:Response response = check authV2Client->put(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles/${testRoleId}`,
+        updateRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for whitespace-only roleName on update");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testUpdateRole]
+}
+function testUpdateRoleWithTabNewlineName() returns error? {
+    json updateRequest = {
+        roleName: "\t\n",
+        description: "tab newline name update"
+    };
+
+    http:Response response = check authV2Client->put(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles/${testRoleId}`,
+        updateRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for tab/newline-only roleName on update");
+}
+
 @test:Config {
     groups: ["auth-v2", "roles"],
     dependsOn: [testCreateRole]
