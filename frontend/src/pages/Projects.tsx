@@ -25,11 +25,12 @@ import { useProjects, type GqlProject } from '../api/queries';
 import EmptyListing from '../components/EmptyListing';
 import { formatDistanceToNow } from '../utils/time';
 import { resourceUrl, narrow, newProjectUrl, type OrgScope } from '../nav';
+import { editProjectUrl } from '../paths';
 import { useAccessControl } from '../contexts/AccessControlContext';
 import { Permissions } from '../constants/permissions';
 import Authorized from '../components/Authorized';
 
-function ProjectCard({ project, onClick }: { project: GqlProject; onClick: () => void }) {
+function ProjectCard({ project, onClick, onSettings }: { project: GqlProject; onClick: () => void; onSettings: () => void }) {
   return (
     <Card variant="outlined" sx={{ cursor: 'pointer', '&:hover': { boxShadow: 2 } }} onClick={onClick}>
       <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2.5 }}>
@@ -48,6 +49,7 @@ function ProjectCard({ project, onClick }: { project: GqlProject; onClick: () =>
           aria-label={`Settings for ${project.name}`}
           onClick={(e) => {
             e.stopPropagation();
+            onSettings();
           }}>
           <Settings size={16} />
         </IconButton>
@@ -123,7 +125,7 @@ export default function Projects(scope: OrgScope): JSX.Element {
           <Grid container spacing={2}>
             {paginated.map((p) => (
               <Grid key={p.id} size={{ xs: 12, sm: 6, md: 4 }}>
-                <ProjectCard project={p} onClick={() => navigate(resourceUrl(narrow(scope, p.handler), 'overview'))} />
+                <ProjectCard project={p} onClick={() => navigate(resourceUrl(narrow(scope, p.handler), 'overview'))} onSettings={() => navigate(editProjectUrl(scope.org, p.id))} />
               </Grid>
             ))}
           </Grid>

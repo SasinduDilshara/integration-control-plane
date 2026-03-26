@@ -57,6 +57,10 @@ export function projectUrl(orgHandler: string, projectHandler: string): string {
   return `/organizations/${orgHandler}/projects/${projectHandler}`;
 }
 
+export function editProjectUrl(orgHandler: string, projectId: string): string {
+  return `/organizations/${orgHandler}/projects/${projectId}/edit`;
+}
+
 export function componentUrl(orgHandler: string, projectHandler: string, componentHandler: string): string {
   return `/organizations/${orgHandler}/projects/${projectHandler}/components/${componentHandler}`;
 }
