@@ -52,6 +52,7 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
     };
   }, [effectiveHandler]);
 
+  const handlerMissing = !effectiveHandler.trim();
   const availability = useProjectHandlerAvailability(1, debouncedHandler);
   const handlerTaken = debouncedHandler !== '' && availability.data?.handlerUnique === false;
 
@@ -123,8 +124,8 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
             }}
             fullWidth
             disabled={!handlerEdited}
-            error={handlerTaken}
-            helperText={handlerTaken ? 'This handler is already taken. Please choose a different one.' : undefined}
+            error={handlerMissing || handlerTaken}
+            helperText={handlerMissing ? 'Name must include at least one letter or number.' : handlerTaken ? 'This handler is already taken. Please choose a different one.' : undefined}
             slotProps={{
               htmlInput: { 'aria-label': 'Name' },
               input: {
@@ -154,7 +155,7 @@ export default function CreateProject(scope: OrgScope): JSX.Element {
         <Button variant="outlined" onClick={() => navigate(resourceUrl(scope, 'overview'))}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={submit} disabled={!displayName.trim() || mutation.isPending || handlerTaken}>
+        <Button variant="contained" onClick={submit} disabled={!displayName.trim() || handlerMissing || mutation.isPending || handlerTaken}>
           Create
         </Button>
       </Stack>

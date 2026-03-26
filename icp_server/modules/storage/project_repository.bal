@@ -48,8 +48,8 @@ public isolated function createProject(types:ProjectInput project, types:UserCon
         return error("Project name is required");
     }
 
-    string handler = project.projectHandler;
-    if handler.trim() == "" {
+    string handler = project.projectHandler.trim();
+    if handler == "" {
         log:printWarn("Project creation attempted without handler for project: " + project.name);
         return error("Project handler is required");
     }
@@ -103,7 +103,7 @@ public isolated function createProject(types:ProjectInput project, types:UserCon
 
         sql:ExecutionResult|sql:Error groupResult = dbClient->execute(`
             INSERT INTO user_groups (group_id, group_name, org_uuid, description)
-            VALUES (${adminGroupId}, ${groupName}, 1, ${groupDescription})
+            VALUES (${adminGroupId}, ${groupName}, ${project.orgId}, ${groupDescription})
         `);
         if groupResult is sql:Error {
             log:printError(string `Failed to create admin group for project: ${project.name}`, 'error = groupResult);
@@ -119,7 +119,7 @@ public isolated function createProject(types:ProjectInput project, types:UserCon
         // 3. Map group to Project Admin role (project-scoped, all environments)
         sql:ExecutionResult|sql:Error roleMappingResult = dbClient->execute(`
             INSERT INTO group_role_mapping (group_id, role_id, org_uuid, project_uuid)
-            VALUES (${adminGroupId}, ${projectAdminRoleId}, 1, ${projectId})
+            VALUES (${adminGroupId}, ${projectAdminRoleId}, ${project.orgId}, ${projectId})
         `);
         if roleMappingResult is sql:Error {
             log:printError(string `Failed to assign admin role for project: ${project.name}`, 'error = roleMappingResult);
