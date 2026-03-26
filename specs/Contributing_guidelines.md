@@ -37,6 +37,35 @@ Backend: `https://localhost:9445` | Frontend: `http://localhost:5173` | Default 
 
 For full architecture details, see `docs/ARCHITECTURE.md`.
 
+## General Coding Rules
+
+**Do NOT:**
+- Add comments, docstrings, or type annotations to code you did not change.
+- Refactor or clean up surrounding code when fixing a bug or adding a feature.
+- Add error handling for scenarios that cannot happen.
+- Create new files unless absolutely necessary. Prefer editing existing files.
+- Add new dependencies without explicit approval.
+- Modify CI/CD pipelines, GitHub Actions, or Gradle build files without explicit approval.
+- Over-engineer. No premature abstractions, no feature flags, no backwards-compatibility shims.
+- Add `// removed` or placeholder comments for deleted code. Just delete it.
+- Rename unused variables to `_` prefixed names. If unused, remove entirely.
+- Create fallback tests with mock/hardcoded data when original tests fail.
+
+**Do:**
+- Keep changes minimal and focused on the task requested.
+- Follow existing patterns in the codebase. Match the style of surrounding code.
+- Promote code reusability and define constants where applicable.
+- Read relevant spec documents before making changes to a feature area.
+
+## File Naming
+
+| Type | Convention | Example |
+| ---- | ---------- | ------- |
+| Ballerina source | `snake_case.bal` | `runtime_service.bal` |
+| TypeScript (`.ts`) | `camelCase.ts` | `useCreateProject.ts` |
+| React components (`.tsx`) | `PascalCase.tsx` | `ProjectList.tsx` |
+| SQL scripts | `snake_case.sql` | `mysql_init.sql` |
+
 ## Coding Conventions
 
 ### Backend (Ballerina)
@@ -96,48 +125,35 @@ The backend uses **Ballerina 2201.13.1** — NOT Java. All source files are `.ba
 
 ## Testing
 
-### Backend Tests
+See `specs/Testing_guidelines.md` for full testing guidelines including test file listing, test framework details, run commands, CI pipeline, and test infrastructure.
 
-Location: `icp_server/tests/`
+## Key Backend Rules
 
-Test files:
-- `auth_tests_v2.bal` — RBAC v2 authorization tests
-- `oidc_tests.bal` — OIDC flow tests
-- `component_graphql_tests.bal` — Component management tests
-- `environment_graphql_tests.bal` — Environment management tests
-- `project_graphql_tests.bal` — Project management tests
-- `runtime_graphql_tests.bal` — Runtime management tests
-- `refresh_token_api_tests.bal` — Refresh token API tests
-- `refresh_token_storage_tests.bal` — Token storage tests
-- `refresh_token_utils_tests.bal` — Token utility tests
-- `token_renew_tests.bal` — Token renewal tests
-- `test_utils.bal` — Test utilities and helpers
-- `mock_oidc_provider.bal` — Mock OIDC provider for testing
+- **Storage:** One `*_repository.bal` per entity in `modules/storage/`. Repository functions take SQL client as param.
+- **Auth:** All resolvers/endpoints must check RBAC v2 permissions via `modules/auth/permission_checker.bal`.
+- **Types:** Domain types in `modules/types/`. Do not duplicate.
+- **Config:** All configurables in `config.bal`. No hardcoded environment values.
+- **DB support:** Schema changes require scripts for all 4 databases (MySQL, PostgreSQL, MSSQL, H2) in `icp_server/resources/db/init-scripts/` and `migration-scripts/`.
+- **DB dialect:** Use `modules/storage/database_dialect.bal` for vendor-specific SQL. Never write DB-specific SQL inline.
+- **Error handling:** Use `classifySqlError()` from `modules/storage/error_mapper.bal`. Never expose raw SQL errors.
 
-```bash
-# Run locally
-cd icp_server && bal test
+## Key Frontend Rules
 
-# Run with Docker (matches CI)
-docker-compose -f icp_server/docker-compose.test.yml up --build
-```
+- **UI library:** `@wso2/oxygen-ui` only. No other UI component libraries.
+- **Routing:** All URL paths in `frontend/src/paths.ts`. No string URLs elsewhere.
+- **API layer:** GraphQL in `frontend/src/api/`. Use TanStack React Query hooks.
+- **House rules:** Read `frontend/HOUSE_RULES.md` before frontend changes.
 
-### Frontend Tests
+## Git Conventions
 
-```bash
-cd frontend
-pnpm test
-```
+- Short imperative sentences, no conventional commit prefixes (no `feat:`, `fix:`).
+- Examples: "Add log search support for BI runtimes", "Fix heartbeat delta hash comparison"
+- PRs are squash-merged. Follow the PR template in `pull_request_template.md`.
 
-### CI Pipeline (`.github/workflows/pr-check.yml`)
+## Security
 
-The CI runs on every PR to `main`:
-1. Prettier formatting check on frontend code
-2. Full Gradle build (backend + frontend)
-3. H2 database initialization test
-4. Docker Compose integration tests against MySQL
-
-**Environment:** Node.js 22.19.0, JDK 17, Ballerina 2201.13.1
+- Never log PII or sensitive runtime data (secrets, tokens, credentials).
+- Do not expose internal error details in API responses for 5xx errors.
 
 ## Pull Request Process
 
