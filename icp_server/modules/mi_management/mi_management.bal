@@ -497,11 +497,18 @@ public isolated function fetchRegistryResourceProperties(http:Client mgmtClient,
         apiPath = string `${apiPath}&name=${encodedName}`;
     }
     log:printDebug("Calling MI management API", path = apiPath);
-    MgmtRegistryPropertiesResponse respResult = check mgmtClient->get(apiPath, {
+    json respJson = check mgmtClient->get(apiPath, {
         [HEADER_AUTHORIZATION]: string `Bearer ${hmacToken}`,
         [HEADER_ACCEPT]: CONTENT_TYPE_JSON
     });
 
+    json listField = check respJson.list;
+    if listField is string {
+        log:printDebug("MI returned error for registry properties", errorMessage = listField, path = path);
+        return {count: 0, properties: []};
+    }
+
+    MgmtRegistryPropertiesResponse respResult = check respJson.cloneWithType();
     types:RegistryProperty[] props = [];
     foreach MgmtRegistryProperty prop in respResult.list {
         props.push({name: prop.name, value: prop.value});
