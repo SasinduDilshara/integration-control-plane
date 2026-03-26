@@ -136,6 +136,7 @@ export function useEnvironmentHandlerAvailability(handler: string) {
   });
 }
 
+
 export function useComponents(orgHandler: string, projectId: string) {
   return useQuery({
     queryKey: ['components', orgHandler, projectId],
