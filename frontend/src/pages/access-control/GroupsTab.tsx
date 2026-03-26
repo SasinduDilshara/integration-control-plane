@@ -30,16 +30,71 @@ import { newOrgGroupUrl, editOrgGroupUrl, projectGroupDetailUrl, componentGroupD
 import { Loading } from './shared';
 import { useFiltered } from './utils';
 
-function GroupUserCount({ orgHandler, groupId }: { orgHandler: string; groupId: string }) {
-  const { data: users = [], isLoading } = useGroupUsers(orgHandler, groupId);
-  if (isLoading) return <>—</>;
-  return <>{users.length}</>;
-}
 
-function GroupRoleCount({ orgHandler, groupId, projectId, componentId }: { orgHandler: string; groupId: string; projectId?: string; componentId?: string }) {
-  const { data: roles = [], isLoading } = useGroupRoles(orgHandler, groupId, projectId, componentId);
-  if (isLoading) return <>—</>;
-  return <>{roles.length}</>;
+function GroupRow({ g, orgHandler, projectId, componentId, effectiveReadOnly, getGroupDetailUrl, onDeleteClick }: {
+  g: Group;
+  orgHandler: string;
+  projectId?: string;
+  componentId?: string;
+  effectiveReadOnly: boolean;
+  getGroupDetailUrl: (groupId: string) => string;
+  onDeleteClick: (g: Group) => void;
+}) {
+  const navigate = useNavigate();
+  const { data: users = [], isLoading: usersLoading } = useGroupUsers(orgHandler, g.groupId);
+  const { data: roles = [], isLoading: rolesLoading } = useGroupRoles(orgHandler, g.groupId, projectId, componentId);
+  const hasRoleMappings = roles.length > 0;
+
+  return (
+    <ListingTable.Row
+      key={g.groupId}
+      clickable
+      hover
+      tabIndex={0}
+      aria-label={`View details for ${g.groupName}`}
+      onClick={() => navigate(getGroupDetailUrl(g.groupId))}
+      onKeyDown={(e) => {
+        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+          if (e.key === ' ') e.preventDefault();
+          navigate(getGroupDetailUrl(g.groupId));
+        }
+      }}>
+      <ListingTable.Cell>{g.groupName}</ListingTable.Cell>
+      <ListingTable.Cell>{g.description}</ListingTable.Cell>
+      <ListingTable.Cell>{usersLoading ? <>—</> : users.length}</ListingTable.Cell>
+      <ListingTable.Cell>{rolesLoading ? <>—</> : roles.length}</ListingTable.Cell>
+      <ListingTable.Cell align="right">
+        <Tooltip title="Edit">
+          <IconButton
+            size="small"
+            aria-label={`Edit ${g.groupName}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(getGroupDetailUrl(g.groupId));
+            }}>
+            <Pencil size={16} />
+          </IconButton>
+        </Tooltip>
+        {!effectiveReadOnly && (
+          <Tooltip title={hasRoleMappings ? "Cannot delete groups with mapped roles" : "Delete"}>
+            <span>
+              <IconButton
+                size="small"
+                color="error"
+                disabled={hasRoleMappings}
+                aria-label={`Delete ${g.groupName}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteClick(g);
+                }}>
+                <Trash2 size={16} />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+      </ListingTable.Cell>
+    </ListingTable.Row>
+  );
 }
 
 export function GroupsTab({ orgHandler, projectId, projectHandler, componentHandler, readOnly }: { orgHandler: string; projectId?: string; projectHandler?: string; componentHandler?: string; readOnly?: boolean }): JSX.Element {
@@ -114,55 +169,16 @@ export function GroupsTab({ orgHandler, projectId, projectHandler, componentHand
               </ListingTable.Row>
             ) : (
               paginated.map((g) => (
-                <ListingTable.Row
+                <GroupRow
                   key={g.groupId}
-                  clickable
-                  hover
-                  tabIndex={0}
-                  aria-label={`View details for ${g.groupName}`}
-                  onClick={() => navigate(getGroupDetailUrl(g.groupId))}
-                  onKeyDown={(e) => {
-                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                      if (e.key === ' ') e.preventDefault();
-                      navigate(getGroupDetailUrl(g.groupId));
-                    }
-                  }}>
-                  <ListingTable.Cell>{g.groupName}</ListingTable.Cell>
-                  <ListingTable.Cell>{g.description}</ListingTable.Cell>
-                  <ListingTable.Cell>
-                    <GroupUserCount orgHandler={orgHandler} groupId={g.groupId} />
-                  </ListingTable.Cell>
-                  <ListingTable.Cell>
-                    <GroupRoleCount orgHandler={orgHandler} groupId={g.groupId} projectId={projectId} componentId={componentId} />
-                  </ListingTable.Cell>
-                  <ListingTable.Cell align="right">
-                    <Tooltip title="Edit">
-                      <IconButton
-                        size="small"
-                        aria-label={`Edit ${g.groupName}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(getGroupDetailUrl(g.groupId));
-                        }}>
-                        <Pencil size={16} />
-                      </IconButton>
-                    </Tooltip>
-                    {!effectiveReadOnly && (
-                      <Tooltip title="Delete">
-                        <IconButton
-                          size="small"
-                          color="error"
-                          aria-label={`Delete ${g.groupName}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeletingGroup(g);
-                          }}>
-                          <Trash2 size={16} />
-                        </IconButton>
-                      </Tooltip>
-                    )}
-                  </ListingTable.Cell>
-                </ListingTable.Row>
+                  g={g}
+                  orgHandler={orgHandler}
+                  projectId={projectId}
+                  componentId={componentId}
+                  effectiveReadOnly={effectiveReadOnly}
+                  getGroupDetailUrl={getGroupDetailUrl}
+                  onDeleteClick={setDeletingGroup}
+                />
               ))
             )}
           </ListingTable.Body>
