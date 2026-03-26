@@ -32,11 +32,13 @@ Using `agents.md > Deployment`:
 
 If setup fails, **report the failure and stop** — do not proceed with a broken environment.
 
-## Step 3: Reproduce the Bug
+## Step 3: Reproduce the Bug (**THIS IS A MANDATORY STEP**, REPRODUCE THS ISSUE ALWAYS, INSTEAD OF RELYING ON CODE INSPECTION ALONE)
 
 Using `agents.md > Feature Inventory`, locate the feature referenced in the issue.
 
 1. Follow the reproduction steps from the issue (or infer reasonable steps if not provided).
+2. Use Deployment instructions in the CLAUDE.md and the `specs/Deployement.md` to execute the reproduction steps.
+3. **If the issue is involving frontend, then you should run the backend and frontend locally, and use the frontend to reproduce the issue**. **If the issue is involving only backend, then you can run the backend and use curl or Postman to reproduce the issue**.
 2. Capture all logs, error output, and HTTP responses.
 3. Record expected vs. actual behavior.
 
@@ -55,7 +57,7 @@ Search for existing unit and integration tests covering the affected code path. 
 
 ## Step 6: Write the Output Artifact
 
-Create the directory `.ai/` at the repo root if it doesn't exist. Write the analysis to `.ai/issue-analysis.md` using this exact format:
+Create the directory `.ai/` at the repo root if it doesn't exist. Write the analysis to `.ai/issue-analysis_<issue_number>.md` using this exact format:
 
 ```markdown
 # Issue Analysis — [Issue #ID]: [Issue Title]
@@ -77,8 +79,7 @@ Create the directory `.ai/` at the repo root if it doesn't exist. Write the anal
 - **Logs/Evidence:** [attached or inline]
 
 ## Root Cause Hypothesis
-Brief analysis of what is likely causing the bug based on code inspection
-and reproduction results.
+Brief analysis of what is likely causing the bug based on reproduction results.
 
 ## Test Coverage Assessment
 - **Existing tests covering this path:** [list with pass/fail status]
