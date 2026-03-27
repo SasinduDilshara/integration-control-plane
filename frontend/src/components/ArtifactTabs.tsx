@@ -39,13 +39,24 @@ export function ArtifactApiDefinition({ artifact }: TabProps) {
   const resources = (artifact.resources as Array<{ path?: string; methods?: string }> | undefined) ?? [];
   const context = (artifact.context ?? '/*').toString();
   const items = resources.length === 0 ? [{ methods: 'POST', path: context }] : resources;
+
+  const expandedItems: Array<{ method: string; path: string }> = [];
+  items.forEach((r) => {
+    const methodsStr = (r.methods ?? 'GET').toString();
+    const methodsList = methodsStr.split(',').map((m) => m.trim().toUpperCase());
+    const path = r.path ?? context;
+    methodsList.forEach((method) => {
+      expandedItems.push({ method, path });
+    });
+  });
+
   return (
     <Stack gap={1}>
-      {items.map((r, i) => (
+      {expandedItems.map((item, i) => (
         <Box key={i} sx={{ bgcolor: (theme) => (theme.palette.mode === 'dark' ? 'grey.900' : '#e8f5e9'), p: 1.5, borderRadius: 1, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Chip label={(r.methods ?? 'GET').toString().toUpperCase()} size="small" sx={{ bgcolor: '#4caf50', color: 'white', fontWeight: 700 }} />
+          <Chip label={item.method} size="small" sx={{ bgcolor: '#4caf50', color: 'white', fontWeight: 700 }} />
           <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.primary' }}>
-            {r.path ?? context}
+            {item.path}
           </Typography>
         </Box>
       ))}

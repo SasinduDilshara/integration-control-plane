@@ -1080,15 +1080,27 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
             `);
         }
 
-        // Insert API resources for this API
+        // Group resources by path and merge methods to handle duplicates
+        map<string> resourcesByPath = {};
         foreach types:ApiResource apiResource in api.resources {
-            // MI sends methods as a single string (e.g., "POST"), store as-is
+            string path = apiResource.path;
+            if resourcesByPath.hasKey(path) {
+                string existingMethods = resourcesByPath.get(path);
+                string[] methodsList = [existingMethods, apiResource.methods];
+                resourcesByPath[path] = string:'join(",", ...methodsList);
+            } else {
+                resourcesByPath[path] = apiResource.methods;
+            }
+        }
+
+        // Insert deduplicated API resources
+        foreach [string, string] [path, methods] in resourcesByPath.entries() {
             if dbType == MSSQL {
                 _ = check dbClient->execute(`
                     MERGE INTO mi_api_resource_artifacts AS target
-                    USING (VALUES (${heartbeat.runtime}, ${api.name}, ${apiResource.path}, ${apiResource.methods})) 
+                    USING (VALUES (${heartbeat.runtime}, ${api.name}, ${path}, ${methods}))
                            AS source (runtime_id, api_name, resource_path, methods)
-                    ON (target.runtime_id = source.runtime_id AND target.api_name = source.api_name 
+                    ON (target.runtime_id = source.runtime_id AND target.api_name = source.api_name
                         AND target.resource_path = source.resource_path)
                     WHEN MATCHED THEN
                         UPDATE SET methods = source.methods, updated_at = CURRENT_TIMESTAMP
@@ -1102,7 +1114,7 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                         runtime_id, api_name, resource_path, methods
                     ) VALUES (
                         ${heartbeat.runtime}, ${api.name},
-                        ${apiResource.path}, ${apiResource.methods}
+                        ${path}, ${methods}
                     )
                     ON CONFLICT (runtime_id, api_name, resource_path) DO UPDATE SET
                         methods = EXCLUDED.methods,
@@ -1114,7 +1126,7 @@ isolated function insertMIArtifacts(types:Heartbeat heartbeat) returns error? {
                         runtime_id, api_name, resource_path, methods
                     ) VALUES (
                         ${heartbeat.runtime}, ${api.name},
-                        ${apiResource.path}, ${apiResource.methods}
+                        ${path}, ${methods}
                     )
                     ON DUPLICATE KEY UPDATE
                         methods = VALUES(methods),
