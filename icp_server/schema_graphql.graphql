@@ -207,7 +207,7 @@ type Mutation {
   deleteMIUser(componentId: String!, runtimeId: String!, username: String!): MIUserOperationResponse!
 
   # Org-level Secret Mutations
-  createOrgSecret(environmentId: String!): String!
+  createOrgSecret(environmentId: String!, componentId: String): String!
   revokeOrgSecret(keyId: String!): Boolean!
 }
 

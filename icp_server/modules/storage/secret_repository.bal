@@ -28,7 +28,8 @@ isolated function generateKeyId() returns string|error {
 
         stream<record {|int cnt;|}, sql:Error?> s =
             dbClient->query(`SELECT COUNT(*) AS cnt FROM org_secrets WHERE key_id = ${candidate}`);
-        record {|int cnt;|}[] rows = check from record {|int cnt;|} r in s select r;
+        record {|int cnt;|}[] rows = check from record {|int cnt;|} r in s
+            select r;
 
         if rows[0].cnt == 0 {
             log:printDebug(string `generateKeyId: candidate=${candidate} is unique`);
@@ -72,6 +73,44 @@ public isolated function createOrgSecret(string environmentId, string createdBy)
     }
 
     log:printInfo(string `createOrgSecret: created keyId=${keyId} for environment=${environmentId}`);
+    return keyId + "." + keyMaterial;
+}
+
+public isolated function createBoundOrgSecret(string environmentId, string createdBy, string projectId,
+        string componentId, string projectHandler, string componentName, string runtimeType) returns string|error {
+    string keyId = check generateKeyId();
+    string keyMaterial = generateKeyMaterial();
+
+    log:printDebug(string `createBoundOrgSecret: inserting keyId=${keyId} for environment=${environmentId}, componentId=${componentId}, createdBy=${createdBy}`);
+
+    sql:ExecutionResult|sql:Error result = dbClient->execute(`
+        INSERT INTO org_secrets (
+            key_id, environment_id, key_material, project_id, component_id,
+            project_handler, component_name, runtime_type, bound_at, created_by
+        )
+        VALUES (
+            ${keyId}, ${environmentId}, ${keyMaterial}, ${projectId}, ${componentId},
+            ${projectHandler}, ${componentName}, ${runtimeType}, CURRENT_TIMESTAMP, ${createdBy}
+        )
+    `);
+
+    if result is sql:Error {
+        log:printError(string `createBoundOrgSecret: insert failed for keyId=${keyId}, environment=${environmentId}, componentId=${componentId}`,
+                'error = result);
+        match classifySqlError(result) {
+            DUPLICATE_KEY => {
+                return error("A secret with this key ID already exists. Please retry.", result);
+            }
+            FOREIGN_KEY_VIOLATION => {
+                return error("The specified environment or component does not exist", result);
+            }
+            _ => {
+                return error("Failed to create component-bound org secret", result);
+            }
+        }
+    }
+
+    log:printInfo(string `createBoundOrgSecret: created keyId=${keyId} for environment=${environmentId}, componentId=${componentId}`);
     return keyId + "." + keyMaterial;
 }
 
@@ -158,7 +197,8 @@ public isolated function revokeAllSecretsForComponent(string componentId) return
 
     stream<record {|string key_id;|}, sql:Error?> s =
         dbClient->query(`SELECT key_id FROM org_secrets WHERE component_id = ${componentId}`);
-    string[] keyIds = check from var r in s select r.key_id;
+    string[] keyIds = check from var r in s
+        select r.key_id;
 
     foreach string kid in keyIds {
         check revokeOrgSecret(kid);
@@ -186,7 +226,8 @@ public isolated function lookupOrgSecretByKeyId(string keyId) returns types:OrgS
                project_handler, component_name, runtime_type, bound_at, created_at, created_by
         FROM org_secrets WHERE key_id = ${keyId}
     `);
-    types:OrgSecret[] rows = check from types:OrgSecret r in s select r;
+    types:OrgSecret[] rows = check from types:OrgSecret r in s
+        select r;
 
     if rows.length() == 0 {
         log:printWarn(string `lookupOrgSecretByKeyId: keyId=${keyId} not found`);
@@ -302,7 +343,8 @@ public isolated function resolveOrCreateComponent(string projectId, string name,
     stream<record {|string component_id; string component_type;|}, sql:Error?> s = dbClient->query(`
         SELECT component_id, component_type FROM components WHERE project_id = ${projectId} AND name = ${name}
     `);
-    record {|string component_id; string component_type;|}[] rows = check from record {|string component_id; string component_type;|} r in s select r;
+    record {|string component_id; string component_type;|}[] rows = check from record {|string component_id; string component_type;|} r in s
+        select r;
 
     if rows.length() > 0 {
         if rows[0].component_type != expectedType {
@@ -328,7 +370,8 @@ public isolated function resolveOrCreateComponent(string projectId, string name,
             stream<record {|string component_id; string component_type;|}, sql:Error?> retryStream = dbClient->query(
                 `SELECT component_id, component_type FROM components WHERE project_id = ${projectId} AND name = ${name}`
             );
-            record {|string component_id; string component_type;|}[] existing = check from record {|string component_id; string component_type;|} r in retryStream select r;
+            record {|string component_id; string component_type;|}[] existing = check from record {|string component_id; string component_type;|} r in retryStream
+                select r;
             if existing.length() > 0 {
                 if existing[0].component_type != expectedType {
                     log:printError(string `resolveOrCreateComponent: type mismatch on retry for component=${name}: existing=${existing[0].component_type}, expected=${expectedType}`);
@@ -367,7 +410,8 @@ public isolated function resolveKeyIdAndMaterialByRuntimeId(string runtimeId) re
             LEFT JOIN org_secrets os ON os.key_id = r.key_id
             WHERE r.runtime_id = ${runtimeId}
         `);
-    record {|string? key_id; string? key_material;|}[] rows = check from var r in s select r;
+    record {|string? key_id; string? key_material;|}[] rows = check from var r in s
+        select r;
 
     if rows.length() == 0 {
         return error(string `Runtime '${runtimeId}' not found`);
@@ -403,7 +447,8 @@ public isolated function listBoundSecrets(string componentId, string environment
             ORDER BY os.created_at DESC, r.runtime_id
         `);
     record {|string key_id; string created_at; string? runtime_id; string? status;|}[] rows =
-        check from var r in s select r;
+        check from var r in s
+        select r;
 
     log:printDebug(string `listBoundSecrets: fetched ${rows.length()} joined rows`);
 
@@ -420,7 +465,8 @@ public isolated function listBoundSecrets(string componentId, string environment
         }
     }
 
-    types:BoundSecretEntry[] entries = from var k in keyOrder select byKey.get(k);
+    types:BoundSecretEntry[] entries = from var k in keyOrder
+        select byKey.get(k);
     log:printDebug(string `listBoundSecrets: returning ${entries.length()} entries`);
     return entries;
 }
@@ -431,7 +477,8 @@ public isolated function getKeyIdByRuntimeId(string runtimeId) returns string?|e
 
     stream<record {|string? key_id;|}, sql:Error?> s =
         dbClient->query(`SELECT key_id FROM runtimes WHERE runtime_id = ${runtimeId}`);
-    record {|string? key_id;|}[] rows = check from var r in s select r;
+    record {|string? key_id;|}[] rows = check from var r in s
+        select r;
 
     if rows.length() == 0 {
         return error(string `Runtime '${runtimeId}' not found`);
@@ -445,7 +492,8 @@ public isolated function countRuntimesByKeyId(string keyId) returns int|error {
 
     stream<record {|int cnt;|}, sql:Error?> s =
         dbClient->query(`SELECT COUNT(*) AS cnt FROM runtimes WHERE key_id = ${keyId}`);
-    record {|int cnt;|}[] rows = check from var r in s select r;
+    record {|int cnt;|}[] rows = check from var r in s
+        select r;
     int count = rows[0].cnt;
 
     log:printDebug(string `countRuntimesByKeyId: keyId=${keyId}, count=${count}`);

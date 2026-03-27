@@ -196,8 +196,8 @@ isolated function fetchBILoggersByRuntime(string runtimeId) returns types:Logger
 // Helper function to fetch MI loggers from management API for environment and component
 isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, string componentId, string projectId) returns types:LoggerGroup[]|error {
     log:printInfo("Fetching loggers from MI management API for environment and component",
-        environmentId = environmentId,
-        componentId = componentId);
+            environmentId = environmentId,
+            componentId = componentId);
 
     // Get all runtimes for this environment and component
     types:Runtime[] runtimes = check storage:getRuntimes((), (), environmentId, projectId, componentId);
@@ -222,8 +222,8 @@ isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, 
 
         if mgmtClientResult is error {
             log:printError("Failed to create management API client for runtime",
-                runtimeId = runtime.runtimeId,
-                'error = mgmtClientResult);
+                    runtimeId = runtime.runtimeId,
+                    'error = mgmtClientResult);
             continue; // Skip this runtime and continue with others
         }
 
@@ -232,8 +232,8 @@ isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, 
 
         if hmacTokenResult is error {
             log:printError("Failed to generate HMAC token for runtime",
-                runtimeId = runtime.runtimeId,
-                'error = hmacTokenResult);
+                    runtimeId = runtime.runtimeId,
+                    'error = hmacTokenResult);
             continue; // Skip this runtime and continue with others
         }
 
@@ -244,8 +244,8 @@ isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, 
 
         if loggersResponse is error {
             log:printError("Failed to fetch loggers from runtime",
-                runtimeId = runtime.runtimeId,
-                'error = loggersResponse);
+                    runtimeId = runtime.runtimeId,
+                    'error = loggersResponse);
             continue; // Skip this runtime and continue with others
         }
 
@@ -309,9 +309,9 @@ isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, 
             types:LogLevel|error logLevelResult = utils:toLogLevel(loggerInfo.level);
             if logLevelResult is error {
                 log:printWarn("Invalid log level, skipping logger",
-                    loggerName = loggerInfo.loggerName,
-                    logLevel = loggerInfo.level,
-                    errorMsg = logLevelResult.message());
+                        loggerName = loggerInfo.loggerName,
+                        logLevel = loggerInfo.level,
+                        errorMsg = logLevelResult.message());
                 continue;
             }
 
@@ -338,10 +338,10 @@ isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, 
     types:LoggerGroup[] loggerGroups = loggerGroupMap.toArray();
 
     log:printInfo("Successfully fetched and grouped MI loggers from multiple runtimes",
-        environmentId = environmentId,
-        componentId = componentId,
-        runtimeCount = runtimes.length(),
-        loggerGroupCount = loggerGroups.length());
+            environmentId = environmentId,
+            componentId = componentId,
+            runtimeCount = runtimes.length(),
+            loggerGroupCount = loggerGroups.length());
 
     return loggerGroups;
 }
@@ -566,8 +566,8 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
 
         // Build management API base URL
         string baseUrl = check storage:buildManagementBaseUrl(
-            validated.runtime.managementHostname,
-            validated.runtime.managementPort
+                validated.runtime.managementHostname,
+                validated.runtime.managementPort
         );
 
         // Create management API client
@@ -577,8 +577,8 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
 
         if mgmtClientResult is error {
             log:printError("Failed to create management API client for runtime",
-                runtimeId = validated.runtimeId,
-                'error = mgmtClientResult);
+                    runtimeId = validated.runtimeId,
+                    'error = mgmtClientResult);
             failureCount += 1;
             continue;
         }
@@ -588,8 +588,8 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
 
         if hmacTokenResult is error {
             log:printError("Failed to generate HMAC token for runtime",
-                runtimeId = validated.runtimeId,
-                'error = hmacTokenResult);
+                    runtimeId = validated.runtimeId,
+                    'error = hmacTokenResult);
             failureCount += 1;
             continue;
         }
@@ -617,22 +617,22 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
 
         // Call MI management API to update logger
         types:MgmtUpdateLoggerResponse|error updateResult = mi_management:updateLogger(
-            mgmtClientResult,
-            hmacToken,
-            request
+                mgmtClientResult,
+                hmacToken,
+                request
         );
 
         if updateResult is error {
             log:printError("Failed to update logger on runtime",
-                runtimeId = validated.runtimeId,
-                loggerName = loggerName,
-                'error = updateResult);
+                    runtimeId = validated.runtimeId,
+                    loggerName = loggerName,
+                    'error = updateResult);
             failureCount += 1;
         } else {
             log:printInfo("Successfully updated logger on runtime",
-                runtimeId = validated.runtimeId,
-                loggerName = loggerName,
-                logLevel = logLevelStr);
+                    runtimeId = validated.runtimeId,
+                    loggerName = loggerName,
+                    logLevel = logLevelStr);
             successCount += 1;
         }
     }
@@ -657,10 +657,10 @@ isolated function updateLogLevelMI(types:UserContextV2 userContext, types:Update
 }
 
 isolated function validateRegistryResourceAccess(
-    types:UserContextV2 userContext,
-    string runtimeId,
-    string path,
-    string operation
+        types:UserContextV2 userContext,
+        string runtimeId,
+        string path,
+        string operation
 ) returns types:ValidatedRegistryAccess|error {
     log:printDebug(string `Validating registry access for ${operation}`, userId = userContext.userId, runtimeId = runtimeId, path = path);
 
@@ -677,12 +677,12 @@ isolated function validateRegistryResourceAccess(
     }
 
     log:printDebug(string `Runtime found for ${operation}`,
-        userId = userContext.userId,
-        runtimeId = runtimeId,
-        projectId = runtime.component.projectId,
-        componentId = runtime.component.id,
-        environmentId = runtime.environment.id,
-        status = runtime.status
+            userId = userContext.userId,
+            runtimeId = runtimeId,
+            projectId = runtime.component.projectId,
+            componentId = runtime.component.id,
+            environmentId = runtime.environment.id,
+            status = runtime.status
     );
 
     types:AccessScope scope = auth:buildScopeFromContext(runtime.component.projectId, runtime.component.id, runtime.environment.id);
@@ -2755,11 +2755,28 @@ service /graphql on graphqlListener {
         return check storage:listBoundSecrets(componentId, environmentId);
     }
 
-    isolated remote function createOrgSecret(graphql:Context context, string environmentId) returns string|error {
+    isolated remote function createOrgSecret(graphql:Context context, string environmentId, string? componentId = ()) returns string|error {
         types:UserContextV2 userContext = check extractUserContext(context);
-        log:printDebug(string `createOrgSecret by user=${userContext.userId}, environment=${environmentId}`);
+        log:printDebug(string `createOrgSecret by user=${userContext.userId}, environment=${environmentId}, componentId=${componentId ?: "unbound"}`);
 
         check authorizeEnvironmentAccess(userContext.userId, environmentId, "create org secrets");
+
+        if componentId is string {
+            types:Component component = check storage:getComponentById(componentId);
+            types:AccessScope scope = auth:buildScopeFromContext(component.projectId, integrationId = componentId,
+                    envId = environmentId);
+            if !check auth:hasPermission(userContext.userId, auth:PERMISSION_INTEGRATION_MANAGE, scope) {
+                return error("Access denied: insufficient permissions to create component-bound secrets");
+            }
+
+            types:Project project = check storage:getProjectById(component.projectId);
+            string secret = check storage:createBoundOrgSecret(environmentId, userContext.userId,
+                    component.projectId, componentId, project.handler, component.name,
+                    component.componentType.toString());
+            log:printInfo(string `Component-bound org secret created for environment=${environmentId}, componentId=${componentId}`,
+                    userId = userContext.userId);
+            return secret;
+        }
 
         string secret = check storage:createOrgSecret(environmentId, userContext.userId);
         log:printInfo(string `Org secret created for environment=${environmentId}`, userId = userContext.userId);
@@ -3721,5 +3738,4 @@ service /graphql on graphqlListener {
         return {username, status: "Deleted"};
     }
 }
-
 
