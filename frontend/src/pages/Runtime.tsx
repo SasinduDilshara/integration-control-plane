@@ -54,6 +54,7 @@ import { hasComponent, type ProjectScope, type ComponentScope } from '../nav';
 import { formatDistanceToNow } from '../utils/time';
 import Authorized from '../components/Authorized';
 import { Permissions } from '../constants/permissions';
+import { useAccessControl } from '../contexts/AccessControlContext';
 
 const drawerSx = {
   '& .MuiDrawer-paper': { width: '45%', maxWidth: 560, minWidth: 360, position: 'fixed', top: 64, height: 'calc(100% - 64px)', borderLeft: '1px solid', borderColor: 'divider' },
@@ -312,12 +313,14 @@ function EnvironmentRuntimeCard({
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const { hasAnyPermission } = useAccessControl();
 
   useEffect(() => {
     if (!autoOpenAddRuntime || !componentId) return;
+    if (!hasAnyPermission([Permissions.INTEGRATION_MANAGE], undefined, componentId)) return;
     setAddOpen(true);
     onAutoOpenConsumed?.();
-  }, [autoOpenAddRuntime, componentId, onAutoOpenConsumed]);
+  }, [autoOpenAddRuntime, componentId, hasAnyPermission, onAutoOpenConsumed]);
 
   const filtered = runtimes.filter((r) => !query || r.runtimeId.toLowerCase().includes(query.toLowerCase()) || r.runtimeType.toLowerCase().includes(query.toLowerCase()) || (r.component?.displayName ?? '').toLowerCase().includes(query.toLowerCase()));
   const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);

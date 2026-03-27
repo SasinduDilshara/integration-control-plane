@@ -453,9 +453,11 @@ function EntryPointsList({ envId, componentId, projectId, componentType, onOpenD
         <Typography color="text.secondary" sx={{ textAlign: 'center' }}>
           No entry points found for this integration. Add runtime to get started.
         </Typography>
-        <Button variant="contained" size="small" onClick={() => navigate(`${resourceUrl(scope, 'runtimes')}?action=add-runtime&environmentId=${encodeURIComponent(envId)}`)}>
-          + Add Runtime
-        </Button>
+        <Authorized permissions={[Permissions.INTEGRATION_MANAGE]}>
+          <Button variant="contained" size="small" onClick={() => navigate(`${resourceUrl(scope, 'runtimes')}?action=add-runtime&environmentId=${encodeURIComponent(envId)}`)}>
+            + Add Runtime
+          </Button>
+        </Authorized>
       </Stack>
     );
 

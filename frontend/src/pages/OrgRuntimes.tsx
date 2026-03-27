@@ -54,6 +54,7 @@ import { LogFilesDrawer } from '../components/LogFilesDrawer';
 import EmptyListing from '../components/EmptyListing';
 import Authorized from '../components/Authorized';
 import { Permissions } from '../constants/permissions';
+import { useAccessControl } from '../contexts/AccessControlContext';
 import type { OrgScope } from '../nav';
 
 const drawerSx = {
@@ -283,12 +284,14 @@ function EnvironmentRuntimeCard({
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const { hasAnyPermission } = useAccessControl();
 
   useEffect(() => {
     if (!autoOpenAddRuntime) return;
+    if (!hasAnyPermission([Permissions.ENVIRONMENT_MANAGE, Permissions.ENVIRONMENT_MANAGE_NONPROD])) return;
     setAddOpen(true);
     onAutoOpenConsumed?.();
-  }, [autoOpenAddRuntime, onAutoOpenConsumed]);
+  }, [autoOpenAddRuntime, hasAnyPermission, onAutoOpenConsumed]);
 
   const filtered = runtimes.filter((r) => !query || r.runtimeId.toLowerCase().includes(query.toLowerCase()) || r.runtimeType.toLowerCase().includes(query.toLowerCase()) || (r.component?.displayName ?? '').toLowerCase().includes(query.toLowerCase()));
   const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
