@@ -3,14 +3,14 @@
 ## Connections
 
 ```
-Browser -> ui-to-icp:9460 -> ICP-AUTH/HB:9445
-Browser -> ui-to-icp-graphql:9461 -> ICP-GraphQL:9446
-Browser -> ui-to-icp-obs:9462 -> ICP-OBS:9448
-Ballerina Integrator -> bi-to-icp:9455 -> ICP-AUTH/HB:9445
-Micro Integrator -> mi-to-icp:9456 -> ICP-AUTH/HB:9445
-ICP-AUTH/HB -> icp-to-auth-adaptor:9457 (HTTP) -> ICP-AUTH-ADPT:9447
-ICP-OBS -> icp-to-obs-adaptor:9458 (HTTP) -> ICP-OBS-ADPT:9449
-ICP-GraphQL -> icp-to-mi:9164 -> Micro Integrator:9164
+Browser -> ICP-AUTH/HB:9445
+Browser -> ICP-GraphQL:9446
+Browser -> ICP-OBS:9448
+Ballerina Integrator -> ICP-AUTH/HB:9445
+Micro Integrator -> ICP-AUTH/HB:9445
+ICP-AUTH/HB -> ICP-AUTH-ADPT:9447
+ICP-OBS -> ICP-OBS-ADPT:9449
+ICP-GraphQL -> Micro Integrator:9164
 ICP-AUTH/HB -> DB:5432
 ICP-GraphQL -> DB:5432
 ICP-AUTH-ADPT -> DB:5432
