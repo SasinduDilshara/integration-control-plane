@@ -142,10 +142,10 @@ export default function Projects(scope: OrgScope): JSX.Element {
         <EmptyListing
           icon={<Folder size={48} />}
           title="No projects found"
-          description={query ? 'Try adjusting your search' : canCreateProject ? 'Create your first project to get started' : 'Ask your administrator for access'}
+          description={query ? 'Try adjusting your search' : canCreateProject ? 'Add your runtime to get started.' : 'Ask your administrator for access'}
           showAction={!query && canCreateProject}
-          actionLabel="Create Project"
-          onAction={() => navigate(newProjectUrl(scope))}
+          actionLabel="Register Runtime"
+          onAction={() => navigate(`${resourceUrl(scope, 'runtimes')}?action=add-runtime`)}
         />
       ) : (
         <>

@@ -41,9 +41,10 @@ import {
   Tabs,
   Typography,
 } from '@wso2/oxygen-ui';
-import { Check, Copy, FileText, Plus, Server, Trash2, X } from '@wso2/oxygen-ui-icons-react';
-import { useState, type JSX } from 'react';
+import { Check, Copy, FileText, Plus, RefreshCw, Server, Trash2, X } from '@wso2/oxygen-ui-icons-react';
+import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useQueries } from '@tanstack/react-query';
+import { useLocation, useNavigate } from 'react-router';
 import { gql } from '../api/graphql';
 import { useAllEnvironments, useOrgSecrets, ORG_RUNTIMES_QUERY, type GqlEnvironment, type GqlRuntime } from '../api/queries';
 import { useCreateOrgSecret, useDeleteRuntime, useRevokeOrgSecret } from '../api/mutations';
@@ -251,12 +252,36 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'medium' });
 }
 
-function EnvironmentRuntimeCard({ env, runtimes, onDelete, onViewLogs }: { env: GqlEnvironment; runtimes: GqlRuntime[]; onDelete: (r: GqlRuntime) => void; onViewLogs: (r: GqlRuntime) => void }) {
+function EnvironmentRuntimeCard({
+  env,
+  runtimes,
+  onDelete,
+  onViewLogs,
+  onRefresh,
+  isRefreshing,
+  autoOpenAddRuntime,
+  onAutoOpenConsumed,
+}: {
+  env: GqlEnvironment;
+  runtimes: GqlRuntime[];
+  onDelete: (r: GqlRuntime) => void;
+  onViewLogs: (r: GqlRuntime) => void;
+  onRefresh: () => void;
+  isRefreshing?: boolean;
+  autoOpenAddRuntime?: boolean;
+  onAutoOpenConsumed?: () => void;
+}) {
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+
+  useEffect(() => {
+    if (!autoOpenAddRuntime) return;
+    setAddOpen(true);
+    onAutoOpenConsumed?.();
+  }, [autoOpenAddRuntime, onAutoOpenConsumed]);
 
   const filtered = runtimes.filter((r) => !query || r.runtimeId.toLowerCase().includes(query.toLowerCase()) || r.runtimeType.toLowerCase().includes(query.toLowerCase()) || (r.component?.displayName ?? '').toLowerCase().includes(query.toLowerCase()));
   const maxPage = Math.max(0, Math.ceil(filtered.length / rowsPerPage) - 1);
@@ -274,16 +299,21 @@ function EnvironmentRuntimeCard({ env, runtimes, onDelete, onViewLogs }: { env: 
               </Typography>
               <Chip label={`${filtered.length} runtime${filtered.length !== 1 ? 's' : ''}`} size="small" color={filtered.length > 0 ? 'primary' : 'default'} />
             </Stack>
-            <Authorized permissions={[Permissions.ENVIRONMENT_MANAGE, Permissions.ENVIRONMENT_MANAGE_NONPROD]}>
-              <Stack direction="row" gap={1}>
+            <Stack direction="row" gap={1} alignItems="center">
+              <IconButton size="small" aria-label={`Refresh runtimes for ${env.name}`} onClick={onRefresh} disabled={isRefreshing}>
+                <RefreshCw size={16} />
+              </IconButton>
+              <Authorized permissions={[Permissions.ENVIRONMENT_MANAGE, Permissions.ENVIRONMENT_MANAGE_NONPROD]}>
+                <Stack direction="row" gap={1}>
                 <Button variant="outlined" size="small" onClick={() => setDrawerOpen(true)}>
                   Manage Secrets
                 </Button>
                 <Button variant="contained" size="small" startIcon={<Plus size={16} />} onClick={() => setAddOpen(true)}>
                   Add Runtime
                 </Button>
-              </Stack>
-            </Authorized>
+                </Stack>
+              </Authorized>
+            </Stack>
           </Stack>
           <Divider sx={{ mb: 2 }} />
           <SearchField value={query} onChange={setQuery} placeholder="Search runtimes..." sx={{ mb: 2, width: '100%', maxWidth: 400 }} />
@@ -372,10 +402,26 @@ function EnvironmentRuntimeCard({ env, runtimes, onDelete, onViewLogs }: { env: 
 }
 
 export default function OrgRuntimes(_scope: OrgScope): JSX.Element {
+  const location = useLocation();
+  const navigate = useNavigate();
   const { data: environments, isLoading: envsLoading } = useAllEnvironments();
   const [deleting, setDeleting] = useState<GqlRuntime | null>(null);
   const [viewingLogs, setViewingLogs] = useState<GqlRuntime | null>(null);
   const deleteMutation = useDeleteRuntime();
+  const shouldAutoOpenAddRuntime = new URLSearchParams(location.search).get('action') === 'add-runtime';
+
+  const clearAutoOpenAction = useCallback(() => {
+    if (!shouldAutoOpenAddRuntime) return;
+    const params = new URLSearchParams(location.search);
+    params.delete('action');
+    navigate(
+      {
+        pathname: location.pathname,
+        search: params.toString() ? `?${params.toString()}` : '',
+      },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate, shouldAutoOpenAddRuntime]);
 
   const runtimeQueries = useQueries({
     queries: (environments ?? []).map((env) => ({
@@ -398,8 +444,9 @@ export default function OrgRuntimes(_scope: OrgScope): JSX.Element {
         <EmptyListing icon={<Server size={48} />} title="No environments found" description="Create an environment first to register runtimes." />
       ) : (
         environments.map((env, index) => {
+          const query = runtimeQueries[index];
           const runtimes = runtimeQueries[index]?.data ?? [];
-          return <EnvironmentRuntimeCard key={env.id} env={env} runtimes={runtimes} onDelete={setDeleting} onViewLogs={setViewingLogs} />;
+          return <EnvironmentRuntimeCard key={env.id} env={env} runtimes={runtimes} onDelete={setDeleting} onViewLogs={setViewingLogs} onRefresh={() => query?.refetch()} isRefreshing={query?.isFetching} autoOpenAddRuntime={shouldAutoOpenAddRuntime && index === 0} onAutoOpenConsumed={clearAutoOpenAction} />;
         })
       )}
 
