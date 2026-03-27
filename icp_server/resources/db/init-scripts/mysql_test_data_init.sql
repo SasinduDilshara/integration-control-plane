@@ -34,6 +34,60 @@ VALUES ('770e8400-e29b-41d4-a716-446655440005', 'readonlyviewer', 'Read Only Vie
 -- ADDITIONAL COMPONENTS FOR TESTING
 -- ============================================================================
 
+-- Re-create sample project (moved from mysql_init.sql) for test data dependencies
+INSERT INTO projects (
+    project_id,
+    org_id,
+    name,
+    version,
+    handler,
+    region,
+    description,
+    type,
+    git_provider,
+    git_organization,
+    repository,
+    branch,
+    owner_id,
+    created_by
+)
+VALUES (
+    '650e8400-e29b-41d4-a716-446655440001',
+    1,
+    'Sample Project',
+    '1.0.0',
+    'sample-project',
+    'us-west-2',
+    'Sample project for testing',
+    'web-application',
+    'github',
+    'sample-org',
+    'sample-repo',
+    'main',
+    NULL,
+    'System Administrator'
+);
+
+-- Primary component in Project 1 used by runtime and role-mapping test data
+INSERT INTO components (
+    component_id,
+    name,
+    display_name,
+    component_type,
+    description,
+    created_by,
+    project_id
+)
+VALUES (
+    '640e8400-e29b-41d4-a716-446655440001',
+    'sample-integration',
+    'Sample Integration',
+    'BI',
+    'Sample integration for testing',
+    NULL,
+    '650e8400-e29b-41d4-a716-446655440001'
+);
+
 -- Second component in Project 1 for same-project testing
 INSERT INTO components (
     component_id,
