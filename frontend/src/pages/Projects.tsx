@@ -58,6 +58,33 @@ function ProjectCard({ project, onClick, onSettings }: { project: GqlProject; on
   );
 }
 
+function ProjectListItem({ project, onClick, onSettings }: { project: GqlProject; onClick: () => void; onSettings: () => void }) {
+  return (
+    <Card variant="outlined" sx={{ cursor: 'pointer', '&:hover': { boxShadow: 1 } }} onClick={onClick}>
+      <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2 }}>
+        <Avatar sx={{ bgcolor: 'action.hover', color: 'text.secondary', width: 40, height: 40 }}>{project.name[0].toUpperCase()}</Avatar>
+        <Stack sx={{ flex: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" sx={{ fontWeight: 600 }} noWrap>
+            {project.name}
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            Updated {formatDistanceToNow(project.updatedAt)}
+          </Typography>
+        </Stack>
+        <IconButton
+          size="small"
+          aria-label={`Settings for ${project.name}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSettings();
+          }}>
+          <Settings size={16} />
+        </IconButton>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Projects(scope: OrgScope): JSX.Element {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
@@ -122,14 +149,22 @@ export default function Projects(scope: OrgScope): JSX.Element {
         />
       ) : (
         <>
-          <Grid container spacing={2}>
-            {paginated.map((p) => (
-              <Grid key={p.id} size={{ xs: 12, sm: 6, md: 4 }}>
-                <ProjectCard project={p} onClick={() => navigate(resourceUrl(narrow(scope, p.handler), 'overview'))} onSettings={() => navigate(editProjectUrl(scope.org, p.id))} />
-              </Grid>
-            ))}
-          </Grid>
-          {filtered.length > 10 && (
+          {view === 'grid' ? (
+            <Grid container spacing={2}>
+              {paginated.map((p) => (
+                <Grid key={p.id} size={{ xs: 12, sm: 6, md: 4 }}>
+                  <ProjectCard project={p} onClick={() => navigate(resourceUrl(narrow(scope, p.handler), 'overview'))} onSettings={() => navigate(editProjectUrl(scope.org, p.id))} />
+                </Grid>
+              ))}
+            </Grid>
+          ) : (
+            <Stack spacing={1.5}>
+              {paginated.map((p) => (
+                <ProjectListItem key={p.id} project={p} onClick={() => navigate(resourceUrl(narrow(scope, p.handler), 'overview'))} onSettings={() => navigate(editProjectUrl(scope.org, p.id))} />
+              ))}
+            </Stack>
+          )}
+          {filtered.length > rowsPerPage && (
             <TablePagination
               component="div"
               count={filtered.length}
