@@ -62,6 +62,7 @@ type LogSource record {
     string? module?;
     string? level?;
     string? message?;
+    string? 'error?;
     string? service_type?;
     string? product?;
     string? icp_runtimeId?;
@@ -241,7 +242,7 @@ service /observability on openSerachObservabilityListener {
                 artifactContainer, // COL_ARTIFACT_CONTAINER (10)
                 product, // COL_PRODUCT (11)
                 icpRuntimeId, // COL_ICP_RUNTIME_ID (12)
-                (), // COL_LOG_CONTEXT (13) - null for now
+                sourceData?.'error ?: (), // COL_LOG_CONTEXT (13) - error details
                 "", // COL_COMPONENT_VERSION (14)
                 "", // COL_COMPONENT_VERSION_ID (15)
                 rawMessage, // COL_RAW_MESSAGE (16) - for deduplication
@@ -768,8 +769,12 @@ function constructLogEntry(LogSource sourceData) returns string {
         serviceSpecificFields = artifactContainer;
     }
 
+    // Error field (may contain structured JSON)
+    string? errorValue = sourceData?.'error;
+    string errorField = errorValue is string && errorValue != "" ? string ` error="${errorValue}"` : "";
+
     // Construct the log entry in logfmt style
-    return string `time=${time} level=${level}${serviceSpecificFields} message="${message}"${traceId}${spanId}${runtimeId}`;
+    return string `time=${time} level=${level}${serviceSpecificFields} message="${message}"${errorField}${traceId}${spanId}${runtimeId}`;
 }
 
 // Helper function to deduplicate log entries based on composite key

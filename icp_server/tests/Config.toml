@@ -24,7 +24,7 @@ enableMetrics = true
 # AUTHENTICATION BACKEND CONFIGURATION
 # =============================================================================
 authBackendUrl = "https://localhost:9447"
-authBackendApiKey = "default-api-key"
+
 
 # JWT Configuration
 frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs256"
