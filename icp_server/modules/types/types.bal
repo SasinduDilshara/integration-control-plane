@@ -254,116 +254,57 @@ public enum ComponentType {
     MI
 };
 
-# MI Runtime Control Command
-#
-# + runtimeId - Runtime ID where the command should be executed
-# + componentId - Component ID that the artifact belongs to
-# + artifactName - Name of the artifact
-# + artifactType - Type of the artifact
-# + action - Control action to perform
-# + status - Current status of the command
-# + issuedAt - Timestamp when the command was issued
-# + sentAt - Timestamp when the command was sent to runtime
-# + acknowledgedAt - Timestamp when the runtime acknowledged the command
-# + completedAt - Timestamp when the command execution completed
-# + errorMessage - Error message if the command failed
-# + issuedBy - User ID who issued the command
-public type MIRuntimeControlCommand record {
-    string runtimeId;
-    string componentId;
-    string artifactName;
-    string artifactType;
-    MIControlAction action;
-    ControlCommandStatus status;
-    time:Utc issuedAt;
-    time:Utc? sentAt?;
-    time:Utc? acknowledgedAt?;
-    time:Utc? completedAt?;
-    string? errorMessage?;
-    string? issuedBy?;
-};
 
-# MI Artifact Intended State
-#
-# + componentId - Component ID that the artifact belongs to
-# + artifactName - Name of the artifact
-# + artifactType - Type of the artifact (e.g., API, Proxy Service, Endpoint)
-# + action - Intended action/state for the artifact
-# + issuedAt - Timestamp when the intended state was set
-# + issuedBy - User ID who set the intended state
-public type MIArtifactIntendedState record {
-    string componentId;
-    string artifactName;
-    string artifactType;
-    MIControlAction action;
-    time:Utc issuedAt;
-    string? issuedBy?;
-};
-
-# Database record for MI Runtime Control Command
-#
-# + runtime_id - field description  
-# + component_id - field description  
-# + artifact_name - field description  
-# + artifact_type - field description  
-# + action - field description  
-# + status - field description  
-# + issued_at - field description  
-# + sent_at - field description  
-# + acknowledged_at - field description  
-# + completed_at - field description  
-# + error_message - field description  
-# + issued_by - field description
-public type MIRuntimeControlCommandDBRecord record {
-    string runtime_id;
-    string component_id;
-    string artifact_name;
-    string artifact_type;
-    string action;
-    string status;
-    time:Utc issued_at;
-    time:Utc? sent_at?;
-    time:Utc? acknowledged_at?;
-    time:Utc? completed_at?;
-    string? error_message?;
-    string? issued_by?;
-};
-
-# Database record for MI Artifact Intended State
-#
-# + component_id - Component ID that the artifact belongs to
-# + artifact_name - Name of the artifact
-# + artifact_type - Type of the artifact (e.g., API, Proxy Service, Endpoint)
-# + action - Intended action/state for the artifact
-public type MIArtifactIntendedStateDBRecord record {
-    string component_id;
-    string artifact_name;
-    string artifact_type;
-    string action;
-};
-
-# Database record for BI Artifact Intended State
-#
-# + target_artifact - Name of the target artifact
-# + action - Intended action/state for the artifact
-public type BIArtifactIntendedStateDBRecord record {
-    string target_artifact;
-    string action;
-};
-
-# Record type for artifact query result from runtime tables
-#
-# + artifact_id - Unique identifier for the artifact (not used in control commands)  
-# + state - Current state of the artifact (enabled/disabled)  
-# + tracing - Current tracing state of the artifact (enabled/disabled)  
-# + statistics - field description
-public type ArtifactQueryResult record {|
-    string artifact_id;
-    string state;
-    string tracing?;
-    string statistics?;
+public type ReconcileAction record {|
+    string key;
+    string value;
 |};
 
+public type ReconcileArtifactKey record {|
+    string artifactName;
+    string artifactType;
+|};
+
+# Returns a qualified artifact name in the format `package:name` when the
+# package is non-empty, or just `name` otherwise.  Used to build unique
+# reconcile keys for BI artifacts that may share a name across packages.
+public isolated function qualifiedArtifactName(string name, string? package) returns string {
+    if package is string && package.length() > 0 {
+        return package + ":" + name;
+    }
+    return name;
+}
+
+# Extracts the raw artifact name from a potentially qualified name.
+# If the name contains a `:`, everything after the last `:` is the raw name.
+public isolated function rawArtifactName(string qualifiedName) returns string {
+    int? idx = qualifiedName.lastIndexOf(":");
+    if idx is int {
+        return qualifiedName.substring(idx + 1);
+    }
+    return qualifiedName;
+}
+
+public type DispatchFn function (string runtimeId, ReconcileArtifactKey artifact, ReconcileAction[] actions) returns error?;
+
+public type PartialDispatchDetail record {|
+    ReconcileAction[] applied;
+    ReconcileAction[] failed;
+|};
+
+public type PartialDispatchError distinct error<PartialDispatchDetail>;
+
+public type ReconcileBackoffRecord record {|
+    string state_key;
+    int attempt_count;
+    int has_error;
+    int next_attempt;
+|};
+
+public type ArtifactStateField record {|
+    string value;
+    boolean inSync;
+|};
 // === Configuration ===
 
 public type IcpServer record {|
@@ -415,6 +356,55 @@ public type AccessTokenResponse record {|
 |};
 
 // Database record types for mapping query results
+# + runtime_id - field description
+# + component_id - field description
+# + artifact_name - field description
+# + artifact_type - field description
+# + action - field description
+# + status - field description
+# + issued_at - field description
+# + sent_at - field description
+# + acknowledged_at - field description
+# + completed_at - field description
+# + error_message - field description
+# + issued_by - field description
+public type MIRuntimeControlCommandDBRecord record {
+    string runtime_id;
+    string component_id;
+    string artifact_name;
+    string artifact_type;
+    string action;
+    string status;
+    time:Utc issued_at;
+    time:Utc? sent_at?;
+    time:Utc? acknowledged_at?;
+    time:Utc? completed_at?;
+    string? error_message?;
+    string? issued_by?;
+};
+
+# Database record for MI Artifact Intended State
+#
+# + component_id - Component ID that the artifact belongs to
+# + artifact_name - Name of the artifact
+# + artifact_type - Type of the artifact (e.g., API, Proxy Service, Endpoint)
+# + action - Intended action/state for the artifact
+public type MIArtifactIntendedStateDBRecord record {
+    string component_id;
+    string artifact_name;
+    string artifact_type;
+    string action;
+};
+
+# Database record for BI Artifact Intended State
+#
+# + target_artifact - Name of the target artifact
+# + action - Intended action/state for the artifact
+public type BIArtifactIntendedStateDBRecord record {
+    string target_artifact;
+    string action;
+};
+
 public type RuntimeDBRecord record {
     string runtime_id;
     string runtime_type;
@@ -677,11 +667,12 @@ public type Service record {
     @sql:Column {
         name: "service_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     @sql:Column {
         name: "service_type"
     }
-    string 'type = ""; // "API", "ProxyService", "DataService", "InboundEndpoint", "ScheduledTask"
+    string 'type = "";
     Resource[] resources;
     Listener[] listeners;
     string[] runtimeIds?;
@@ -730,7 +721,8 @@ public type Listener record {
     @sql:Column {
         name: "state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     string[] runtimeIds?;
     ArtifactRuntimeInfo[]? runtimes?;
 };
@@ -769,14 +761,17 @@ public type RestApi record {
     @sql:Column {
         name: "api_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
-    string tracing = "disabled"; // "enabled", "disabled"
-    string statistics = "disabled"; // "enabled", "disabled"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
+    string tracing = "disabled";
+    boolean? tracingInSync = ();
+    string statistics = "disabled";
+    boolean? statisticsInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
     string carbonApp?;
-    ApiResource[] resources = []; // API resources (path + methods)
+    ApiResource[] resources = [];
     string[] runtimeIds?;
     ArtifactRuntimeInfo[]? runtimes?;
 };
@@ -798,9 +793,12 @@ public type ProxyService record {
     @sql:Column {
         name: "proxy_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
-    string tracing = "disabled"; // "enabled", "disabled"
-    string statistics = "disabled"; // "enabled", "disabled"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
+    string tracing = "disabled";
+    boolean? tracingInSync = ();
+    string statistics = "disabled";
+    boolean? statisticsInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -819,9 +817,12 @@ public type Endpoint record {
     @sql:Column {
         name: "endpoint_state"
     }
-    ArtifactState state; // "enabled", "disabled"
-    string tracing = "disabled"; // "enabled", "disabled"
-    string statistics = "disabled"; // "enabled", "disabled"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
+    string tracing = "disabled";
+    boolean? tracingInSync = ();
+    string statistics = "disabled";
+    boolean? statisticsInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -854,6 +855,7 @@ public type InboundEndpoint record {
         name: "statistics"
     }
     string statistics?;
+    boolean? statisticsInSync = ();
     @sql:Column {
         name: "on_error"
     }
@@ -861,8 +863,10 @@ public type InboundEndpoint record {
     @sql:Column {
         name: "inbound_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
-    string tracing = "disabled"; // "enabled", "disabled"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
+    string tracing = "disabled";
+    boolean? tracingInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -881,9 +885,12 @@ public type Sequence record {
     @sql:Column {
         name: "sequence_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
-    string tracing = "disabled"; // "enabled", "disabled"
-    string statistics = "disabled"; // "enabled", "disabled"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
+    string tracing = "disabled";
+    boolean? tracingInSync = ();
+    string statistics = "disabled";
+    boolean? statisticsInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -902,7 +909,8 @@ public type Task record {
     @sql:Column {
         name: "task_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -940,7 +948,8 @@ public type MessageStore record {
     @sql:Column {
         name: "store_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -959,7 +968,8 @@ public type MessageProcessor record {
     @sql:Column {
         name: "processor_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -978,7 +988,8 @@ public type LocalEntry record {
     @sql:Column {
         name: "entry_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -997,7 +1008,8 @@ public type DataService record {
     @sql:Column {
         name: "dataservice_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
@@ -1057,7 +1069,8 @@ public type Connector record {
     @sql:Column {
         name: "connector_state"
     }
-    ArtifactState state = "enabled"; // "ENABLED", "DISABLED"
+    ArtifactState state = "enabled";
+    boolean? stateInSync = ();
     string[] runtimeIds?;
     ArtifactRuntimeInfo[]? runtimes?;
 };
@@ -2305,6 +2318,7 @@ public type ArtifactTriggerResponse record {|
 public type ListenerControlInput record {|
     string[] runtimeIds;
     string listenerName;
+    string listenerPackage?;
     ControlAction action;
 |};
 
@@ -2319,6 +2333,7 @@ public type UpdateLogLevelInput record {|
     RuntimeType? componentType?; // Optional: if provided, skips runtime lookup
     // BI fields
     string? componentName?; // Required for BI, optional for MI
+    string? componentPackage?; // Optional: package qualifier for BI
     // MI fields
     string? loggerName?; // Required for MI, optional for BI
     string? loggerClass?; // Optional: only for adding new logger in MI

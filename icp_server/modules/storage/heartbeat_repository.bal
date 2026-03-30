@@ -35,7 +35,6 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat, boolean pre
 
     boolean isNewRegistration = false;
     boolean fullHeartbeatRequired = false;
-    types:ControlCommand[] pendingCommands = [];
 
     // Upsert runtime record
     isNewRegistration = check upsertRuntime(heartbeat);
@@ -46,7 +45,7 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat, boolean pre
         log:printInfo(string `Updated runtime via heartbeat: ${heartbeat.runtime}`);
     }
 
-    // Start transaction for artifact updates and command retrieval
+    // Start transaction for artifact updates
     transaction {
         // Insert all runtime artifacts
         check insertRuntimeArtifacts(heartbeat);
@@ -59,29 +58,6 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat, boolean pre
             }
         }
 
-        // Get component type(MI/BI) for this runtime
-        string? componentType = check getComponentTypeByRuntimeId(heartbeat.runtime);
-
-        // Process intended states and retrieve pending control commands based on component type
-        if isNewRegistration {
-            log:printInfo(string `New runtime registration detected - processing intended states for runtime ${heartbeat.runtime}`);
-            check processIntendedStates(heartbeat.runtime, heartbeat.component, heartbeat.artifacts, heartbeat.logLevels, componentType);
-        }
-
-        if componentType == types:BI {
-            // Retrieve pending BI control commands (works for both new and existing runtimes)
-            types:ControlCommand[] existingCommands = check sendPendingBIControlCommands(heartbeat.runtime);
-            foreach types:ControlCommand cmd in existingCommands {
-                pendingCommands.push(cmd);
-            }
-        } else if componentType == types:MI {
-            // Retrieve and mark MI control commands as sent
-            // MI commands are handled via management API, not returned in heartbeat response
-            log:printDebug(string `Checking for pending MI control commands for runtime ${heartbeat.runtime}`);
-            _ = check sendPendingMIControlCommands(heartbeat.runtime);
-        }
-        // For other component types or if runtime not found, pendingCommands remains empty
-
         // Create audit log entry
         string action = isNewRegistration ? "REGISTER" : "HEARTBEAT";
         int totalArtifacts = countTotalArtifacts(heartbeat.artifacts);
@@ -93,7 +69,7 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat, boolean pre
             INSERT INTO audit_logs (
                 runtime_id, action, details
             ) VALUES (
-                ${heartbeat.runtime}, ${action}, 
+                ${heartbeat.runtime}, ${action},
                 ${string `Runtime ${action.toLowerAscii()} processed with ${totalArtifacts} total artifacts (${heartbeat.artifacts.services.length()} services,
                  ${heartbeat.artifacts.listeners.length()} listeners)`}
             )
@@ -105,6 +81,20 @@ public isolated function processHeartbeat(types:Heartbeat heartbeat, boolean pre
         log:printError(string `Failed to process heartbeat for runtime ${heartbeat.runtime}`, e);
         return error(string `Failed to process heartbeat for runtime ${heartbeat.runtime}`, e);
     }
+
+    // Write observed state from heartbeat artifacts (skip for incomplete heartbeats to avoid pruning valid state)
+    if !fullHeartbeatRequired {
+        string? componentType = check getComponentTypeByRuntimeId(heartbeat.runtime);
+        log:printDebug(string `Resolved component type: ${componentType ?: "unknown"} for runtime ${heartbeat.runtime}`);
+        if componentType == types:MI {
+            check writeObservedStateMI(heartbeat.runtime, heartbeat.component, heartbeat.environment, heartbeat.artifacts);
+        } else if componentType == types:BI {
+            check writeObservedStateBI(heartbeat.runtime, heartbeat.component, heartbeat.environment, heartbeat.artifacts, heartbeat.logLevels);
+        }
+    } else {
+        log:printDebug(string `Skipping observed state write for runtime ${heartbeat.runtime}: heartbeat marked incomplete`);
+    }
+    types:ControlCommand[] pendingCommands = [];
 
     // Cache the runtime hash value
     error? cacheResult = hashCache.put(heartbeat.runtime, heartbeat.runtimeHash);
@@ -130,7 +120,6 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
 
     time:Utc currentTime = time:utcNow();
     string currentTimeStr = check convertUtcToDbDateTime(currentTime);
-    types:ControlCommand[] pendingCommands = [];
     boolean hashMatches = false;
 
     if hashCache.hasKey(deltaHeartbeat.runtime) {
@@ -144,7 +133,6 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
         log:printInfo(string `Hash mismatch for runtime ${deltaHeartbeat.runtime}, requesting full heartbeat`);
 
         // Still update the timestamp to show runtime is alive
-        // Use database's native timestamp function (CURRENT_TIMESTAMP works in both H2 MySQL mode and MySQL)
         sql:ExecutionResult|error result = dbClient->execute(`
             UPDATE runtimes
             SET last_heartbeat = CURRENT_TIMESTAMP, status = 'RUNNING'
@@ -153,8 +141,6 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
 
         if result is error {
             log:printError(string `Failed to update timestamp for runtime ${deltaHeartbeat.runtime}`, result);
-            // Don't fail the delta heartbeat just because timestamp update failed
-            // Still request full heartbeat
         }
 
         return {
@@ -166,7 +152,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
 
     // Hash matches, process delta heartbeat
 
-    // Update the heartbeat timestamp using database's native timestamp function
+    // Update the heartbeat timestamp
     sql:ExecutionResult|error timestampResult = dbClient->execute(`
         UPDATE runtimes
         SET last_heartbeat = CURRENT_TIMESTAMP, status = 'RUNNING'
@@ -176,28 +162,13 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
     boolean runtimeExists = true;
     if timestampResult is error {
         log:printError(string `Failed to update timestamp for runtime ${deltaHeartbeat.runtime}`, timestampResult);
-        // Determine if runtime is missing; in that case, avoid FK violations when auditing
         runtimeExists = false;
     } else {
-        // If no rows were updated, runtime may have been deleted concurrently
         runtimeExists = (timestampResult.affectedRowCount ?: 0) > 0;
     }
 
-    // Handle control commands and audit logging in a transaction
-    // Commands are marked as 'sent' atomically with audit log creation
+    // Audit logging
     transaction {
-        // Get component type for this runtime
-        string? componentType = check getComponentTypeByRuntimeId(deltaHeartbeat.runtime);
-
-        // Retrieve pending control commands based on component type
-        if componentType == types:BI {
-            pendingCommands = check sendPendingBIControlCommands(deltaHeartbeat.runtime);
-        } else if componentType == types:MI {
-            _ = check sendPendingMIControlCommands(deltaHeartbeat.runtime);
-        }
-        // For other component types or if runtime not found, pendingCommands remains empty
-
-        // Create audit log entry
         if runtimeExists {
             sql:ParameterizedQuery auditQuery = sql:queryConcat(
                     `INSERT INTO audit_logs (
@@ -209,7 +180,6 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
             );
             _ = check dbClient->execute(auditQuery);
         } else {
-            // Runtime was deleted or not yet created; log without FK reference to avoid integrity violation
             sql:ParameterizedQuery auditQuery = sql:queryConcat(
                     `INSERT INTO audit_logs (
                     action, details, timestamp
@@ -232,7 +202,7 @@ public isolated function processDeltaHeartbeat(types:DeltaHeartbeat deltaHeartbe
     return {
         acknowledged: true,
         fullHeartbeatRequired: false,
-        commands: pendingCommands
+        commands: []
     };
 }
 
@@ -419,394 +389,74 @@ isolated function validateResourcesConsistency(types:Resource[] referenceResourc
     return ();
 }
 
-// Process intended states and insert control commands to DB
-isolated function processIntendedStates(string runtimeId, string componentId, types:Artifacts artifacts, map<log:Level>? logLevels, string? componentType) returns error? {
-    if componentType == types:BI {
-        // Check BI intended states and insert control commands to DB
-        int|error commandCount = checkBIIntendedStatesAndInsertCommands(
-                runtimeId,
-                componentId,
-                artifacts,
-                logLevels
-        );
-
-        if commandCount is int && commandCount > 0 {
-            log:printInfo(string `Inserted ${commandCount} BI control commands from intended states for runtime ${runtimeId}`);
-        } else if commandCount is error {
-            return commandCount;
-        }
-    } else if componentType == types:MI {
-        // Check MI intended states and insert control commands to DB
-        int|error commandCount = checkMIIntendedStatesAndInsertCommands(
-                runtimeId,
-                componentId,
-                artifacts
-        );
-
-        if commandCount is int && commandCount > 0 {
-            log:printInfo(string `Inserted ${commandCount} MI control commands from intended states for runtime ${runtimeId}`);
-        } else if commandCount is error {
-            return commandCount;
-        }
+isolated function writeObservedStateMI(string runtimeId, string componentId, string envId,
+        types:Artifacts artifacts) returns error? {
+    log:printDebug(string `Writing MI observed state for runtime ${runtimeId}, component ${componentId}, environment ${envId}`);
+    [types:ReconcileArtifactKey, map<string>][] entries = [];
+    foreach types:RestApi api in <types:RestApi[]>artifacts.apis {
+        entries.push([{artifactName: api.name, artifactType: "api"},
+            {"status": api.state, "tracing": api.tracing, "statistics": api.statistics}]);
     }
+    foreach types:ProxyService proxy in <types:ProxyService[]>artifacts.proxyServices {
+        entries.push([{artifactName: proxy.name, artifactType: "proxy-service"},
+            {"status": proxy.state, "tracing": proxy.tracing, "statistics": proxy.statistics}]);
+    }
+    foreach types:Endpoint ep in <types:Endpoint[]>artifacts.endpoints {
+        entries.push([{artifactName: ep.name, artifactType: "endpoint"},
+            {"status": ep.state, "tracing": ep.tracing, "statistics": ep.statistics}]);
+    }
+    foreach types:InboundEndpoint ie in <types:InboundEndpoint[]>artifacts.inboundEndpoints {
+        entries.push([{artifactName: ie.name, artifactType: "inbound-endpoint"},
+            {"status": ie.state, "tracing": ie.tracing, "statistics": ie.statistics ?: "disabled"}]);
+    }
+    foreach types:Sequence seq in <types:Sequence[]>artifacts.sequences {
+        entries.push([{artifactName: seq.name, artifactType: "sequence"},
+            {"status": seq.state, "tracing": seq.tracing, "statistics": seq.statistics}]);
+    }
+    foreach types:Task task in <types:Task[]>artifacts.tasks {
+        entries.push([{artifactName: task.name, artifactType: "task"}, {"status": task.state}]);
+    }
+    foreach types:MessageProcessor mp in <types:MessageProcessor[]>artifacts.messageProcessors {
+        entries.push([{artifactName: mp.name, artifactType: "message-processor"}, {"status": mp.state}]);
+    }
+    foreach types:LocalEntry le in <types:LocalEntry[]>artifacts.localEntries {
+        entries.push([{artifactName: le.name, artifactType: "local-entry"}, {"status": le.state}]);
+    }
+    foreach types:DataService ds in <types:DataService[]>artifacts.dataServices {
+        entries.push([{artifactName: ds.name, artifactType: "data-service"}, {"status": ds.state}]);
+    }
+    foreach types:Connector conn in <types:Connector[]>artifacts.connectors {
+        entries.push([{artifactName: conn.name, artifactType: "connector"}, {"status": conn.state}]);
+    }
+    foreach types:MessageStore store in <types:MessageStore[]>artifacts.messageStores {
+        entries.push([{artifactName: store.name, artifactType: "message-store"}, {"status": store.state}]);
+    }
+    check batchUpsertReconcileObservedState(runtimeId, componentId, envId, entries);
 }
 
-// Check BI artifact intended states and insert control commands to DB
-isolated function checkBIIntendedStatesAndInsertCommands(string runtimeId, string componentId, types:Artifacts artifacts, map<log:Level>? logLevels) returns int|error {
-    int commandCount = 0;
-
-    // Get intended states for this component
-    map<string>|error intendedStates = getBIIntendedStatesForComponent(componentId);
-
-    if intendedStates is error {
-        log:printWarn(string `Failed to retrieve intended states for component ${componentId}`, intendedStates);
-        return commandCount;
-    }
-
-    if intendedStates.length() == 0 {
-        // No intended states configured, nothing to sync
-        return commandCount;
-    }
-
-    // Check services against intended states
+isolated function writeObservedStateBI(string runtimeId, string componentId, string envId,
+        types:Artifacts artifacts, map<log:Level>? logLevels) returns error? {
+    log:printDebug(string `Writing BI observed state for runtime ${runtimeId}, component ${componentId}, environment ${envId}`);
+    [types:ReconcileArtifactKey, map<string>][] entries = [];
     foreach types:Service svc in artifacts.services {
-        string artifactName = svc.name;
-        if intendedStates.hasKey(artifactName) {
-            string intendedAction = intendedStates.get(artifactName);
-            string currentState = svc.state.toUpperAscii();
-
-            // Determine if command is needed
-            boolean needsCommand = false;
-            types:ControlAction? actionToIssue = ();
-
-            if intendedAction == "STOP" && currentState == "ENABLED" {
-                needsCommand = true;
-                actionToIssue = types:STOP;
-            } else if intendedAction == "START" && currentState == "DISABLED" {
-                needsCommand = true;
-                actionToIssue = types:START;
-            }
-
-            if needsCommand && actionToIssue is types:ControlAction {
-                // Insert control command to DB
-                string|error commandId = insertControlCommand(runtimeId, artifactName, actionToIssue);
-
-                if commandId is string {
-                    commandCount += 1;
-                    log:printInfo(string `Inserted BI control command for service ${artifactName}: ${intendedAction} (current: ${currentState})`);
-                }
-            }
-        }
+        string qualName = types:qualifiedArtifactName(svc.name, svc.package);
+        entries.push([{artifactName: qualName, artifactType: "service"},
+            {"status": svc.state.toLowerAscii()}]);
     }
-
-    // Check listeners against intended states
     foreach types:Listener 'listener in artifacts.listeners {
-        string artifactName = 'listener.name;
-        if intendedStates.hasKey(artifactName) {
-            string intendedAction = intendedStates.get(artifactName);
-            string currentState = 'listener.state.toUpperAscii();
-
-            // Determine if command is needed
-            boolean needsCommand = false;
-            types:ControlAction? actionToIssue = ();
-
-            if intendedAction == "STOP" && currentState == "ENABLED" {
-                needsCommand = true;
-                actionToIssue = types:STOP;
-            } else if intendedAction == "START" && currentState == "DISABLED" {
-                needsCommand = true;
-                actionToIssue = types:START;
-            }
-
-            if needsCommand && actionToIssue is types:ControlAction {
-                // Insert control command to DB
-                string|error commandId = insertControlCommand(runtimeId, artifactName, actionToIssue);
-
-                if commandId is string {
-                    commandCount += 1;
-                    log:printInfo(string `Inserted BI control command for listener ${artifactName}: ${intendedAction} (current: ${currentState})`);
-                }
-            }
+        string qualName = types:qualifiedArtifactName('listener.name, 'listener.package);
+        entries.push([{artifactName: qualName, artifactType: "listener"},
+            {"status": 'listener.state.toLowerAscii()}]);
+    }
+    if logLevels is map<log:Level> {
+        foreach var [componentName, logLevel] in logLevels.entries() {
+            entries.push([{artifactName: componentName, artifactType: "log-level"},
+                {"logLevel": logLevel.toString()}]);
         }
     }
-
-    // Check log levels against intended states
-    map<string>|error intendedLogLevels = getBILogLevelIntendedStatesForComponent(componentId);
-
-    if intendedLogLevels is map<string> && intendedLogLevels.length() > 0 {
-        if logLevels is map<log:Level> {
-            foreach string componentName in intendedLogLevels.keys() {
-                string intendedLevel = intendedLogLevels.get(componentName);
-
-                if logLevels.hasKey(componentName) {
-                    log:Level currentLevelEnum = logLevels.get(componentName);
-                    string currentLevel = currentLevelEnum.toString();
-
-                    if currentLevel.toUpperAscii() != intendedLevel.toUpperAscii() {
-                        // Insert log level control command
-                        string|error commandId = insertLogLevelControlCommand(
-                                runtimeId,
-                                componentName,
-                                intendedLevel,
-                                () // No user ID for system-initiated sync
-                        );
-
-                        if commandId is string {
-                            commandCount += 1;
-                            log:printInfo(string `Inserted BI log level control command for ${componentName}: ${intendedLevel} (current: ${currentLevel})`);
-                        } else {
-                            log:printWarn(string `Failed to insert BI log level control command for ${componentName}`, commandId);
-                        }
-                    }
-                } else {
-                    // Component not reporting log level, insert command anyway
-                    string|error commandId = insertLogLevelControlCommand(
-                            runtimeId,
-                            componentName,
-                            intendedLevel,
-                            ()
-                    );
-
-                    if commandId is string {
-                        commandCount += 1;
-                        log:printInfo(string `Inserted BI log level control command for ${componentName}: ${intendedLevel} (not currently reported)`);
-                    }
-                }
-            }
-        } else {
-            // No log levels reported in heartbeat - enforce all intended levels
-            log:printDebug(string `No log levels reported in heartbeat for runtime ${runtimeId}, enforcing all intended log levels`);
-            foreach string componentName in intendedLogLevels.keys() {
-                string intendedLevel = intendedLogLevels.get(componentName);
-
-                // Insert command for intended level (no current level to compare)
-                string|error commandId = insertLogLevelControlCommand(
-                        runtimeId,
-                        componentName,
-                        intendedLevel,
-                        ()
-                );
-
-                if commandId is string {
-                    commandCount += 1;
-                    log:printInfo(string `Inserted BI log level control command for ${componentName}: ${intendedLevel} (no log levels reported in heartbeat)`);
-                } else {
-                    log:printWarn(string `Failed to insert BI log level control command for ${componentName}`, commandId);
-                }
-            }
-        }
-    } else {
-        // No intended log levels configured - still enforce any reported log levels
-        if logLevels is map<log:Level> && logLevels.length() > 0 {
-            log:printDebug(string `No intended BI log levels configured for runtime ${runtimeId}, but runtime reported log levels`);
-        }
-    }
-    return commandCount;
+    check batchUpsertReconcileObservedState(runtimeId, componentId, envId, entries);
 }
 
-// Check MI artifact intended states and insert control commands to DB
-isolated function checkMIIntendedStatesAndInsertCommands(
-        string runtimeId,
-        string componentId,
-        types:Artifacts artifacts
-) returns int|error {
-    int commandCount = 0;
-
-    log:printInfo(string `Starting MI intended state sync for runtime ${runtimeId}, component ${componentId}`);
-
-    // Get intended states for this component
-    types:MIArtifactIntendedStateDBRecord[]|error intendedStates = getMIIntendedStatesForComponent(componentId);
-
-    if intendedStates is error {
-        log:printWarn(string `Failed to retrieve MI intended states for component ${componentId}`, intendedStates);
-        return commandCount;
-    }
-
-    if intendedStates.length() == 0 {
-        // No intended states configured, nothing to sync
-        log:printInfo(string `No MI intended states configured for component ${componentId}`);
-        return commandCount;
-    }
-
-    log:printInfo(string `Found ${intendedStates.length()} intended state(s) for component ${componentId}`);
-
-    // Iterate through intended states and process each one
-    foreach types:MIArtifactIntendedStateDBRecord intendedState in intendedStates {
-        string artifactName = intendedState.artifact_name;
-        string artifactType = intendedState.artifact_type;
-        string intendedAction = intendedState.action;
-
-        log:printInfo(string `Processing intended state: artifact=${artifactName}, type=${artifactType}, action=${intendedAction}`);
-
-        // Query the appropriate table based on artifact type and get artifact details
-        types:ArtifactQueryResult|error? artifactDetails = getArtifactDetailsByTypeAndName(runtimeId, artifactName, artifactType);
-
-        if artifactDetails is error {
-            log:printError(string `Error querying artifact ${artifactName} of type ${artifactType}`, artifactDetails);
-            continue;
-        }
-
-        if artifactDetails is () {
-            log:printWarn(string `Artifact '${artifactName}' of type '${artifactType}' not found in runtime ${runtimeId}`);
-            continue;
-        }
-
-        // Get the intended action
-
-        // Process the control command
-        log:printInfo(string `Found artifact '${artifactName}' (type=${artifactType}, state=${artifactDetails.state}, tracing=${artifactDetails.tracing ?: "N/A"})`);
-        commandCount = check processMIControlCommand(
-                runtimeId,
-                componentId,
-                artifactName,
-                artifactType,
-                artifactDetails.state,
-                artifactDetails.tracing,
-                artifactDetails.statistics,
-                intendedAction,
-                commandCount
-        );
-    }
-
-    log:printInfo(string `Completed MI intended state sync for runtime ${runtimeId}: inserted ${commandCount} control command(s)`);
-    return commandCount;
-}
-
-// Record type for artifact details
-type MIArtifactDetails record {|
-    string artifactId;
-    string currentState;
-|};
-
-// Get artifact details by type and name from the appropriate runtime table
-isolated function getArtifactDetailsByTypeAndName(string runtimeId, string artifactName, string artifactType) returns types:ArtifactQueryResult|error? {
-    log:printDebug(string `Querying artifact: name=${artifactName}, type=${artifactType}, runtime=${runtimeId}`);
-
-    ArtifactTableMetadata? metadata = resolveArtifactTableMetadata(artifactType);
-    if metadata is () {
-        log:printWarn(string `Unknown artifact type: ${artifactType}`);
-        return ();
-    }
-
-    // Build SELECT clause: include tracing/statistics columns only for tables that have them.
-    // MSSQL requires [statistics] as it is a reserved keyword.
-    // MSSQL uses TOP 1 immediately after SELECT; other dialects use LIMIT 1 at the end.
-    string statisticsCol = isMSSQL() ? "[statistics]" : "statistics";
-    string topClause = isMSSQL() ? "TOP 1 " : "";
-    string selectClause;
-    if metadata.hasTracing && metadata.hasStatistics {
-        selectClause = string `SELECT ${topClause}artifact_id, ${metadata.stateColumn} AS state, tracing, ${statisticsCol} FROM ${metadata.tableName}`;
-    } else if metadata.hasTracing {
-        selectClause = string `SELECT ${topClause}artifact_id, ${metadata.stateColumn} AS state, tracing FROM ${metadata.tableName}`;
-    } else {
-        selectClause = string `SELECT ${topClause}artifact_id, ${metadata.stateColumn} AS state FROM ${metadata.tableName}`;
-    }
-
-    sql:ParameterizedQuery query;
-    if isMSSQL() {
-        query = sql:queryConcat(
-                sqlQueryFromString(selectClause),
-                ` WHERE runtime_id = ${runtimeId} AND `,
-                sqlQueryFromString(metadata.nameColumn),
-                ` = ${artifactName}`
-        );
-    } else {
-        query = sql:queryConcat(
-                sqlQueryFromString(selectClause),
-                ` WHERE runtime_id = ${runtimeId} AND `,
-                sqlQueryFromString(metadata.nameColumn),
-                ` = ${artifactName} LIMIT 1`
-        );
-    }
-
-    stream<types:ArtifactQueryResult, sql:Error?> resultStream = dbClient->query(query);
-    types:ArtifactQueryResult[] results = check from types:ArtifactQueryResult state in resultStream
-        select state;
-    check resultStream.close();
-
-    if results.length() > 0 {
-        return results[0];
-    }
-    return ();
-}
-
-// Helper function to process MI control command
-isolated function processMIControlCommand(
-        string runtimeId,
-        string componentId,
-        string artifactName,
-        string artifactType,
-        string currentState,
-        string? currentTracingState,
-        string? currentStatisticsState,
-        string intendedAction,
-        int currentCommandCount
-) returns int|error {
-    int commandCount = currentCommandCount;
-
-    log:printDebug(string `Processing MI control command for ${artifactType} '${artifactName}': intendedAction=${intendedAction}, currentState=${currentState}, currentTracing=${currentTracingState ?: "N/A"}, currentStatistics=${currentStatisticsState ?: "N/A"}`);
-
-    // Determine if command is needed
-    boolean needsCommand = false;
-    types:MIControlAction? actionToIssue = ();
-
-    if intendedAction == "ARTIFACT_DISABLE" && currentState == "enabled" {
-        needsCommand = true;
-        actionToIssue = types:ARTIFACT_DISABLE;
-        log:printInfo(string `Command needed for ${artifactType} '${artifactName}': DISABLE (intended=ARTIFACT_DISABLE, current=enabled)`);
-    } else if intendedAction == "ARTIFACT_ENABLE" && currentState == "disabled" {
-        needsCommand = true;
-        actionToIssue = types:ARTIFACT_ENABLE;
-        log:printInfo(string `Command needed for ${artifactType} '${artifactName}': ENABLE (intended=ARTIFACT_ENABLE, current=disabled)`);
-    } else if intendedAction == "ARTIFACT_ENABLE_TRACING" {
-        string tracingState = currentTracingState ?: "disabled";
-        if tracingState == "disabled" {
-            needsCommand = true;
-            actionToIssue = types:ARTIFACT_ENABLE_TRACING;
-            log:printInfo(string `Command needed for ${artifactType} '${artifactName}': ENABLE_TRACING (intended=ARTIFACT_ENABLE_TRACING, currentTracing=${tracingState})`);
-        }
-    } else if intendedAction == "ARTIFACT_DISABLE_TRACING" {
-        string tracingState = currentTracingState ?: "disabled";
-        if tracingState == "enabled" {
-            needsCommand = true;
-            actionToIssue = types:ARTIFACT_DISABLE_TRACING;
-            log:printInfo(string `Command needed for ${artifactType} '${artifactName}': DISABLE_TRACING (intended=ARTIFACT_DISABLE_TRACING, currentTracing=${tracingState})`);
-        }
-    } else if intendedAction == "ARTIFACT_ENABLE_STATISTICS" {
-        string statisticsState = currentStatisticsState ?: "disabled";
-        if statisticsState == "disabled" {
-            needsCommand = true;
-            actionToIssue = types:ARTIFACT_ENABLE_STATISTICS;
-            log:printInfo(string `Command needed for ${artifactType} '${artifactName}': ENABLE_STATISTICS (intended=ARTIFACT_ENABLE_STATISTICS, currentStatistics=${statisticsState})`);
-        }
-    } else if intendedAction == "ARTIFACT_DISABLE_STATISTICS" {
-        string statisticsState = currentStatisticsState ?: "disabled";
-        if statisticsState == "enabled" {
-            needsCommand = true;
-            actionToIssue = types:ARTIFACT_DISABLE_STATISTICS;
-            log:printInfo(string `Command needed for ${artifactType} '${artifactName}': DISABLE_STATISTICS (intended=ARTIFACT_DISABLE_STATISTICS, currentStatistics=${statisticsState})`);
-        }
-    }
-
-    if !needsCommand {
-        log:printDebug(string `No command needed for ${artifactType} '${artifactName}': already in desired state (intended=${intendedAction}, currentState=${currentState}, currentTracing=${currentTracingState ?: "N/A"}, currentStatistics=${currentStatisticsState ?: "N/A"})`);
-    }
-
-    if needsCommand && actionToIssue is types:MIControlAction {
-        // Insert MI control command to DB
-        log:printInfo(string `Inserting MI control command: runtime=${runtimeId}, component=${componentId}, artifact=${artifactName}, action=${actionToIssue}`);
-        error? insertResult = insertMIControlCommand(runtimeId, componentId, artifactName, artifactType, actionToIssue);
-
-        if insertResult is () {
-            commandCount += 1;
-            log:printInfo(string `Successfully inserted MI control command for ${artifactType} '${artifactName}' : ${actionToIssue} (intended=${intendedAction}, currentState=${currentState}, currentTracing=${currentTracingState ?: "N/A"})`);
-        } else {
-            log:printError(string `Failed to insert MI control command for ${artifactType} '${artifactName}'`, insertResult);
-        }
-    }
-
-    return commandCount;
-}
 
 // Upsert runtime record
 isolated function upsertRuntime(types:Heartbeat heartbeat) returns boolean|error {
@@ -814,9 +464,6 @@ isolated function upsertRuntime(types:Heartbeat heartbeat) returns boolean|error
     string runtimeHostname = heartbeat.runtimeHostname ?: "";
     string runtimePort = heartbeat.runtimePort ?: "";
 
-    // By the time this function is called, validateHeartbeatData has already resolved
-    // heartbeat.component / .environment / .project from handler names to UUIDs in-place,
-    // so they can be used directly as FK values.
     sql:ExecutionResult|error insertRes = dbClient->execute(`
         INSERT INTO runtimes (
             runtime_id, name, runtime_type, status, version,

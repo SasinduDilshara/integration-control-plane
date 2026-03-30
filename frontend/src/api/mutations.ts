@@ -187,6 +187,7 @@ export interface ArtifactStatusInput {
 export interface ListenerStateInput {
   runtimeIds: string[];
   listenerName: string;
+  listenerPackage?: string;
   action: 'START' | 'STOP';
 }
 
@@ -275,6 +276,7 @@ export function useUpdateListenerState() {
         input: {
           runtimeIds: input.runtimeIds,
           listenerName: input.listenerName,
+          listenerPackage: input.listenerPackage,
           action: input.action,
         },
       }).then((d) => d.updateListenerState),
