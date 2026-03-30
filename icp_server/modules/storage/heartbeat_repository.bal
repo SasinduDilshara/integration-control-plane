@@ -230,24 +230,36 @@ isolated function validateHeartbeatData(types:Heartbeat heartbeat) returns error
     }
     heartbeat.environment = envId;
 
-    string|error projectId = getProjectIdByHandler(heartbeat.project, DEFAULT_ORG_ID);
+    string|error projectHandler = toHandler(heartbeat.project);
+    if projectHandler is error {
+        return error(string `Invalid project name '${heartbeat.project}': ${projectHandler.message()}`);
+    }
+    log:printDebug(string `Normalized project name '${heartbeat.project}' to handler '${projectHandler}'`);
+
+    string|error componentHandler = toHandler(heartbeat.component);
+    if componentHandler is error {
+        return error(string `Invalid component name '${heartbeat.component}': ${componentHandler.message()}`);
+    }
+    log:printDebug(string `Normalized component name '${heartbeat.component}' to handler '${componentHandler}'`);
+
+    string|error projectId = resolveOrCreateProject(projectHandler, ());
     if projectId is error {
-        return error(string `Invalid project configuration detected: ${heartbeat.project}`, projectId);
+        return error(string `Failed to resolve or create project: ${heartbeat.project}`, projectId);
     }
     heartbeat.project = projectId;
 
-    string|error componentId = getComponentIdByName(heartbeat.component);
+    string|error componentId = resolveOrCreateComponent(projectId, componentHandler, heartbeat.runtimeType, ());
     if componentId is error {
-        return error(string `Invalid component configuration detected: ${heartbeat.component}`, componentId);
+        return error(string `Failed to resolve or create component: ${heartbeat.component}`, componentId);
     }
     heartbeat.component = componentId;
 
     types:Component|error componentById = getComponentById(componentId);
     if componentById is error {
-        return error(string `Invalid component configuration detected: ${heartbeat.component}`, componentById);
+        return error(string `Failed to retrieve component details: ${componentId}`, componentById);
     }
     if componentById.componentType != heartbeat.runtimeType {
-        return error(string `Component type mismatch for component ${heartbeat.component}. Expected: ${componentById.componentType}, Got: ${heartbeat.runtimeType}`);
+        return error(string `Component type mismatch for component ${componentId}. Expected: ${componentById.componentType}, Got: ${heartbeat.runtimeType}`);
     }
 }
 
@@ -394,24 +406,34 @@ isolated function writeObservedStateMI(string runtimeId, string componentId, str
     log:printDebug(string `Writing MI observed state for runtime ${runtimeId}, component ${componentId}, environment ${envId}`);
     [types:ReconcileArtifactKey, map<string>][] entries = [];
     foreach types:RestApi api in <types:RestApi[]>artifacts.apis {
-        entries.push([{artifactName: api.name, artifactType: "api"},
-            {"status": api.state, "tracing": api.tracing, "statistics": api.statistics}]);
+        entries.push([
+            {artifactName: api.name, artifactType: "api"},
+            {"status": api.state, "tracing": api.tracing, "statistics": api.statistics}
+        ]);
     }
     foreach types:ProxyService proxy in <types:ProxyService[]>artifacts.proxyServices {
-        entries.push([{artifactName: proxy.name, artifactType: "proxy-service"},
-            {"status": proxy.state, "tracing": proxy.tracing, "statistics": proxy.statistics}]);
+        entries.push([
+            {artifactName: proxy.name, artifactType: "proxy-service"},
+            {"status": proxy.state, "tracing": proxy.tracing, "statistics": proxy.statistics}
+        ]);
     }
     foreach types:Endpoint ep in <types:Endpoint[]>artifacts.endpoints {
-        entries.push([{artifactName: ep.name, artifactType: "endpoint"},
-            {"status": ep.state, "tracing": ep.tracing, "statistics": ep.statistics}]);
+        entries.push([
+            {artifactName: ep.name, artifactType: "endpoint"},
+            {"status": ep.state, "tracing": ep.tracing, "statistics": ep.statistics}
+        ]);
     }
     foreach types:InboundEndpoint ie in <types:InboundEndpoint[]>artifacts.inboundEndpoints {
-        entries.push([{artifactName: ie.name, artifactType: "inbound-endpoint"},
-            {"status": ie.state, "tracing": ie.tracing, "statistics": ie.statistics ?: "disabled"}]);
+        entries.push([
+            {artifactName: ie.name, artifactType: "inbound-endpoint"},
+            {"status": ie.state, "tracing": ie.tracing, "statistics": ie.statistics ?: "disabled"}
+        ]);
     }
     foreach types:Sequence seq in <types:Sequence[]>artifacts.sequences {
-        entries.push([{artifactName: seq.name, artifactType: "sequence"},
-            {"status": seq.state, "tracing": seq.tracing, "statistics": seq.statistics}]);
+        entries.push([
+            {artifactName: seq.name, artifactType: "sequence"},
+            {"status": seq.state, "tracing": seq.tracing, "statistics": seq.statistics}
+        ]);
     }
     foreach types:Task task in <types:Task[]>artifacts.tasks {
         entries.push([{artifactName: task.name, artifactType: "task"}, {"status": task.state}]);
@@ -440,23 +462,28 @@ isolated function writeObservedStateBI(string runtimeId, string componentId, str
     [types:ReconcileArtifactKey, map<string>][] entries = [];
     foreach types:Service svc in artifacts.services {
         string qualName = types:qualifiedArtifactName(svc.name, svc.package);
-        entries.push([{artifactName: qualName, artifactType: "service"},
-            {"status": svc.state.toLowerAscii()}]);
+        entries.push([
+            {artifactName: qualName, artifactType: "service"},
+            {"status": svc.state.toLowerAscii()}
+        ]);
     }
     foreach types:Listener 'listener in artifacts.listeners {
         string qualName = types:qualifiedArtifactName('listener.name, 'listener.package);
-        entries.push([{artifactName: qualName, artifactType: "listener"},
-            {"status": 'listener.state.toLowerAscii()}]);
+        entries.push([
+            {artifactName: qualName, artifactType: "listener"},
+            {"status": 'listener.state.toLowerAscii()}
+        ]);
     }
     if logLevels is map<log:Level> {
         foreach var [componentName, logLevel] in logLevels.entries() {
-            entries.push([{artifactName: componentName, artifactType: "log-level"},
-                {"logLevel": logLevel.toString()}]);
+            entries.push([
+                {artifactName: componentName, artifactType: "log-level"},
+                {"logLevel": logLevel.toString()}
+            ]);
         }
     }
     check batchUpsertReconcileObservedState(runtimeId, componentId, envId, entries);
 }
-
 
 // Upsert runtime record
 isolated function upsertRuntime(types:Heartbeat heartbeat) returns boolean|error {

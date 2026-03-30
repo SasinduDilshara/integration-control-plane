@@ -177,14 +177,14 @@ public isolated function sendMIControlCommandAsync(string runtimeId, string arti
         } else if action == types:ARTIFACT_ENABLE_STATISTICS || action == types:ARTIFACT_DISABLE_STATISTICS {
             // Statistics change: enable/disable - use artifact-specific management API paths
             string statistics = action == types:ARTIFACT_ENABLE_STATISTICS ? TOGGLE_ENABLE : TOGGLE_DISABLE;
-            
+
             // Map artifact type to the correct management API path
             string? managementPath = getManagementPath(artifactType);
             if managementPath is () {
                 log:printWarn(string `Statistics not supported for artifact type: ${artifactType}`, runtimeId = runtimeId);
                 return;
             }
-            
+
             // Build payload based on artifact type
             if artifactType == ARTIFACT_TYPE_TEMPLATE {
                 // Templates require a 'type' field (sequence or endpoint)
@@ -199,7 +199,7 @@ public isolated function sendMIControlCommandAsync(string runtimeId, string arti
                     "statistics": statistics
                 };
             }
-            
+
             artifactPath = managementPath;
         } else {
             log:printWarn(string `Unknown MI control action: ${action}`, runtimeId = runtimeId);
@@ -550,4 +550,18 @@ public isolated function issueRuntimeHmacToken(string runtimeId) returns string|
         return error("Failed to generate authentication token");
     }
     return hmacToken;
+}
+
+// Converts a name to a handler format (lowercase, alphanumeric with hyphens).
+// Returns an error if the normalized handler is empty.
+public isolated function toHandler(string name) returns string|error {
+    string lowercased = name.toLowerAscii();
+    string withHyphens = re `[^a-z0-9]+`.replaceAll(lowercased, "-");
+    string trimmed = re `^-|-$`.replaceAll(withHyphens, "");
+
+    if trimmed.length() == 0 {
+        return error(string `Cannot convert name '${name}' to handler: contains no alphanumeric characters`);
+    }
+
+    return trimmed;
 }

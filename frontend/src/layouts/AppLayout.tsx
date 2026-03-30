@@ -69,9 +69,9 @@ const SIDEBAR_ICONS: Record<Resource, JSX.Element> = {
 };
 
 const SIDEBAR_CATEGORIES: { label: string; resources: Resource[] }[] = [
-  { label: '', resources: ['overview'] },
+  { label: '', resources: ['overview', 'runtimes'] },
   { label: 'Observability', resources: ['logs', 'loggers', 'metrics'] },
-  { label: 'Infrastructure', resources: ['runtimes', 'environments'] },
+  { label: 'Infrastructure', resources: ['environments'] },
   { label: 'Management', resources: ['access-control'] },
 ];
 

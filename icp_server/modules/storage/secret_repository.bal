@@ -285,48 +285,59 @@ public isolated function resolveOrCreateProject(string handler, string? createdB
 
     log:printInfo(string `resolveOrCreateProject: auto-creating project for handler=${handler}`);
     string projectId = uuid:createType1AsString();
-    transaction {
-        _ = check dbClient->execute(`
-            INSERT INTO projects (project_id, org_id, name, handler, owner_id, created_by)
-            VALUES (${projectId}, ${DEFAULT_ORG_ID}, ${handler}, ${handler}, ${createdBy}, ${createdBy})
-        `);
 
-        string adminGroupId = uuid:createType1AsString();
-        string groupName = string `${handler} Admins`;
-
-        sql:ExecutionResult|sql:Error groupRes = dbClient->execute(`
-            INSERT INTO user_groups (group_id, group_name, org_uuid, description)
-            VALUES (${adminGroupId}, ${groupName}, ${DEFAULT_ORG_ID}, ${string `Admin group for project: ${handler}`})
-        `);
-        if groupRes is sql:Error {
-            log:printError(string `resolveOrCreateProject: failed to create admin group for handler=${handler}`, 'error = groupRes);
-            fail error("Failed to set up project admin group", groupRes);
-        }
-
-        string roleId = check getProjectAdminRoleId();
-
-        sql:ExecutionResult|sql:Error roleRes = dbClient->execute(`
-            INSERT INTO group_role_mapping (group_id, role_id, org_uuid, project_uuid)
-            VALUES (${adminGroupId}, ${roleId}, ${DEFAULT_ORG_ID}, ${projectId})
-        `);
-        if roleRes is sql:Error {
-            log:printError(string `resolveOrCreateProject: failed to map admin role for handler=${handler}`, 'error = roleRes);
-            fail error("Failed to set up project admin role", roleRes);
-        }
-
-        if createdBy is string {
-            sql:ExecutionResult|sql:Error userRes = dbClient->execute(`
-                INSERT INTO group_user_mapping (group_id, user_uuid)
-                VALUES (${adminGroupId}, ${createdBy})
+    do {
+        transaction {
+            _ = check dbClient->execute(`
+                INSERT INTO projects (project_id, org_id, name, handler, owner_id, created_by)
+                VALUES (${projectId}, ${DEFAULT_ORG_ID}, ${handler}, ${handler}, ${createdBy}, ${createdBy})
             `);
-            if userRes is sql:Error {
-                log:printError(string `resolveOrCreateProject: failed to add creator to admin group for handler=${handler}`, 'error = userRes);
-                fail error("Failed to add user to project admin group", userRes);
-            }
-        }
 
-        check commit;
+            string adminGroupId = uuid:createType1AsString();
+            string groupName = string `${handler} Admins`;
+
+            sql:ExecutionResult|sql:Error groupRes = dbClient->execute(`
+                INSERT INTO user_groups (group_id, group_name, org_uuid, description)
+                VALUES (${adminGroupId}, ${groupName}, ${DEFAULT_ORG_ID}, ${string `Admin group for project: ${handler}`})
+            `);
+            if groupRes is sql:Error {
+                log:printError(string `resolveOrCreateProject: failed to create admin group for handler=${handler}`, 'error = groupRes);
+                fail error("Failed to set up project admin group", groupRes);
+            }
+
+            string roleId = check getProjectAdminRoleId();
+
+            sql:ExecutionResult|sql:Error roleRes = dbClient->execute(`
+                INSERT INTO group_role_mapping (group_id, role_id, org_uuid, project_uuid)
+                VALUES (${adminGroupId}, ${roleId}, ${DEFAULT_ORG_ID}, ${projectId})
+            `);
+            if roleRes is sql:Error {
+                log:printError(string `resolveOrCreateProject: failed to map admin role for handler=${handler}`, 'error = roleRes);
+                fail error("Failed to set up project admin role", roleRes);
+            }
+
+            if createdBy is string {
+                sql:ExecutionResult|sql:Error userRes = dbClient->execute(`
+                    INSERT INTO group_user_mapping (group_id, user_uuid)
+                    VALUES (${adminGroupId}, ${createdBy})
+                `);
+                if userRes is sql:Error {
+                    log:printError(string `resolveOrCreateProject: failed to add creator to admin group for handler=${handler}`, 'error = userRes);
+                    fail error("Failed to add user to project admin group", userRes);
+                }
+            }
+
+            check commit;
+        }
     } on fail error e {
+        if e is sql:Error && classifySqlError(e) == DUPLICATE_KEY {
+            log:printDebug(string `resolveOrCreateProject: concurrent insert detected for handler=${handler}, re-querying`);
+            string|error found = getProjectIdByHandler(handler, DEFAULT_ORG_ID);
+            if found is string {
+                return found;
+            }
+            return error(string `Project concurrent insert race for '${handler}'`, found);
+        }
         log:printError(string `resolveOrCreateProject: transaction failed for handler=${handler}`, 'error = e);
         return error(string `Failed to auto-create project '${handler}'`, e);
     }
