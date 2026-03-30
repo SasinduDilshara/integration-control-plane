@@ -53,24 +53,28 @@ public isolated function storeRefreshToken(string tokenId, string userId, string
 public isolated function validateRefreshToken(string tokenHash) returns types:User|error {
     log:printDebug("Validating refresh token");
 
-    // Query for the refresh token with epoch timestamp for expiry
-    // Use dialect-specific function to convert timestamp to epoch seconds
+    // Query for the refresh token with seconds remaining until expiry
+    // Use dialect-specific TIMESTAMPDIFF to avoid UNIX_TIMESTAMP compatibility issues with H2
     sql:ParameterizedQuery selectQuery = sql:queryConcat(
         `SELECT token_id, user_id, revoked, `,
         sql:queryConcat(
-            sqlQueryFromString(epochFromTimestamp("expires_at")),
-            ` as expires_at_epoch FROM refresh_tokens WHERE token_hash = ${tokenHash}`
+            sqlQueryFromString(getTimestampDiffSeconds("CURRENT_TIMESTAMP", "expires_at")),
+            ` as seconds_until_expiry FROM refresh_tokens WHERE token_hash = ${tokenHash}`
         )
     );
     record {|
         string token_id;
         string user_id;
         boolean revoked;
-        decimal expires_at_epoch;
+        int seconds_until_expiry;
     |}|sql:Error refreshToken = dbClient->queryRow(selectQuery);
 
     if refreshToken is sql:Error {
-        log:printWarn("Refresh token not found in database");
+        if refreshToken is sql:NoRowsError {
+            log:printWarn("Refresh token not found in database");
+            return error("Invalid refresh token");
+        } 
+        log:printError("Database error while validating refresh token", 'error = refreshToken);
         return error("Invalid refresh token");
     }
 
@@ -80,12 +84,8 @@ public isolated function validateRefreshToken(string tokenHash) returns types:Us
         return error("Refresh token has been revoked");
     }
 
-    // Check if token has expired
-    time:Utc currentTime = time:utcNow();
-    decimal currentEpoch = <decimal>currentTime[0];
-    decimal expiryEpoch = refreshToken.expires_at_epoch;
-
-    if expiryEpoch <= currentEpoch {
+    // Check if token has expired (seconds_until_expiry <= 0 means expired)
+    if refreshToken.seconds_until_expiry <= 0 {
         log:printWarn("Refresh token has expired", tokenId = refreshToken.token_id);
         return error("Refresh token has expired");
     }

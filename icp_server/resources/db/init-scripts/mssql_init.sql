@@ -2018,6 +2018,7 @@ GO
 -- ============================================================================
 
 CREATE TABLE reconcile_desired_state (
+    id BIGINT IDENTITY(1,1) NOT NULL,
     component_id CHAR(36) NOT NULL,
     env_id CHAR(36) NOT NULL,
     artifact_name NVARCHAR(200) NOT NULL,
@@ -2025,7 +2026,8 @@ CREATE TABLE reconcile_desired_state (
     state_key NVARCHAR(255) NOT NULL,
     state_value NVARCHAR(1024) NULL,
     updated_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    PRIMARY KEY (component_id, env_id, artifact_name, artifact_type, state_key),
+    PRIMARY KEY (id),
+    CONSTRAINT uq_reconcile_desired_state UNIQUE NONCLUSTERED (component_id, env_id, artifact_name, artifact_type, state_key),
     INDEX idx_reconcile_desired_comp_env (component_id, env_id)
 );
 GO
@@ -2045,6 +2047,7 @@ END;
 GO
 
 CREATE TABLE reconcile_observed_state (
+    id BIGINT IDENTITY(1,1) NOT NULL,
     runtime_id VARCHAR(100) NOT NULL,
     component_id CHAR(36) NOT NULL,
     env_id CHAR(36) NOT NULL,
@@ -2055,7 +2058,8 @@ CREATE TABLE reconcile_observed_state (
     optimistic BIT NOT NULL DEFAULT 0,
     heartbeat_gen BIGINT NOT NULL DEFAULT 0,
     updated_at DATETIME2 NOT NULL DEFAULT GETDATE(),
-    PRIMARY KEY (runtime_id, artifact_name, artifact_type, state_key),
+    PRIMARY KEY (id),
+    CONSTRAINT uq_reconcile_observed_state UNIQUE NONCLUSTERED (runtime_id, artifact_name, artifact_type, state_key),
     INDEX idx_reconcile_observed_comp_env (component_id, env_id)
 );
 GO
@@ -2074,6 +2078,7 @@ END;
 GO
 
 CREATE TABLE reconcile_backoff (
+    id BIGINT IDENTITY(1,1) NOT NULL,
     runtime_id VARCHAR(100) NOT NULL,
     artifact_name NVARCHAR(200) NOT NULL,
     artifact_type NVARCHAR(100) NOT NULL,
@@ -2081,7 +2086,8 @@ CREATE TABLE reconcile_backoff (
     attempt_count INT NOT NULL DEFAULT 0,
     has_error INT NOT NULL DEFAULT 0,
     next_attempt BIGINT NOT NULL DEFAULT 0,
-    PRIMARY KEY (runtime_id, artifact_name, artifact_type, state_key)
+    PRIMARY KEY (id),
+    CONSTRAINT uq_reconcile_backoff UNIQUE NONCLUSTERED (runtime_id, artifact_name, artifact_type, state_key)
 );
 GO
 
