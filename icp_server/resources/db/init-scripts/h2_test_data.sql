@@ -281,6 +281,79 @@ FETCH FIRST 1 ROWS ONLY;
 
 
 -- ============================================================================
+-- MI COMPONENT, RUNTIME, AND ARTIFACTS FOR ARTIFACT TOGGLE TESTS
+-- ============================================================================
+
+-- MI component in Project 1
+INSERT INTO components (
+    component_id, name, display_name, component_type, description, created_by, project_id
+)
+VALUES (
+    '640e8400-e29b-41d4-a716-446655440010',
+    'mi-sample-integration',
+    'MI Sample Integration',
+    'MI',
+    'MI integration for artifact toggle testing',
+    NULL,
+    '650e8400-e29b-41d4-a716-446655440001'
+);
+
+-- MI runtime: Project 1, MI Component, Dev env, RUNNING
+INSERT INTO runtimes (
+    runtime_id, name, project_id, component_id, environment_id,
+    runtime_type, status, version, platform_name, platform_version,
+    management_hostname, management_port,
+    registration_time, last_heartbeat
+)
+VALUES (
+    '880e8400-e29b-41d4-a716-446655440010',
+    'mi-sample-dev-runtime',
+    '650e8400-e29b-41d4-a716-446655440001',
+    '640e8400-e29b-41d4-a716-446655440010',
+    '750e8400-e29b-41d4-a716-446655440001',
+    'MI',
+    'RUNNING',
+    '4.3.0',
+    'wso2-mi',
+    '4.3.0',
+    'localhost',
+    '9164',
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+);
+
+-- MI REST API artifact with tracing disabled
+INSERT INTO mi_api_artifacts (
+    runtime_id, api_name, artifact_id, url, context, version, state, tracing, statistics, carbon_app
+)
+VALUES (
+    '880e8400-e29b-41d4-a716-446655440010',
+    'TestHealthcareAPI',
+    'a10e8400-e29b-41d4-a716-446655440001',
+    'http://localhost:8280/healthcare',
+    '/healthcare',
+    '1.0.0',
+    'enabled',
+    'disabled',
+    'disabled',
+    'HealthcareApp'
+);
+
+-- MI Proxy Service artifact with tracing disabled
+INSERT INTO mi_proxy_service_artifacts (
+    runtime_id, proxy_name, artifact_id, state, tracing, statistics, carbon_app
+)
+VALUES (
+    '880e8400-e29b-41d4-a716-446655440010',
+    'TestMainProxy',
+    'a10e8400-e29b-41d4-a716-446655440002',
+    'enabled',
+    'disabled',
+    'disabled',
+    'ProxyApp'
+);
+
+-- ============================================================================
 -- TEST DATA SUMMARY
 -- ============================================================================
 -- Users created:
@@ -295,8 +368,9 @@ FETCH FIRST 1 ROWS ONLY;
 --   - Sample Project (650e8400-e29b-41d4-a716-446655440001)
 --
 -- Components:
---   - sample-integration (640e8400-e29b-41d4-a716-446655440001) in Project 1
---   - sample-integration-2 (640e8400-e29b-41d4-a716-446655440002) in Project 1
+--   - sample-integration (640e8400-e29b-41d4-a716-446655440001) in Project 1 [BI]
+--   - sample-integration-2 (640e8400-e29b-41d4-a716-446655440002) in Project 1 [BI]
+--   - mi-sample-integration (640e8400-e29b-41d4-a716-446655440010) in Project 1 [MI]
 --
 -- Environments:
 --   - dev (750e8400-e29b-41d4-a716-446655440001)
@@ -308,3 +382,8 @@ FETCH FIRST 1 ROWS ONLY;
 --   - Runtime 3: Project 1 / Component 2 / Dev / OFFLINE
 --   - Runtime 4: Project 2 / Component 3 / Dev / RUNNING
 --   - Runtime 5: Project 1 / Component 2 / Prod / FAILED
+--   - Runtime 10: Project 1 / MI Component / Dev / RUNNING (MI)
+--
+-- MI Artifacts (Runtime 10):
+--   - TestHealthcareAPI (REST API) - tracing: disabled, statistics: disabled
+--   - TestMainProxy (Proxy Service) - tracing: disabled, statistics: disabled

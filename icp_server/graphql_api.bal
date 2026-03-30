@@ -2352,6 +2352,17 @@ service /graphql on graphqlListener {
                     action = actionStr);
         }
 
+        // Immediately update the artifact state column so queries reflect the change
+        string stateValue = input.status == "active" ? "enabled" : "disabled";
+        error? colResult = storage:updateMIArtifactColumnForComponent(
+                input.componentId, input.artifactName, normalizedType, "state", stateValue);
+        if colResult is error {
+            log:printWarn("Failed to immediately update artifact state column",
+                    componentId = input.componentId,
+                    artifactName = input.artifactName,
+                    errorMessage = colResult.message());
+        }
+
         int successCount = 0;
         int failedCount = 0;
         string[] details = [];
@@ -2489,6 +2500,17 @@ service /graphql on graphqlListener {
                     artifactName = input.artifactName,
                     artifactType = normalizedType,
                     action = actionStr);
+        }
+
+        // Immediately update the artifact tracing column so queries reflect the change
+        string tracingValue = input.trace == "enable" ? "enabled" : "disabled";
+        error? colResult = storage:updateMIArtifactColumnForComponent(
+                input.componentId, input.artifactName, normalizedType, "tracing", tracingValue);
+        if colResult is error {
+            log:printWarn("Failed to immediately update artifact tracing column",
+                    componentId = input.componentId,
+                    artifactName = input.artifactName,
+                    errorMessage = colResult.message());
         }
 
         int successCount = 0;
@@ -2646,6 +2668,17 @@ service /graphql on graphqlListener {
                     artifactName = input.artifactName,
                     artifactType = normalizedType,
                     action = actionStr);
+        }
+
+        // Immediately update the artifact statistics column so queries reflect the change
+        string statisticsValue = input.statistics == "enable" ? "enabled" : "disabled";
+        error? colResult = storage:updateMIArtifactColumnForComponent(
+                input.componentId, input.artifactName, normalizedType, "statistics", statisticsValue);
+        if colResult is error {
+            log:printWarn("Failed to immediately update artifact statistics column",
+                    componentId = input.componentId,
+                    artifactName = input.artifactName,
+                    errorMessage = colResult.message());
         }
 
         int successCount = 0;

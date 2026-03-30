@@ -890,7 +890,97 @@ isolated function resolveArtifactTableMetadata(string artifactType) returns Arti
     } else if normalizedType == ARTIFACT_TYPE_CONNECTORS {
         return {tableName: "mi_connector_artifacts", nameColumn: "connector_name", hasTracing: false, hasStatistics: false, stateColumn: "status"};
     }
+    // Singular type aliases (used by GraphQL mutations via frontend's toBackendArtifactType)
+    else if normalizedType == ARTIFACT_TYPE_API {
+        return {tableName: "mi_api_artifacts", nameColumn: "api_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_PROXY_SERVICE {
+        return {tableName: "mi_proxy_service_artifacts", nameColumn: "proxy_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_ENDPOINT {
+        return {tableName: "mi_endpoint_artifacts", nameColumn: "endpoint_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_INBOUND_ENDPOINT {
+        return {tableName: "mi_inbound_endpoint_artifacts", nameColumn: "inbound_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_SEQUENCE {
+        return {tableName: "mi_sequence_artifacts", nameColumn: "sequence_name", hasTracing: true, hasStatistics: true, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_TEMPLATE {
+        return {tableName: "mi_template_artifacts", nameColumn: "template_name", hasTracing: true, hasStatistics: true, stateColumn: ""};
+    } else if normalizedType == ARTIFACT_TYPE_TASK {
+        return {tableName: "mi_task_artifacts", nameColumn: "task_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_MESSAGE_PROCESSOR {
+        return {tableName: "mi_message_processor_artifacts", nameColumn: "processor_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_LOCAL_ENTRY {
+        return {tableName: "mi_local_entry_artifacts", nameColumn: "entry_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_DATA_SERVICE {
+        return {tableName: "mi_data_service_artifacts", nameColumn: "service_name", hasTracing: false, hasStatistics: false, stateColumn: "state"};
+    } else if normalizedType == ARTIFACT_TYPE_CONNECTOR {
+        return {tableName: "mi_connector_artifacts", nameColumn: "connector_name", hasTracing: false, hasStatistics: false, stateColumn: "status"};
+    }
     return ();
+}
+
+// Immediately update a column (tracing, statistics, or state) in the MI artifact table
+// for all runtimes belonging to a given component. Used to reflect mutation changes in the DB
+// before the MI runtime confirms via heartbeat.
+public isolated function updateMIArtifactColumnForComponent(
+        string componentId,
+        string artifactName,
+        string artifactType,
+        string columnName,
+        string columnValue
+) returns error? {
+    // Validate column name to prevent SQL injection (only known columns allowed)
+    if columnName != "tracing" && columnName != "statistics" && columnName != "state" {
+        return error(string `Invalid column name '${columnName}' for artifact update`);
+    }
+
+    ArtifactTableMetadata? metadata = resolveArtifactTableMetadata(artifactType);
+    if metadata is () {
+        log:printDebug(string `updateMIArtifactColumnForComponent: unsupported artifact type '${artifactType}', skipping`);
+        return;
+    }
+
+    // For state updates, verify the table actually has a state column
+    if columnName == "state" && metadata.stateColumn == "" {
+        log:printDebug(string `updateMIArtifactColumnForComponent: artifact type '${artifactType}' has no state column, skipping`);
+        return;
+    }
+
+    // For tracing/statistics updates, verify the table supports them
+    if columnName == "tracing" && !metadata.hasTracing {
+        log:printDebug(string `updateMIArtifactColumnForComponent: artifact type '${artifactType}' does not support tracing, skipping`);
+        return;
+    }
+    if columnName == "statistics" && !metadata.hasStatistics {
+        log:printDebug(string `updateMIArtifactColumnForComponent: artifact type '${artifactType}' does not support statistics, skipping`);
+        return;
+    }
+
+    // Resolve the actual column name for the SET clause
+    string actualColumn = columnName;
+    if columnName == "state" && metadata.stateColumn != "" {
+        actualColumn = metadata.stateColumn;
+    }
+    // Escape 'statistics' for MSSQL (reserved word)
+    string escapedColumn = (actualColumn == "statistics" && isMSSQL()) ? "[statistics]" : actualColumn;
+
+    // Build dynamic UPDATE using sqlQueryFromString for table/column names (safe — derived from metadata)
+    // and parameterized values for user-provided data
+    string updateClause = string `UPDATE ${metadata.tableName} SET ${escapedColumn} = `;
+    string whereClause = string ` , updated_at = CURRENT_TIMESTAMP WHERE ${metadata.nameColumn} = `;
+
+    sql:ParameterizedQuery query = sql:queryConcat(
+            sqlQueryFromString(updateClause),
+            `${columnValue}`,
+            sqlQueryFromString(whereClause),
+            `${artifactName} AND runtime_id IN (SELECT runtime_id FROM runtimes WHERE component_id = ${componentId})`
+    );
+
+    sql:ExecutionResult result = check dbClient->execute(query);
+    log:printInfo(string `updateMIArtifactColumnForComponent: updated ${result.affectedRowCount ?: 0} row(s)`,
+            componentId = componentId,
+            artifactName = artifactName,
+            artifactType = artifactType,
+            column = columnName,
+            value = columnValue);
 }
 
 // Upsert MI artifact intended status (enable/disable) for a component
