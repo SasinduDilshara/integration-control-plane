@@ -56,9 +56,20 @@ function extract_bal_metrics_data(tag, timestamp, record)
     local method = record["http.method"] or ""
     local response_time = record["response_time_seconds"] or 0
     local status = "successful"
-    
-    if record["http.status_code_group"] == "4xx" or record["http.status_code_group"] == "5xx" then
+    local status_code_group = record["http.status_code_group"]
+
+    if status_code_group == "4xx" or status_code_group == "5xx" then
         status = "failed"
+    elseif not status_code_group or status_code_group == "" then
+        local code = tonumber(record["http.status_code"])
+        if code and code >= 400 then
+            status = "failed"
+            if code >= 500 then
+                status_code_group = "5xx"
+            else
+                status_code_group = "4xx"
+            end
+        end
     end
 
     -- Convert to milliseconds and round
@@ -72,7 +83,7 @@ function extract_bal_metrics_data(tag, timestamp, record)
     record["sublevel"] = sublevel
     record["method"] = method
     record["url"] = record["http.url"] or ""
-    record["status_code_group"] = record["http.status_code_group"] or ""
+    record["status_code_group"] = status_code_group or ""
 
     return 1, timestamp, record
 end
