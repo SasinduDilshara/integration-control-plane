@@ -89,15 +89,32 @@ service /icp on httpListener {
             string componentId;
 
             if orgSecret.componentId is () {
-                // Unbound key — resolve/auto-create project and component, then bind
+                // Unbound key — normalize names, resolve/auto-create project and component, then bind
                 string? createdBy = orgSecret.createdBy;
                 if createdBy is () {
                     log:printWarn(string `kid=${kid}: original creator deleted, auto-provisioning without owner`);
                 }
-                projectId = check storage:resolveOrCreateProject(heartbeat.project, createdBy);
-                componentId = check storage:resolveOrCreateComponent(projectId, heartbeat.component, heartbeat.runtimeType, createdBy);
-                check storage:bindOrgSecret(kid, projectId, componentId, heartbeat.project, heartbeat.component, heartbeat.runtimeType);
-                log:printInfo(string `Bound kid=${kid} to project=${projectId}, component=${componentId}, runtimeType=${heartbeat.runtimeType}`);
+
+                // Normalize both project and component names before any resolve-or-create operations
+                string|error projectHandlerResult = storage:toHandler(heartbeat.project);
+                if projectHandlerResult is error {
+                    log:printWarn(string `Heartbeat rejected — invalid project name '${heartbeat.project}': ${projectHandlerResult.message()}`);
+                    return <http:BadRequest>{body: string `Invalid project name '${heartbeat.project}': ${projectHandlerResult.message()}`};
+                }
+                string projectHandler = projectHandlerResult;
+
+                string|error componentHandlerResult = storage:toHandler(heartbeat.component);
+                if componentHandlerResult is error {
+                    log:printWarn(string `Heartbeat rejected — invalid component name '${heartbeat.component}': ${componentHandlerResult.message()}`);
+                    return <http:BadRequest>{body: string `Invalid component name '${heartbeat.component}': ${componentHandlerResult.message()}`};
+                }
+                string componentHandler = componentHandlerResult;
+
+                // Both names are valid - now resolve or auto-create with normalized handlers
+                projectId = check storage:resolveOrCreateProject(projectHandler, createdBy);
+                componentId = check storage:resolveOrCreateComponent(projectId, componentHandler, heartbeat.runtimeType, createdBy);
+                check storage:bindOrgSecret(kid, projectId, componentId, projectHandler, componentHandler, heartbeat.runtimeType);
+                log:printInfo(string `Bound kid=${kid} to project=${projectId} (handler=${projectHandler}), component=${componentId} (handler=${componentHandler}), runtimeType=${heartbeat.runtimeType}`);
             } else {
                 // Bound key — use stored IDs, enforce runtime type, log-only name mismatch
                 if orgSecret.runtimeType is string && orgSecret.runtimeType != heartbeat.runtimeType {
@@ -110,9 +127,9 @@ service /icp on httpListener {
 
                 if orgSecret.projectHandler != heartbeat.project || orgSecret.componentName != heartbeat.component {
                     log:printError(string `Binding name mismatch for kid=${kid}: ` +
-                        string `bound project=${orgSecret.projectHandler ?: "?"}/component=${orgSecret.componentName ?: "?"}, ` +
-                        string `got project=${heartbeat.project}/component=${heartbeat.component}. ` +
-                        string `Proceeding with bound IDs project=${projectId}, component=${componentId}`);
+                            string `bound project=${orgSecret.projectHandler ?: "?"}/component=${orgSecret.componentName ?: "?"}, ` +
+                            string `got project=${heartbeat.project}/component=${heartbeat.component}. ` +
+                            string `Proceeding with bound IDs project=${projectId}, component=${componentId}`);
                 }
             }
 
@@ -132,7 +149,7 @@ service /icp on httpListener {
 
             // Reconcile desired state against observed state written during heartbeat processing
             types:ControlCommand[] reconcileCommands = sync:reconcileFromHeartbeat(
-                heartbeat.runtime, heartbeat.component, heartbeat.environment, heartbeat.runtimeType
+                    heartbeat.runtime, heartbeat.component, heartbeat.environment, heartbeat.runtimeType
             );
             log:printDebug(string `Reconciled ${reconcileCommands.length()} commands for runtime ${heartbeat.runtime}`);
             // Merge reconcile commands into the response
@@ -202,8 +219,8 @@ service /icp on httpListener {
             }
             if runtimeInfo.componentId != orgSecret.componentId || runtimeInfo.environmentId != orgSecret.environmentId {
                 log:printWarn(string `Delta heartbeat rejected — binding mismatch for kid=${kid}: ` +
-                    string `runtime component=${runtimeInfo.componentId}/env=${runtimeInfo.environmentId}, ` +
-                    string `key component=${orgSecret.componentId ?: "?"}/env=${orgSecret.environmentId}`);
+                        string `runtime component=${runtimeInfo.componentId}/env=${runtimeInfo.environmentId}, ` +
+                        string `key component=${orgSecret.componentId ?: "?"}/env=${orgSecret.environmentId}`);
                 return <http:Conflict>{body: string `Binding mismatch: key ID '${kid}' does not match this runtime's component/environment`};
             }
 
