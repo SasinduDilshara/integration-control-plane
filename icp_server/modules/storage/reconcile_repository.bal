@@ -176,6 +176,24 @@ public isolated function queryArtifactState(string componentId, string envId)
         result[artKey] = fields;
     }
 
+    // 4. Fill in desired-only keys that have no observed state yet.
+    // This covers the window between desired state being set and the next heartbeat/optimistic update.
+    foreach var [artKey, desiredMap] in desired.entries() {
+        map<types:ArtifactStateField> fields = result[artKey] ?: {};
+        boolean added = false;
+        foreach var [stateKey, desiredVal] in desiredMap.entries() {
+            if !fields.hasKey(stateKey) {
+                fields[stateKey] = {value: desiredVal, inSync: false};
+                added = true;
+                log:printDebug("queryArtifactState desired-only field", artKey = artKey,
+                    stateKey = stateKey, value = desiredVal);
+            }
+        }
+        if added {
+            result[artKey] = fields;
+        }
+    }
+
     log:printDebug("queryArtifactState done", artifactCount = result.length());
     return result;
 }

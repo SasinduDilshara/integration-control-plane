@@ -90,7 +90,8 @@ export function useUpdateArtifactToggleStatus(kind: ArtifactToggleKind) {
       await qc.cancelQueries(filters);
       const previous = qc.getQueriesData<GqlArtifact[]>(filters);
       const newValue = input.value === 'enable' ? 'enabled' : 'disabled';
-      qc.setQueriesData<GqlArtifact[]>(filters, (old) => old?.map((a) => (a.name === input.artifactName ? { ...a, [config.cacheField]: newValue } : a)));
+      const inSyncField = `${config.cacheField}InSync`;
+      qc.setQueriesData<GqlArtifact[]>(filters, (old) => old?.map((a) => (a.name === input.artifactName ? { ...a, [config.cacheField]: newValue, [inSyncField]: false } : a)));
       return { previous };
     },
     onError: (_err, _input, context) => {
