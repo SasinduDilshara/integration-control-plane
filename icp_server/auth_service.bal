@@ -2479,6 +2479,10 @@ service /auth on httpListener {
     isolated resource function post orgs/[string orgHandle]/roles(@http:Payload types:RoleV2Input roleInput, http:Request req) returns http:Created|http:BadRequest|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Creating new role", orgHandle = orgHandle, roleName = roleInput.roleName);
 
+        if roleInput.roleName.trim().length() == 0 {
+            return utils:createBadRequestError("Role name is required");
+        }
+
         // Permission check: org-level role management
         types:UserContextV2|error userContext = extractUserContextFromRequest(req);
         if userContext is error {
@@ -2640,8 +2644,12 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function put orgs/[string orgHandle]/roles/[string roleId](@http:Payload types:RoleV2Input roleInput, http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+    isolated resource function put orgs/[string orgHandle]/roles/[string roleId](@http:Payload types:RoleV2Input roleInput, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Updating role", orgHandle = orgHandle, roleId = roleId);
+
+        if roleInput.roleName.trim().length() == 0 {
+            return utils:createBadRequestError("Role name is required");
+        }
 
         // Permission check: org-level role management
         types:UserContextV2|error userContext = extractUserContextFromRequest(req);

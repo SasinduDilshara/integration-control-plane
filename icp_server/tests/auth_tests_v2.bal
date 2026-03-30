@@ -341,6 +341,44 @@ function testCreateRole() returns error? {
 
 @test:Config {
     groups: ["auth-v2", "roles"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleEmptyName() returns error? {
+    json roleRequest = {
+        roleName: "",
+        description: "empty name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for empty roleName");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWhitespaceName() returns error? {
+    json roleRequest = {
+        roleName: "   ",
+        description: "whitespace name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for whitespace-only roleName");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
     dependsOn: [testCreateRole]
 }
 function testGetRoleById() returns error? {
@@ -423,6 +461,44 @@ function testUpdateRole() returns error? {
     // Assert updated values
     test:assertEquals(responseBody.roleName, "Updated Test Role V2", "Role name should be updated");
     test:assertEquals(responseBody.description, "Updated role description", "Description should be updated");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testCreateRole]
+}
+function testUpdateRoleEmptyName() returns error? {
+    json updateRequest = {
+        roleName: "",
+        description: "empty name update"
+    };
+
+    http:Response response = check authV2Client->put(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles/${testRoleId}`,
+        updateRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for empty roleName on update");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles"],
+    dependsOn: [testCreateRole]
+}
+function testUpdateRoleWhitespaceName() returns error? {
+    json updateRequest = {
+        roleName: "   ",
+        description: "whitespace name update"
+    };
+
+    http:Response response = check authV2Client->put(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles/${testRoleId}`,
+        updateRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for whitespace-only roleName on update");
 }
 
 // =============================================================================
