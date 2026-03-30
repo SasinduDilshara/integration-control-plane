@@ -23,6 +23,7 @@ import { Eye, EyeOff } from '@wso2/oxygen-ui-icons-react';
 import { useNavigate } from 'react-router';
 import { resourceUrl } from '../nav';
 import { useAuth } from '../auth/AuthContext';
+import { isSsoEnabled } from '../config/api';
 
 function friendlyLoginError(err: unknown, isSso = false): string {
   const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
@@ -145,17 +146,21 @@ export default function LoginForm(): JSX.Element {
           {isLockedOut ? `Locked (${lockoutSeconds}s)` : loading ? 'Signing In...' : 'Sign In'}
         </Button>
 
-        <Divider sx={{ my: 0.5 }}>OR</Divider>
+        {isSsoEnabled() && (
+          <>
+            <Divider sx={{ my: 0.5 }}>OR</Divider>
 
-        <Button
-          variant="outlined"
-          fullWidth
-          sx={{ textTransform: 'none', py: 1.2, borderColor: '#ccc', color: 'text.primary' }}
-          onClick={handleSSOLogin}
-          disabled={loading || ssoLoading}
-          startIcon={ssoLoading ? <CircularProgress size={20} color="inherit" /> : undefined}>
-          {ssoLoading ? 'Redirecting...' : 'Sign in with SSO'}
-        </Button>
+            <Button
+              variant="outlined"
+              fullWidth
+              sx={{ textTransform: 'none', py: 1.2, borderColor: '#ccc', color: 'text.primary' }}
+              onClick={handleSSOLogin}
+              disabled={loading || ssoLoading}
+              startIcon={ssoLoading ? <CircularProgress size={20} color="inherit" /> : undefined}>
+              {ssoLoading ? 'Redirecting...' : 'Sign in with SSO'}
+            </Button>
+          </>
+        )}
       </Box>
     </form>
   );

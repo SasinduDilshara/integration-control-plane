@@ -146,7 +146,8 @@ function updateFrontendConfig() returns error? {
     json configJson = {
         "VITE_GRAPHQL_URL": backendGraphqlEndpoint,
         "VITE_AUTH_BASE_URL": backendAuthBaseUrl,
-        "VITE_OBSERVABILITY_URL": backendObservabilityEndpoint
+        "VITE_OBSERVABILITY_URL": backendObservabilityEndpoint,
+        "VITE_SSO_ENABLED": ssoEnabled
     };
 
     // Write to config.json
