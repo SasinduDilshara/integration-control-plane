@@ -125,10 +125,21 @@ service /icp on httpListener {
                 projectId = <string>orgSecret.projectId;
                 componentId = <string>orgSecret.componentId;
 
-                if orgSecret.projectHandler != heartbeat.project || orgSecret.componentName != heartbeat.component {
+                // Normalize heartbeat names for comparison with stored normalized handlers
+                string|error normalizedHeartbeatProject = storage:toHandler(heartbeat.project);
+                string|error normalizedHeartbeatComponent = storage:toHandler(heartbeat.component);
+                
+                // Compare normalized values to detect actual mismatches (not just casing/formatting differences)
+                boolean projectMismatch = normalizedHeartbeatProject is string && 
+                    orgSecret.projectHandler != normalizedHeartbeatProject;
+                boolean componentMismatch = normalizedHeartbeatComponent is string && 
+                    orgSecret.componentName != normalizedHeartbeatComponent;
+                
+                if projectMismatch || componentMismatch {
                     log:printError(string `Binding name mismatch for kid=${kid}: ` +
                             string `bound project=${orgSecret.projectHandler ?: "?"}/component=${orgSecret.componentName ?: "?"}, ` +
-                            string `got project=${heartbeat.project}/component=${heartbeat.component}. ` +
+                            string `got project=${heartbeat.project} (normalized: ${normalizedHeartbeatProject is string ? normalizedHeartbeatProject : "invalid"})/` +
+                            string `component=${heartbeat.component} (normalized: ${normalizedHeartbeatComponent is string ? normalizedHeartbeatComponent : "invalid"}). ` +
                             string `Proceeding with bound IDs project=${projectId}, component=${componentId}`);
                 }
             }
