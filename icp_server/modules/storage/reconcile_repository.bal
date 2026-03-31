@@ -149,9 +149,11 @@ public isolated function queryArtifactState(string componentId, string envId)
 
     // 3. Compute {value, inSync} per field
     map<map<types:ArtifactStateField>> result = {};
-    foreach var [artKey, keyMap] in groups.entries() {
+    foreach string artKey in groups.keys() {
         map<types:ArtifactStateField> fields = {};
-        foreach var [stateKey, entries] in keyMap.entries() {
+        map<[string, boolean][]> keyMap = <map<[string, boolean][]>>groups[artKey];
+        foreach string stateKey in keyMap.keys() {
+            [string, boolean][] entries = <[string, boolean][]>keyMap[stateKey];
             string[] values = from var [v, _] in entries select v;
             string[] sorted = values.sort();
             string median = sorted[sorted.length() / 2];
@@ -184,7 +186,7 @@ public isolated function queryArtifactState(string componentId, string envId)
 
 public isolated function upsertReconcileDesiredState(string componentId, string envId,
         types:ReconcileArtifactKey artifact, map<string> state) returns error? {
-    foreach [string, string] [stateKey, stateValue] in state.entries() {
+    foreach [string, string] [stateKey, stateValue] in state.clone().entries() {
         log:printDebug("upsertReconcileDesired", componentId = componentId, envId = envId,
             artifactName = artifact.artifactName, stateKey = stateKey, stateValue = stateValue);
         if dbType == MSSQL || dbType == H2 {
@@ -218,7 +220,7 @@ public isolated function upsertReconcileDesiredState(string componentId, string 
 
 public isolated function optimisticUpsertObservedState(string runtimeId, string componentId, string envId,
         types:ReconcileArtifactKey artifact, map<string> state) returns error? {
-    foreach [string, string] [stateKey, stateValue] in state.entries() {
+    foreach [string, string] [stateKey, stateValue] in state.clone().entries() {
         log:printDebug("optimisticUpsertObservedState", runtimeId = runtimeId,
             artifactName = artifact.artifactName, stateKey = stateKey, stateValue = stateValue);
         if dbType == MSSQL || dbType == H2 {
@@ -266,7 +268,7 @@ public isolated function batchUpsertReconcileObservedState(string runtimeId, str
         sql:ParameterizedQuery values = ``;
         boolean first = true;
         foreach var [artifact, state] in artifacts {
-            foreach var [stateKey, stateValue] in state.entries() {
+            foreach var [stateKey, stateValue] in state.clone().entries() {
                 if !first {
                     values = sql:queryConcat(values, `, `);
                 }
