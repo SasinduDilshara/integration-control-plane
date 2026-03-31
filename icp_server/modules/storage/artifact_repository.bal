@@ -1290,26 +1290,38 @@ public isolated function getLoggersByEnvironmentAndComponent(string environmentI
         return [];
     }
 
-    map<record {string logLevel; string[] runtimeIds;}> loggerGroupMap = {};
+    map<record {map<int> levelCounts; string[] runtimeIds;}> loggerGroupMap = {};
 
     foreach string runtimeId in runtimeIds {
         types:RuntimeLogLevelRecord[] logLevels = check getLogLevelsForRuntime(runtimeId);
         foreach types:RuntimeLogLevelRecord logLevel in logLevels {
             if loggerGroupMap.hasKey(logLevel.componentName) {
-                record {string logLevel; string[] runtimeIds;} entry = <record {string logLevel; string[] runtimeIds;}>loggerGroupMap[logLevel.componentName];
+                record {map<int> levelCounts; string[] runtimeIds;} entry = <record {map<int> levelCounts; string[] runtimeIds;}>loggerGroupMap[logLevel.componentName];
                 entry.runtimeIds.push(runtimeId);
+                entry.levelCounts[logLevel.logLevel] = (entry.levelCounts[logLevel.logLevel] ?: 0) + 1;
             } else {
-                loggerGroupMap[logLevel.componentName] = {logLevel: logLevel.logLevel, runtimeIds: [runtimeId]};
+                map<int> counts = {};
+                counts[logLevel.logLevel] = 1;
+                loggerGroupMap[logLevel.componentName] = {levelCounts: counts, runtimeIds: [runtimeId]};
             }
         }
     }
 
     types:LoggerGroup[] loggerGroups = [];
-    foreach [string, record {string logLevel; string[] runtimeIds;}] [componentName, entry] in loggerGroupMap.entries() {
+    foreach [string, record {map<int> levelCounts; string[] runtimeIds;}] [componentName, entry] in loggerGroupMap.entries() {
+        // Pick the most common level; tie-break alphabetically
+        string chosenLevel = "";
+        int maxCount = 0;
+        foreach [string, int] [level, cnt] in entry.levelCounts.entries() {
+            if cnt > maxCount || (cnt == maxCount && (chosenLevel == "" || level < chosenLevel)) {
+                chosenLevel = level;
+                maxCount = cnt;
+            }
+        }
         types:LoggerGroup group = {
             loggerName: componentName,
             componentName: componentName,
-            logLevel: <types:LogLevel>entry.logLevel,
+            logLevel: <types:LogLevel>chosenLevel,
             runtimeIds: entry.runtimeIds
         };
         loggerGroups.push(group);
