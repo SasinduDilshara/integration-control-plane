@@ -307,10 +307,13 @@ export function ArtifactRuntimes({ artifact }: TabProps) {
   const runtimes = (artifact.runtimes as Array<{ runtimeId: string; runtimeName?: string; status: string }> | undefined) ?? [];
   return (
     <DataTable
-      headers={['Runtime Name', 'Status']}
+      headers={['Runtime Name', 'Runtime ID', 'Status']}
       rows={runtimes.map((r) => [
-        <Typography key="id" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+        <Typography key="name" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
           {r.runtimeName || r.runtimeId}
+        </Typography>,
+        <Typography key="id" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+          {r.runtimeId}
         </Typography>,
         <Typography key="status" variant="body2" color={r.status === 'RUNNING' ? 'success.main' : 'error.main'} sx={{ fontWeight: 600 }}>
           {r.status}
@@ -559,13 +562,16 @@ export function AutomationExecutions({ artifact }: TabProps) {
 
   return (
     <DataTable
-      headers={['Timestamp', 'Runtime Name', 'Status']}
+      headers={['Timestamp', 'Runtime Name', 'Runtime ID', 'Status']}
       rows={allExecutions.map((exec) => [
         <Typography key="timestamp" variant="body2">
           {exec.timestamp}
         </Typography>,
-        <Typography key="runtimeId" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+        <Typography key="runtimeName" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
           {exec.runtimeName || exec.runtimeId}
+        </Typography>,
+        <Typography key="runtimeId" sx={{ fontFamily: 'monospace', fontSize: 12 }}>
+          {exec.runtimeId}
         </Typography>,
         <Typography key="status" variant="body2" color={exec.status === 'ONLINE' ? 'success.main' : 'text.secondary'} sx={{ fontWeight: 600 }}>
           {exec.status}

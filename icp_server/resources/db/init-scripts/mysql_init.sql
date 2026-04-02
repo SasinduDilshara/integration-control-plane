@@ -480,7 +480,7 @@ VALUES (
 
 CREATE TABLE runtimes (
     runtime_id CHAR(36) NOT NULL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
+    name VARCHAR(100) NULL,
     project_id CHAR(36) NOT NULL,
     component_id CHAR(36) NOT NULL,
     environment_id CHAR(36) NOT NULL,

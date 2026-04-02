@@ -54,10 +54,10 @@ isolated function getRuntimeStatusMap(string[] runtimeIds) returns map<types:Run
     inClause = sql:queryConcat(inClause, `)`);
 
     sql:ParameterizedQuery query = sql:queryConcat(`SELECT runtime_id, status, name FROM runtimes WHERE runtime_id IN `, inClause);
-    stream<record {|string runtime_id; string status; string name;|}, sql:Error?> rs = dbClient->query(query);
-    check from record {|string runtime_id; string status; string name;|} row in rs
+    stream<record {|string runtime_id; string status; string? name;|}, sql:Error?> rs = dbClient->query(query);
+    check from record {|string runtime_id; string status; string? name;|} row in rs
         do {
-            runtimeMap[row.runtime_id] = {status: row.status, name: row.name};
+            runtimeMap[row.runtime_id] = {status: row.status, name: row.name ?: "-"};
         };
 
     return runtimeMap;
@@ -77,7 +77,7 @@ isolated function resolveRuntimeInfos(string[] rids, map<types:RuntimeInfo> stat
         let types:RuntimeInfo? info = statusMap[rid]
         select {
             runtimeId: rid,
-            runtimeName: info is types:RuntimeInfo ? info.name : rid,
+            runtimeName: info is types:RuntimeInfo ? (info.name ?: "-") : "-",
             status: info is types:RuntimeInfo ? info.status : "UNKNOWN"
         };
 }
@@ -327,7 +327,7 @@ public isolated function getAutomationsByEnvironmentAndComponent(string environm
         foreach string rid in rids {
             types:RuntimeInfo? info = statusMap[rid];
             string status = info is types:RuntimeInfo ? info.status : "UNKNOWN";
-            string name = info is types:RuntimeInfo ? info.name : rid;
+            string name = info is types:RuntimeInfo ? (info.name ?: "-") : "-";
             string[] execTimestamps = runtimeExecs[rid] ?: [];
             infos.push({runtimeId: rid, runtimeName: name, status, executionTimestamps: execTimestamps});
         }

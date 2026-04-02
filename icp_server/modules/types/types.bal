@@ -176,7 +176,7 @@ public type Node record {
 // Heartbeat that includes all runtime information for registration/updates
 public type Heartbeat record {|
     string heartbeatVersion = "v1.0"; // Heartbeat version (must be v1.0)
-    string runtime; // Runtime name (human-readable, required)
+    string? runtime = (); // Runtime name (human-readable, optional)
     string runtimeId; // UUID for runtime (required)
     string runtimeType; // "wso2-mi" from payloads
     string status; // "RUNNING", "STOPPED", etc.
@@ -194,8 +194,8 @@ public type Heartbeat record {|
 |};
 
 public type RuntimeInfo record {|
-    string status; 
-    string name;
+    string status;
+    string? name;
 |};
 
 // Delta heartbeat with hash value

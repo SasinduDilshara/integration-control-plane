@@ -810,7 +810,7 @@ public isolated function mapToRuntime(types:RuntimeDBRecord runtimeRecord) retur
 
     return {
         runtimeId: runtimeRecord.runtime_id,
-        runtimeName: runtimeRecord.name,
+        runtimeName: runtimeRecord.name ?: "-",
         runtimeType: runtimeRecord.runtime_type,
         status: runtimeRecord.status,
         environment: check getEnvironmentById(runtimeRecord.environment_id),
