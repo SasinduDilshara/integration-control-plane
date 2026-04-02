@@ -239,7 +239,7 @@ public isolated function validateHeartbeatProtocolAndRuntime(types:Heartbeat hea
     if heartbeat.runtimeId.length() != 36 {
         return error("Runtime ID must be a valid UUID (36 characters)");
     }
-    log:printDebug(string `Processing heartbeat v${heartbeat.heartbeatVersion}: id=${heartbeat.runtimeId}, name=${heartbeat.runtime ?: "null"}`);
+    log:printDebug(string `Processing heartbeat v${heartbeat.heartbeatVersion}: id=${heartbeat.runtimeId}, name=${heartbeat.runtime}`);
 }
 
 // Resolve heartbeat name fields to IDs and validate component consistency. Only called when preResolved=false.
@@ -569,7 +569,8 @@ isolated function upsertRuntime(types:Heartbeat heartbeat) returns boolean|error
             WHERE component_id = ${heartbeat.component} AND environment_id = ${heartbeat.environment} AND name IS NULL
         `);
     }
-    record {|string runtime_id;|}[] rows = check from record {|string runtime_id;|} r in existing select r;
+    record {|string runtime_id;|}[] rows = check from record {|string runtime_id;|} r in existing
+        select r;
 
     if rows.length() > 0 && rows[0].runtime_id != runtimeId {
         string oldId = rows[0].runtime_id;

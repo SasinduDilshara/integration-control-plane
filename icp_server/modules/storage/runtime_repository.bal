@@ -49,7 +49,8 @@ public isolated function getRuntimes(string? status, string? runtimeType, string
     sql:ParameterizedQuery orderByClause = ` ORDER BY registration_time DESC `;
     sql:ParameterizedQuery query = sql:queryConcat(selectClause, whereClause, whereConditions, orderByClause);
     stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(query);
-    types:RuntimeDBRecord[] records = check from types:RuntimeDBRecord r in runtimeStream select r;
+    types:RuntimeDBRecord[] records = check from types:RuntimeDBRecord r in runtimeStream
+        select r;
     log:printDebug(string `getRuntimes: collected ${records.length()} records, mapping`);
     foreach types:RuntimeDBRecord rec in records {
         runtimeList.push(check mapToRuntime(rec));
@@ -109,7 +110,8 @@ public isolated function getRuntimesByIntegrationIds(
     sql:ParameterizedQuery query = sql:queryConcat(selectClause, whereClause, whereConditions, orderByClause);
 
     stream<types:RuntimeDBRecord, sql:Error?> runtimeStream = dbClient->query(query);
-    types:RuntimeDBRecord[] records = check from types:RuntimeDBRecord r in runtimeStream select r;
+    types:RuntimeDBRecord[] records = check from types:RuntimeDBRecord r in runtimeStream
+        select r;
     log:printDebug(string `getRuntimesByIntegrationIds: collected ${records.length()} records, mapping`);
     foreach types:RuntimeDBRecord rec in records {
         runtimeList.push(check mapToRuntime(rec));
@@ -166,8 +168,12 @@ public isolated function deleteRuntime(string runtimeId) returns error? {
     if result is sql:Error {
         log:printError(string `Failed to delete runtime ${runtimeId}`, 'error = result);
         match classifySqlError(result) {
-            FOREIGN_KEY_VIOLATION => { return error("Cannot delete runtime because it has dependent resources", result); }
-            _ => { return error("An unexpected error occurred. Please contact your administrator.", result); }
+            FOREIGN_KEY_VIOLATION => {
+                return error("Cannot delete runtime because it has dependent resources", result);
+            }
+            _ => {
+                return error("An unexpected error occurred. Please contact your administrator.", result);
+            }
         }
     }
     log:printInfo(string `Successfully deleted runtime ${runtimeId}`);
@@ -221,7 +227,8 @@ public isolated function getServicesForRuntime(string runtimeId) returns types:S
         FROM bi_service_artifacts
         WHERE runtime_id = ${runtimeId}
     `);
-    types:ServiceRecordInDB[] records = check from types:ServiceRecordInDB r in serviceStream select r;
+    types:ServiceRecordInDB[] records = check from types:ServiceRecordInDB r in serviceStream
+        select r;
     log:printDebug(string `getServicesForRuntime(${runtimeId}): collected ${records.length()} records, mapping`);
     types:Service[] serviceList = [];
     foreach types:ServiceRecordInDB rec in records {
@@ -275,7 +282,8 @@ public isolated function getApisForRuntime(string runtimeId) returns types:RestA
         `;
     }
     stream<ApiRecordInDB, sql:Error?> apiStream = dbClient->query(apiQuery);
-    ApiRecordInDB[] records = check from ApiRecordInDB r in apiStream select r;
+    ApiRecordInDB[] records = check from ApiRecordInDB r in apiStream
+        select r;
     log:printDebug(string `getApisForRuntime(${runtimeId}): collected ${records.length()} records, mapping`);
 
     types:RestApi[] apiList = [];
@@ -396,7 +404,8 @@ public isolated function getEndpointsForRuntime(string runtimeId) returns types:
         `;
     }
     stream<types:EndpointRecordInDB, sql:Error?> endpointStream = dbClient->query(endpointQuery);
-    types:EndpointRecordInDB[] records = check from types:EndpointRecordInDB r in endpointStream select r;
+    types:EndpointRecordInDB[] records = check from types:EndpointRecordInDB r in endpointStream
+        select r;
 
     // Batch-load all attributes for this runtime
     stream<EndpointAttrRecordInDB, sql:Error?> attrStream = dbClient->query(`
@@ -404,7 +413,8 @@ public isolated function getEndpointsForRuntime(string runtimeId) returns types:
         FROM mi_endpoint_attribute_artifacts
         WHERE runtime_id = ${runtimeId}
     `);
-    EndpointAttrRecordInDB[] attrRecords = check from EndpointAttrRecordInDB a in attrStream select a;
+    EndpointAttrRecordInDB[] attrRecords = check from EndpointAttrRecordInDB a in attrStream
+        select a;
     map<types:EndpointAttribute[]> attrMap = {};
     foreach EndpointAttrRecordInDB a in attrRecords {
         types:EndpointAttribute[] existing = attrMap[a.endpoint_name] ?: [];
@@ -810,7 +820,7 @@ public isolated function mapToRuntime(types:RuntimeDBRecord runtimeRecord) retur
 
     return {
         runtimeId: runtimeRecord.runtime_id,
-        runtimeName: runtimeRecord.name ?: "-",
+        runtimeName: runtimeRecord["name"] ?: "-",
         runtimeType: runtimeRecord.runtime_type,
         status: runtimeRecord.status,
         environment: check getEnvironmentById(runtimeRecord.environment_id),

@@ -175,7 +175,9 @@ public type Node record {
 
 // Heartbeat that includes all runtime information for registration/updates
 public type Heartbeat record {|
-    string runtime;
+    string heartbeatVersion = "v1.0"; // Version of the heartbeat format
+    string runtimeId; // Unique identifier for the runtime
+    string runtime; // Alias for runtimeId (for backward compatibility)
     string runtimeType; // "wso2-mi" from payloads
     string status; // "RUNNING", "STOPPED", etc.
     string environment;
@@ -193,7 +195,9 @@ public type Heartbeat record {|
 
 // Delta heartbeat with hash value
 public type DeltaHeartbeat record {|
-    string runtime;
+    string heartbeatVersion = "v1.0"; // Version of the heartbeat format
+    string runtimeId; // Unique identifier for the runtime
+    string runtime; // Alias for runtimeId (for backward compatibility)
     string runtimeHash;
     time:Utc timestamp;
 |};
@@ -412,6 +416,7 @@ public type BIArtifactIntendedStateDBRecord record {
 
 public type RuntimeDBRecord record {
     string runtime_id;
+    string? name?; // Runtime name (optional)
     string runtime_type;
     string status;
     string environment_id;
@@ -473,6 +478,8 @@ public type Runtime record {
         name: "runtime_id"
     }
     string runtimeId;
+
+    string? runtimeName?; // Optional runtime name
 
     @sql:Column {
         name: "runtime_type"
@@ -1788,15 +1795,23 @@ public type ComponentInDB record {
     string project_updated_by?;
 };
 
+// Lightweight runtime info for internal lookups
+public type RuntimeInfo record {
+    string status;
+    string? name;
+};
+
 // Lightweight runtime reference for artifact availability
 public type ArtifactRuntimeInfo record {
     string runtimeId;
+    string? runtimeName?;
     string status;
 };
 
 // Runtime info for automation artifacts with execution timestamps
 public type AutomationRuntimeInfo record {
     string runtimeId;
+    string? runtimeName?;
     string status;
     string[] executionTimestamps;
 };
