@@ -42,7 +42,9 @@ public isolated function exchangeCodeForTokens(string code, types:SSOConfig conf
     log:printInfo("Exchanging authorization code with OIDC provider", tokenEndpoint = config.tokenEndpoint);
 
     // Create HTTP client on-demand for the token endpoint
-    http:Client|error oidcClient = new (config.tokenEndpoint);
+    http:Client|error oidcClient = config.allowInsecureTLS
+        ? new (config.tokenEndpoint, {secureSocket: {enable: false}})
+        : new (config.tokenEndpoint);
     if oidcClient is error {
         log:printError("Failed to create OIDC client", oidcClient);
         return utils:createInternalServerError("Failed to connect to OIDC provider");

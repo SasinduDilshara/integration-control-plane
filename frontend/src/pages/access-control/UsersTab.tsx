@@ -165,7 +165,11 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                   <ListingTable.Cell>
                     <Stack direction="row" alignItems="center" gap={1}>
                       {u.displayName}
-                      {u.isOidcUser && <Chip label="OIDC" size="small" color="info" />}
+                      {u.isOidcUser && (
+                        <Tooltip title="This user signed in via SSO">
+                          <Chip label="External" size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+                        </Tooltip>
+                      )}
                     </Stack>
                   </ListingTable.Cell>
                   <ListingTable.Cell>{u.username}</ListingTable.Cell>
@@ -173,7 +177,7 @@ export function UsersTab({ orgHandler }: { orgHandler: string }): JSX.Element {
                   <ListingTable.Cell align="right">
                     <Authorized permissions={Permissions.USER_MANAGE_USERS}>
                       {capabilities.includes('password_reset') && (
-                        <Tooltip title={u.isOidcUser ? 'Cannot reset password of OIDC user' : u.groups.some((g) => g.groupName === 'Super Admins') && u.userId !== currentUserId ? 'Cannot reset password of another super admin' : 'Reset Password'}>
+                        <Tooltip title={u.isOidcUser ? 'Cannot reset password of external user' : u.groups.some((g) => g.groupName === 'Super Admins') && u.userId !== currentUserId ? 'Cannot reset password of another super admin' : 'Reset Password'}>
                           <span>
                             <IconButton
                               size="small"

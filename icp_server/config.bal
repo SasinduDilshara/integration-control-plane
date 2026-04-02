@@ -79,6 +79,7 @@ configurable string ssoClientSecret = "";
 configurable string ssoRedirectUri = "";
 configurable string ssoUsernameClaim = "email"; // Claim to use for username: "email" or "preferred_username"
 configurable string[] ssoScopes = ["openid", "email", "profile"];
+configurable boolean ssoAllowInsecureTLS = false; // Set true for local/self-signed OIDC provider certs
 
 // Logging configuration
 configurable string logLevel = "INFO"; // DEBUG, INFO, WARN, ERROR
@@ -133,7 +134,8 @@ public isolated function getSSOConfig() returns types:SSOConfig => {
     clientSecret: resolvedSsoClientSecret,
     redirectUri: ssoRedirectUri,
     usernameClaim: ssoUsernameClaim,
-    scopes: ssoScopes
+    scopes: ssoScopes,
+    allowInsecureTLS: ssoAllowInsecureTLS
 };
 
 // Validate SSO configuration

@@ -113,22 +113,6 @@ frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs25
 # ldapConnectionPassword = "$secret{ldapConnectionPassword}"
 # ldapTrustStorePassword = "$secret{ldapTrustStorePassword}"
 
-
-# =============================================================================
-# SECRETS ALIAS CONFIGURATION
-# =============================================================================
-# frontendJwtHMACSecret = "$secret{secretJWTsecret}"
-# credentialsDbPassword = "$secret{secCredsDbPassword}"
-
-# =============================================================================
-# ENCRYPTED SECRETS CONFIGURATION
-# =============================================================================
-[icp_server.secrets]
-# secretJWTsecret = "encrypted-value-for-jwt-secret"
-# secCredsDbPassword = "encrypted-value-for-credentials-db-password"
-# ldapConnectionPassword = "encrypted-value-for-ldap-connection-password"
-# ldapTrustStorePassword = "encrypted-value-for-ldap-truststore-password"
-
 # =============================================================================
 # SSO (OIDC) CONFIGURATION
 # =============================================================================
@@ -150,6 +134,7 @@ frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs25
 # ssoRedirectUri = "https://localhost:3000/auth/callback"
 # ssoUsernameClaim = "email"  # or "preferred_username"
 # ssoScopes = ["openid", "email", "profile"]
+# ssoAllowInsecureTLS = false  # For OIDC providers running with self-signed cert
 
 # Example configuration for Okta
 # ssoIssuer = "https://{your-domain}.okta.com/oauth2/default"
@@ -161,6 +146,7 @@ frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs25
 # ssoRedirectUri = "https://localhost:3000/auth/callback"
 # ssoUsernameClaim = "email"
 # ssoScopes = ["openid", "email", "profile"]
+# ssoAllowInsecureTLS = false  # For OIDC providers running with self-signed cert
 
 # Example configuration for Auth0
 # ssoIssuer = "https://{your-domain}.auth0.com/"
@@ -172,6 +158,7 @@ frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs25
 # ssoRedirectUri = "https://localhost:3000/auth/callback"
 # ssoUsernameClaim = "email"
 # ssoScopes = ["openid", "email", "profile"]
+# ssoAllowInsecureTLS = false  # For OIDC providers running with self-signed cert
 
 # Notes:
 # - The 'openid' scope is required for OIDC authentication
@@ -180,6 +167,20 @@ frontendJwtHMACSecret = "default-secret-key-at-least-32-characters-long-for-hs25
 # - On first login, a new user will be created in the ICP database
 # - The redirect URI must match what's configured in your identity provider
 
+# =============================================================================
+# SECRETS ALIAS CONFIGURATION
+# =============================================================================
+# frontendJwtHMACSecret = "$secret{secretJWTsecret}"
+# credentialsDbPassword = "$secret{secCredsDbPassword}"
+
+# =============================================================================
+# ENCRYPTED SECRETS CONFIGURATION
+# =============================================================================
+[icp_server.secrets]
+# secretJWTsecret = "encrypted-value-for-jwt-secret"
+# secCredsDbPassword = "encrypted-value-for-credentials-db-password"
+# ldapConnectionPassword = "encrypted-value-for-ldap-connection-password"
+# ldapTrustStorePassword = "encrypted-value-for-ldap-truststore-password"
 
 # =============================================================================
 # DATABASE CONFIGURATION

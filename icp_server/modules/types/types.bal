@@ -1946,6 +1946,7 @@ public type SSOConfig record {|
     string redirectUri;
     string usernameClaim; // "email" or "preferred_username"
     string[] scopes;
+    boolean allowInsecureTLS; // Set true for local/self-signed certs; false in production
 |};
 
 // OIDC Authorization URL response
