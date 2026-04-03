@@ -542,7 +542,7 @@ export default function Environment({
   const [createUserError, setCreateUserError] = useState<string | null>(null);
   const [deleteUserError, setDeleteUserError] = useState<string | null>(null);
 
-  const { data: runtimes = [], error: runtimesError, isLoading: runtimesLoading } = useComponentRuntimes(env.id, projectId, componentId, componentType === 'MI' && settingsPanelOpen && !!env.id && !!projectId && !!componentId);
+  const { data: runtimes = [], error: runtimesError, isLoading: runtimesLoading } = useComponentRuntimes(env.id, projectId, componentId, !!env.id && !!projectId && !!componentId);
   const validatedRuntimeId = runtimes.some((r) => r.runtimeId === selectedRuntimeId) ? selectedRuntimeId : '';
   const activeRuntimeId = validatedRuntimeId || (runtimes.length === 1 ? runtimes[0].runtimeId : '');
   const createMiUser = useCreateMiUser();
@@ -566,13 +566,20 @@ export default function Environment({
     setCreateUserError(null);
   };
 
+  const onlineCount = runtimes.filter((r) => r.status === 'RUNNING').length;
+  const totalCount = runtimes.length;
+  const isOnline = onlineCount > 0;
+
   return (
     <Card variant="outlined" sx={{ mb: 3 }}>
       <CardContent>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="h5" component="h2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
-            {env.name}
-          </Typography>
+          <Stack direction="row" alignItems="center" gap={1}>
+            <Typography variant="h5" component="h2" sx={{ fontWeight: 600, textTransform: 'capitalize' }}>
+              {env.name}
+            </Typography>
+            {totalCount > 0 && <Chip label={`${onlineCount}/${totalCount} ${isOnline ? 'Online' : 'Offline'}`} size="small" color={isOnline ? 'success' : 'default'} />}
+          </Stack>
           <Stack direction="row" alignItems="center" gap={1}>
             <IconButton size="small" onClick={handleRefresh} disabled={isRefreshing} aria-label="Refresh">
               <RefreshCw
