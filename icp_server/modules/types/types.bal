@@ -108,6 +108,7 @@ public type Logger record {
     string? loggerName; // Optional: Only present for MI components
     string componentName;
     LogLevel logLevel;
+    boolean? logLevelInSync?;
     string runtimeId;
 };
 
@@ -115,6 +116,7 @@ public type LoggerGroup record {
     string? loggerName;
     string componentName;
     LogLevel logLevel;
+    boolean? logLevelInSync?;
     string[] runtimeIds;
 };
 

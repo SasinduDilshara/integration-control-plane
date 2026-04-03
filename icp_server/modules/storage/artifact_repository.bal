@@ -1245,6 +1245,7 @@ public isolated function getLoggersByEnvironmentAndComponent(string environmentI
             loggerName: componentName,
             componentName: componentName,
             logLevel: <types:LogLevel>chosenLevel,
+            logLevelInSync: entry.levelCounts.length() == 1,
             runtimeIds: entry.runtimeIds
         };
         loggerGroups.push(group);
