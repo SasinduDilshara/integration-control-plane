@@ -88,21 +88,22 @@ export function useDeleteProject() {
 
 export interface EnvironmentInput {
   name: string;
+  environmentHandler: string;
   description: string;
   critical: boolean;
 }
 
 const CREATE_ENVIRONMENT = `
-  mutation CreateEnvironment($name: String!, $description: String!, $critical: Boolean!) {
-    createEnvironment(environment: { name: $name, description: $description, critical: $critical }) {
-      id, name, description, critical, createdAt
+  mutation CreateEnvironment($name: String!, $environmentHandler: String!, $description: String!, $critical: Boolean!) {
+    createEnvironment(environment: { name: $name, environmentHandler: $environmentHandler, description: $description, critical: $critical }) {
+      id, name, handler, description, critical, createdAt
     }
   }`;
 
 const UPDATE_ENVIRONMENT = `
-  mutation UpdateEnvironment($environmentId: String!, $name: String!, $description: String!, $critical: Boolean!) {
-    updateEnvironment(environmentId: $environmentId, name: $name, description: $description, critical: $critical) {
-      id, name, description, critical, createdAt
+  mutation UpdateEnvironment($environmentId: String!, $name: String!, $handler: String, $description: String!, $critical: Boolean!) {
+    updateEnvironment(environmentId: $environmentId, name: $name, handler: $handler, description: $description, critical: $critical) {
+      id, name, handler, description, critical, createdAt
     }
   }`;
 
@@ -122,7 +123,7 @@ export function useCreateEnvironment() {
 export function useUpdateEnvironment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: EnvironmentInput & { environmentId: string }) => gql<{ updateEnvironment: GqlEnvironment }>(UPDATE_ENVIRONMENT, { ...input }).then((d) => d.updateEnvironment),
+    mutationFn: (input: Partial<EnvironmentInput> & { environmentId: string; name: string; description: string; critical: boolean }) => gql<{ updateEnvironment: GqlEnvironment }>(UPDATE_ENVIRONMENT, { ...input }).then((d) => d.updateEnvironment),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['environments'] }),
   });
 }

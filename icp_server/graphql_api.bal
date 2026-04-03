@@ -1893,7 +1893,7 @@ service /graphql on graphqlListener {
     }
 
     // Update environment name, description, and/or critical status (requires management permission)
-    isolated remote function updateEnvironment(graphql:Context context, string environmentId, string? name, string? description, boolean? critical) returns types:Environment?|error {
+    isolated remote function updateEnvironment(graphql:Context context, string environmentId, string? name, string? handler, string? description, boolean? critical) returns types:Environment?|error {
         types:UserContextV2 userContext = check extractUserContext(context);
 
         // Fetch current environment to check its production status
@@ -1923,7 +1923,7 @@ service /graphql on graphqlListener {
             }
         }
 
-        check storage:updateEnvironment(environmentId, name, description, critical);
+        check storage:updateEnvironment(environmentId, name, handler, description, critical);
         return check storage:getEnvironmentById(environmentId);
     }
 
@@ -1948,6 +1948,61 @@ service /graphql on graphqlListener {
 
         check storage:updateEnvironmentProductionStatus(environmentId, isProduction);
         return check storage:getEnvironmentById(environmentId);
+    }
+
+    // Get a specific environment by handler
+    isolated resource function get environmentByHandler(graphql:Context context, string environmentHandler) returns types:Environment?|error {
+        log:printInfo("Fetching environment by handler", environmentHandler = environmentHandler);
+        types:UserContextV2 userContext = check extractUserContext(context);
+
+        types:Environment|error env = storage:getEnvironmentByHandler(environmentHandler);
+        if env is error {
+            log:printError("Error getting environment by handler", env, environmentHandler = environmentHandler);
+            return ();
+        }
+
+        // Check if user has access to this environment via RBAC
+        types:UserEnvironmentAccess[] accessibleEnvs =
+            check storage:getUserEnvironmentRestrictions(userContext.userId);
+
+        // Check if user has any access at all
+        if accessibleEnvs.length() == 0 {
+            log:printWarn("Attempt to access environment without role mappings", userId = userContext.userId, environmentHandler = environmentHandler);
+            return (); // No access - return null
+        }
+
+        // Check if user has unrestricted access or access to this specific environment
+        boolean hasAccess = false;
+        foreach types:UserEnvironmentAccess envAccess in accessibleEnvs {
+            if envAccess.envUuid is () {
+                // env_uuid is NULL = unrestricted access to all environments
+                hasAccess = true;
+                break;
+            } else if envAccess.envUuid is string {
+                // Specific environment access
+                if <string>envAccess.envUuid == env.id {
+                    hasAccess = true;
+                    break;
+                }
+            }
+        }
+
+        if !hasAccess {
+            log:printWarn("Attempt to access environment without permission", userId = userContext.userId, environmentHandler = environmentHandler);
+            return (); // No access - return null
+        }
+
+        log:printInfo("Successfully retrieved environment", environmentId = env.id, environmentHandler = environmentHandler);
+        return env;
+    }
+
+    // Check environment handler availability
+    isolated resource function get environmentHandlerAvailability(graphql:Context context, string environmentHandlerCandidate) returns types:EnvironmentHandlerAvailability|error {
+        // Note: This endpoint might not require authentication depending on business requirements
+        // For now, we'll allow it without strict authentication to enable checking before creation
+
+        // Call storage layer to check handler availability
+        return check storage:checkEnvironmentHandlerAvailability(environmentHandlerCandidate);
     }
 
     //------------- Project Resources

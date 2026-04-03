@@ -552,7 +552,7 @@ export default function Runtime(scope: ProjectScope | ComponentScope): JSX.Eleme
               return (
                 <EnvironmentRuntimeCard
                   key={env.id}
-                  environmentName={env.name}
+                  environmentName={env.handler}
                   environmentId={env.id}
                   componentId={componentId}
                   componentType={component?.componentType}

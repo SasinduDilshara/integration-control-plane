@@ -1634,6 +1634,7 @@ public type Environment record {
     }
     string id; // Alias for environmentId (set in resolver)
     string name;
+    string handler;
     string description?;
 
     // New required fields (from DB)
@@ -1708,6 +1709,7 @@ public type Environment record {
 
 public type EnvironmentInput record {
     string name;
+    string environmentHandler;
     string description?;
     boolean critical;
     string createdBy?;
@@ -2138,6 +2140,11 @@ public type ProjectCreationEligibility record {
 };
 
 // === Project Handler Availability ===
+
+public type EnvironmentHandlerAvailability record {
+    boolean handlerUnique;
+    string? alternateHandlerCandidate;
+};
 
 public type ProjectHandlerAvailability record {
     boolean handlerUnique;
