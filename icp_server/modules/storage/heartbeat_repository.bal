@@ -239,7 +239,7 @@ public isolated function validateHeartbeatProtocolAndRuntime(types:Heartbeat hea
     if heartbeat.runtimeId.length() != 36 {
         return error("Runtime ID must be a valid UUID (36 characters)");
     }
-    log:printDebug(string `Processing heartbeat v${heartbeat.heartbeatVersion}: id=${heartbeat.runtimeId}, name=${heartbeat.runtime}`);
+    log:printDebug(string `Processing heartbeat v${heartbeat.heartbeatVersion}: id=${heartbeat.runtimeId}, name=${heartbeat.runtime ?: "null"}`);
 }
 
 // Resolve heartbeat name fields to IDs and validate component consistency. Only called when preResolved=false.

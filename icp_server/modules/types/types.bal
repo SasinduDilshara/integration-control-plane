@@ -179,7 +179,7 @@ public type Node record {
 public type Heartbeat record {|
     string heartbeatVersion = "v1.0"; // Version of the heartbeat format
     string runtimeId; // Unique identifier for the runtime
-    string runtime; // Alias for runtimeId (for backward compatibility)
+    string? runtime = (); // Alias for runtimeId (for backward compatibility)
     string runtimeType; // "wso2-mi" from payloads
     string status; // "RUNNING", "STOPPED", etc.
     string environment;
