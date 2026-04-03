@@ -121,19 +121,6 @@ isolated function initObservabilityClient() returns http:Client? {
     return httpClient;
 }
 
-// HTTP service configuration
-listener http:Listener observabilityListener = new (observabilityServerPort,
-    config = {
-        host: serverHost,
-        secureSocket: {
-            key: {
-                path: keystorePath,
-                password: resolvedKeystorePassword
-            }
-        }
-    }
-);
-
 @http:ServiceConfig {
     auth: [
         {
@@ -151,10 +138,10 @@ listener http:Listener observabilityListener = new (observabilityServerPort,
         allowHeaders: ["Content-Type", "Authorization"]
     }
 }
-service /icp/observability on observabilityListener {
+service /icp/observability on httpListener {
 
     function init() {
-        log:printInfo("Observability service started at " + serverHost + ":" + observabilityServerPort.toString());
+        log:printInfo("Observability service started at " + serverHost + ":" + serverPort.toString());
     }
 
     resource function post logs(http:Request request, types:ICPLogEntryRequest logRequest) returns types:LogEntriesResponse|http:Response|error {

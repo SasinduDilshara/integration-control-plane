@@ -16,27 +16,35 @@
  * under the License.
  */
 
-import { Alert, Button, Checkbox, FormControlLabel, PageContent, Stack, TextField, Typography } from '@wso2/oxygen-ui';
-import { ArrowLeft } from '@wso2/oxygen-ui-icons-react';
-import { useState, type JSX } from 'react';
+import { Alert, Button, Checkbox, FormControlLabel, IconButton, PageContent, Stack, TextField, Typography } from '@wso2/oxygen-ui';
+import { ArrowLeft, Edit } from '@wso2/oxygen-ui-icons-react';
+import { useState, useEffect, useRef, type JSX } from 'react';
 import { useNavigate } from 'react-router';
 import { useCreateEnvironment } from '../api/mutations';
+import { useEnvironmentHandlerAvailability } from '../api/queries';
 import { resourceUrl, type OrgScope } from '../nav';
+
+function toHandler(name: string) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
 
 function formatErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message: unknown }).message === 'string' ? (error as { message: string }).message : '';
   const lowerMessage = message.toLowerCase();
 
-  if (lowerMessage.includes('already exists') || lowerMessage.includes('duplicate') || lowerMessage.includes('exists') || lowerMessage.includes('conflict') || lowerMessage.includes('unique')) {
-    return 'An environment with this name already exists. Please choose a different name.';
+  if (lowerMessage.includes('already exists') || lowerMessage.includes('duplicate') || lowerMessage.includes('exists') || lowerMessage.includes('conflict') || lowerMessage.includes('unique') || lowerMessage.includes('already taken')) {
+    return 'An environment with this name or handler already exists. Please choose a different name/handler.';
   }
 
   if (lowerMessage.includes('unexpected error') && lowerMessage.includes('administrator')) {
-    return 'Unable to create environment. This name may already be in use or violates system constraints.';
+    return 'Unable to create environment. This name/handler may already be in use or violates system constraints.';
   }
 
   if (lowerMessage.includes('invalid') || lowerMessage.includes('validation')) {
-    return 'Invalid input. Please check the environment name and try again.';
+    return 'Invalid input. Please check the environment name and handler, then try again.';
   }
 
   if (lowerMessage.includes('permission') || lowerMessage.includes('unauthorized') || lowerMessage.includes('forbidden')) {
@@ -50,16 +58,39 @@ export default function CreateEnvironment(scope: OrgScope): JSX.Element {
   const navigate = useNavigate();
 
   const [name, setName] = useState('');
+  const [handler, setHandler] = useState('');
+  const [handlerEdited, setHandlerEdited] = useState(false);
   const [description, setDescription] = useState('');
   const [critical, setCritical] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debouncedHandler, setDebouncedHandler] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mutation = useCreateEnvironment();
+
+  const effectiveHandler = handler || toHandler(name);
+  const normalizedEffectiveHandler = effectiveHandler.trim();
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setDebouncedHandler(normalizedEffectiveHandler), 400);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [normalizedEffectiveHandler]);
+
+  const handlerMissing = !normalizedEffectiveHandler && (!!name.trim() || handlerEdited);
+  const availability = useEnvironmentHandlerAvailability(debouncedHandler);
+  const handlerTaken = debouncedHandler !== '' && availability.data?.handlerUnique === false;
+
+  const resetError = () => {
+    if (error) setError(null);
+  };
 
   const submit = () => {
     setError(null);
     const trimmedName = name.trim();
     mutation.mutate(
-      { name: trimmedName, description: description.trim(), critical },
+      { name: trimmedName, environmentHandler: normalizedEffectiveHandler, description: description.trim(), critical },
       {
         onSuccess: () => navigate(resourceUrl(scope, 'environments'), { state: { success: true, environmentName: trimmedName } }),
         onError: (err) => setError(formatErrorMessage(err)),
@@ -84,7 +115,51 @@ export default function CreateEnvironment(scope: OrgScope): JSX.Element {
       )}
 
       <Stack gap={3} sx={{ maxWidth: 600, mb: 4 }}>
-        <TextField label="Name" required placeholder="e.g., staging" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
+        <TextField
+          label="Name"
+          required
+          placeholder="e.g., Staging Environment"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            resetError();
+          }}
+          fullWidth
+        />
+        <TextField
+          label="Handler"
+          required
+          placeholder="e.g., staging"
+          value={effectiveHandler}
+          onChange={(e) => {
+            setHandler(e.target.value);
+            setHandlerEdited(true);
+            resetError();
+          }}
+          fullWidth
+          disabled={!handlerEdited}
+          error={handlerMissing || handlerTaken}
+          helperText={handlerMissing ? 'Handler must include at least one letter or number.' : handlerTaken ? 'This handler is already taken. Please choose a different one.' : undefined}
+          slotProps={{
+            input: {
+              endAdornment: (
+                <IconButton
+                  size="small"
+                  aria-label={handlerEdited ? 'Stop editing handler' : 'Edit handler'}
+                  onClick={() => {
+                    if (!handlerEdited) {
+                      // Enabling edit mode: capture current auto-generated value
+                      setHandler(toHandler(name));
+                    }
+                    // Toggle edit state without resetting handler value
+                    setHandlerEdited(!handlerEdited);
+                  }}>
+                  <Edit size={16} />
+                </IconButton>
+              ),
+            },
+          }}
+        />
         <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} fullWidth />
         <FormControlLabel control={<Checkbox checked={critical} onChange={(_, v) => setCritical(v)} />} label="Mark as Critical Environment" />
       </Stack>
@@ -93,7 +168,7 @@ export default function CreateEnvironment(scope: OrgScope): JSX.Element {
         <Button variant="outlined" onClick={() => navigate(resourceUrl(scope, 'environments'))}>
           Cancel
         </Button>
-        <Button variant="contained" onClick={submit} disabled={!name.trim() || mutation.isPending}>
+        <Button variant="contained" onClick={submit} disabled={!name.trim() || !normalizedEffectiveHandler || handlerTaken || mutation.isPending}>
           Create
         </Button>
       </Stack>

@@ -111,6 +111,31 @@ export function useProjectHandlerAvailability(orgId: number, handler: string) {
   });
 }
 
+const ENVIRONMENT_HANDLER_AVAILABILITY_QUERY = `
+  query EnvironmentHandlerAvailability($environmentHandlerCandidate: String!) {
+    environmentHandlerAvailability(environmentHandlerCandidate: $environmentHandlerCandidate) {
+      handlerUnique
+      alternateHandlerCandidate
+    }
+  }
+`;
+
+export interface GqlEnvironmentHandlerAvailability {
+  handlerUnique: boolean;
+  alternateHandlerCandidate: string | null;
+}
+
+export function useEnvironmentHandlerAvailability(handler: string) {
+  return useQuery({
+    queryKey: ['environment', 'handler-availability', handler],
+    queryFn: () =>
+      gql<{ environmentHandlerAvailability: GqlEnvironmentHandlerAvailability }>(ENVIRONMENT_HANDLER_AVAILABILITY_QUERY, {
+        environmentHandlerCandidate: handler,
+      }).then((d) => d.environmentHandlerAvailability),
+    enabled: !!handler,
+  });
+}
+
 export function useComponents(orgHandler: string, projectId: string) {
   return useQuery({
     queryKey: ['components', orgHandler, projectId],
@@ -143,6 +168,7 @@ export function useComponentByHandler(projectId: string, handler: string | undef
 export interface GqlEnvironment {
   id: string;
   name: string;
+  handler: string;
   critical: boolean;
   description?: string;
   createdAt?: string;
@@ -151,7 +177,7 @@ export interface GqlEnvironment {
 const ENVIRONMENTS_QUERY = `
   query GetEnvironments($projectId: String!) {
     environments(orgUuid: "default-org-uuid", type: "external", projectId: $projectId) {
-      id, name, critical
+      id, name, handler, critical
     }
   }`;
 
@@ -164,7 +190,7 @@ export function useEnvironments(projectId: string) {
 }
 
 const ALL_ENVIRONMENTS_QUERY = `{
-  environments { id, name, description, critical, createdAt }
+  environments { id, name, handler, description, critical, createdAt }
 }`;
 
 export function useAllEnvironments() {

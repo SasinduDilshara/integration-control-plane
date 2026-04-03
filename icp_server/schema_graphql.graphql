@@ -25,6 +25,10 @@ type Query {
     projectId: String
   ): [Environment!]!
   adminEnvironments: [Environment!]!
+  environmentByHandler(environmentHandler: String!): Environment
+  environmentHandlerAvailability(
+    environmentHandlerCandidate: String!
+  ): EnvironmentHandlerAvailability!
 
   # Project Queries
   projects(orgId: Int): [Project!]!
@@ -162,6 +166,7 @@ type Mutation {
   updateEnvironment(
     environmentId: String!
     name: String
+    handler: String
     description: String
   ): Environment
   updateEnvironmentProductionStatus(
@@ -711,6 +716,7 @@ type Environment {
   environmentId: String!
   id: String!
   name: String!
+  handler: String!
   description: String
   isProduction: Boolean!
 
@@ -1057,6 +1063,7 @@ type Secret {
 # Environment Input
 input EnvironmentInput {
   name: String!
+  environmentHandler: String!
   description: String
   isProduction: Boolean
 }
@@ -1255,6 +1262,11 @@ type ProjectCreationEligibility {
 # ============================================
 # Project Handler Availability Type
 # ============================================
+type EnvironmentHandlerAvailability {
+  handlerUnique: Boolean!
+  alternateHandlerCandidate: String
+}
+
 type ProjectHandlerAvailability {
   handlerUnique: Boolean!
   alternateHandlerCandidate: String

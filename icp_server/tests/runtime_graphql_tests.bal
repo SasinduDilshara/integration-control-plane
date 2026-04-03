@@ -21,7 +21,7 @@ import ballerina/jwt;
 import ballerina/test;
 
 // GraphQL endpoint for runtime queries (using test port from Config.toml)
-const string GRAPHQL_URL = "http://localhost:9446/graphql";
+const string GRAPHQL_URL = "http://localhost:9445/graphql";
 
 // Test data IDs from test seed data (z_test_data.sql / h2_test_data.sql)
 const string PROJECT_1_ID = "650e8400-e29b-41d4-a716-446655440001";

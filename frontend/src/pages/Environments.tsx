@@ -134,7 +134,7 @@ export default function Environments(scope: OrgScope | ProjectScope): JSX.Elemen
     if (!environments) return [];
     if (!search.trim()) return environments;
     const s = search.trim().toLowerCase();
-    return environments.filter((env) => env.name.toLowerCase().includes(s) || env.description?.toLowerCase().includes(s));
+    return environments.filter((env) => env.name.toLowerCase().includes(s) || env.handler.toLowerCase().includes(s) || env.description?.toLowerCase().includes(s));
   }, [environments, search]);
 
   const maxPage = Math.max(0, Math.ceil(filteredEnvironments.length / rowsPerPage) - 1);
@@ -173,6 +173,7 @@ export default function Environments(scope: OrgScope | ProjectScope): JSX.Elemen
               <ListingTable.Head>
                 <ListingTable.Row>
                   <ListingTable.Cell>Name</ListingTable.Cell>
+                  <ListingTable.Cell>Handler</ListingTable.Cell>
                   <ListingTable.Cell>Description</ListingTable.Cell>
                   <ListingTable.Cell>Type</ListingTable.Cell>
                   <ListingTable.Cell>Created</ListingTable.Cell>
@@ -182,7 +183,7 @@ export default function Environments(scope: OrgScope | ProjectScope): JSX.Elemen
               <ListingTable.Body>
                 {filteredEnvironments.length === 0 ? (
                   <ListingTable.Row>
-                    <ListingTable.Cell colSpan={5} align="center">
+                    <ListingTable.Cell colSpan={6} align="center">
                       No records to display
                     </ListingTable.Cell>
                   </ListingTable.Row>
@@ -194,6 +195,11 @@ export default function Environments(scope: OrgScope | ProjectScope): JSX.Elemen
                           <Avatar sx={{ width: 32, height: 32, fontSize: 14, bgcolor: 'action.hover', color: 'text.secondary' }}>{env.name[0]?.toUpperCase()}</Avatar>
                           {env.name}
                         </Stack>
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                          {env.handler}
+                        </Typography>
                       </ListingTable.Cell>
                       <ListingTable.Cell>{env.description}</ListingTable.Cell>
                       <ListingTable.Cell>{env.critical ? 'Critical' : 'Non-Critical'}</ListingTable.Cell>

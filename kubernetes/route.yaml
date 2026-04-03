@@ -27,13 +27,6 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: /graphql
-      backendRefs:
-        - name: icp-service
-          port: 9446
-    - matches:
-        - path:
-            type: PathPrefix
             value: /
       backendRefs:
         - name: icp-service

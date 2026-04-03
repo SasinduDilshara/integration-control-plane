@@ -23,7 +23,7 @@ import ballerina/uuid;
 // Get all environments
 public isolated function getEnvironments() returns types:Environment[]|error {
     types:Environment[] environments = [];
-    stream<types:Environment, sql:Error?> envStream = dbClient->query(`SELECT environment_id, name, description, 
+    stream<types:Environment, sql:Error?> envStream = dbClient->query(`SELECT environment_id, name, handler, description, 
         region, cluster_id, choreo_env, external_apim_env_name, internal_apim_env_name, sandbox_apim_env_name, 
         critical, dns_prefix, created_at, updated_at, created_by, updated_by 
         FROM environments ORDER BY name ASC`);
@@ -33,6 +33,7 @@ public isolated function getEnvironments() returns types:Environment[]|error {
                 id: env.id,
                 description: env.description,
                 name: env.name,
+                handler: env.handler,
                 region: env.region,
                 clusterId: env.clusterId,
                 choreoEnv: env.choreoEnv,
@@ -60,7 +61,7 @@ public isolated function getEnvironmentsByIds(string[] environmentIds) returns t
     types:Environment[] environments = [];
 
     // Build WHERE clause to filter by environment IDs
-    sql:ParameterizedQuery query = `SELECT environment_id, name, description, 
+    sql:ParameterizedQuery query = `SELECT environment_id, name, handler, description, 
                                      region, cluster_id, choreo_env, external_apim_env_name, internal_apim_env_name, 
                                      sandbox_apim_env_name, critical, dns_prefix, created_at, updated_at, created_by, updated_by
                                      FROM environments 
@@ -84,6 +85,7 @@ public isolated function getEnvironmentsByIds(string[] environmentIds) returns t
                 id: env.id,
                 description: env.description,
                 name: env.name,
+                handler: env.handler,
                 region: env.region,
                 clusterId: env.clusterId,
                 choreoEnv: env.choreoEnv,
@@ -108,7 +110,7 @@ public isolated function getEnvironmentsByIds(string[] environmentIds) returns t
 public isolated function getAllEnvironments() returns types:Environment[]|error {
     types:Environment[] environments = [];
 
-    sql:ParameterizedQuery query = `SELECT environment_id, name, description, 
+    sql:ParameterizedQuery query = `SELECT environment_id, name, handler, description, 
                                      region, cluster_id, choreo_env, external_apim_env_name, internal_apim_env_name, 
                                      sandbox_apim_env_name, critical, dns_prefix, created_at, updated_at, created_by, updated_by
                                      FROM environments 
@@ -122,6 +124,7 @@ public isolated function getAllEnvironments() returns types:Environment[]|error 
                 id: env.id,
                 description: env.description,
                 name: env.name,
+                handler: env.handler,
                 region: env.region,
                 clusterId: env.clusterId,
                 choreoEnv: env.choreoEnv,
@@ -178,7 +181,7 @@ public isolated function getEnvironmentIdsByTypes(boolean hasProdAccess, boolean
 // Get environment by ID
 public isolated function getEnvironmentById(string environmentId) returns types:Environment|error {
     stream<types:Environment, sql:Error?> envStream =
-        dbClient->query(`SELECT environment_id, name, description, region, cluster_id, choreo_env, 
+        dbClient->query(`SELECT environment_id, name, handler, description, region, cluster_id, choreo_env, 
                         external_apim_env_name, internal_apim_env_name, sandbox_apim_env_name, critical, dns_prefix, 
                         created_at, updated_at FROM environments WHERE environment_id = ${environmentId}`);
 
@@ -193,6 +196,7 @@ public isolated function getEnvironmentById(string environmentId) returns types:
     return {
         id: env.id,
         name: env.name,
+        handler: env.handler,
         description: env.description,
         region: env?.region,
         clusterId: env?.clusterId,
@@ -212,14 +216,34 @@ public isolated function createEnvironment(types:EnvironmentInput environment) r
     log:printInfo(string `Register environment : ${environment.toString()}`);
     string envId = uuid:createRandomUuid();
 
-    sql:ParameterizedQuery insertQuery = `INSERT INTO environments (environment_id, name, description, critical, created_by) 
-    VALUES (${envId}, ${environment.name}, ${environment.description}, ${environment.critical}, ${environment.createdBy})`;
+    if environment.name.trim() == "" {
+        log:printWarn("Environment creation attempted with empty name");
+        return error("Environment name is required");
+    }
+
+    string handler = environment.environmentHandler.trim();
+    if handler == "" {
+        log:printWarn("Environment creation attempted without handler for environment: " + environment.name);
+        return error("Environment handler is required");
+    }
+
+    // Check for duplicate handler
+    sql:ParameterizedQuery handlerCheckQuery = `SELECT COUNT(*) as cnt FROM environments WHERE handler = ${handler}`;
+    stream<record {|int cnt;|}, sql:Error?> handlerCheckStream = dbClient->query(handlerCheckQuery);
+    record {|int cnt;|}[] handlerCheckResult = check from record {|int cnt;|} r in handlerCheckStream
+        select r;
+    if handlerCheckResult.length() > 0 && handlerCheckResult[0].cnt > 0 {
+        return error(string `Environment handler '${handler}' is already taken`);
+    }
+
+    sql:ParameterizedQuery insertQuery = `INSERT INTO environments (environment_id, name, handler, description, critical, created_by) 
+    VALUES (${envId}, ${environment.name}, ${handler}, ${environment.description}, ${environment.critical}, ${environment.createdBy})`;
     var result = dbClient->execute(insertQuery);
     if result is sql:Error {
         log:printError(string `Failed to insert environment: ${environment.name}`, 'error = result);
         match classifySqlError(result) {
             DUPLICATE_KEY => {
-                return error(string `An environment with the name "${environment.name}" already exists`, result);
+                return error(string `An environment with the name or handler "${environment.name}" already exists`, result);
             }
             VALUE_TOO_LONG => {
                 return error("The provided value exceeds the maximum allowed length", result);
@@ -230,17 +254,39 @@ public isolated function createEnvironment(types:EnvironmentInput environment) r
         }
     }
 
+    log:printInfo(string `Created environment: ${environment.name}`,
+            envId = envId,
+            handler = handler,
+            createdBy = environment.createdBy);
+
     // Return the created environment
     return check getEnvironmentById(envId);
 }
 
 // Update environment name and/or description
-public isolated function updateEnvironment(string environmentId, string? name, string? description, boolean? critical) returns error? {
+public isolated function updateEnvironment(string environmentId, string? name, string? handler, string? description, boolean? critical) returns error? {
     sql:ParameterizedQuery whereClause = ` WHERE environment_id = ${environmentId} `;
     sql:ParameterizedQuery updateFields = ` SET updated_at = CURRENT_TIMESTAMP `;
 
     if name is string {
         updateFields = sql:queryConcat(updateFields, `, name = ${name} `);
+    }
+    if handler is string {
+        // Trim and validate handler the same way as createEnvironment
+        string trimmedHandler = handler.trim();
+        if trimmedHandler == "" {
+            return error("Environment handler cannot be empty");
+        }
+
+        // Check for duplicate handler (excluding current environment)
+        sql:ParameterizedQuery handlerCheckQuery = `SELECT COUNT(*) as cnt FROM environments WHERE handler = ${trimmedHandler} AND environment_id != ${environmentId}`;
+        stream<record {|int cnt;|}, sql:Error?> handlerCheckStream = dbClient->query(handlerCheckQuery);
+        record {|int cnt;|}[] handlerCheckResult = check from record {|int cnt;|} r in handlerCheckStream
+            select r;
+        if handlerCheckResult.length() > 0 && handlerCheckResult[0].cnt > 0 {
+            return error(string `Environment handler '${trimmedHandler}' is already taken`);
+        }
+        updateFields = sql:queryConcat(updateFields, `, handler = ${trimmedHandler} `);
     }
     if description is string {
         updateFields = sql:queryConcat(updateFields, `, description = ${description} `);
@@ -255,7 +301,7 @@ public isolated function updateEnvironment(string environmentId, string? name, s
         log:printError(string `Failed to update environment ${environmentId}`, 'error = result);
         match classifySqlError(result) {
             DUPLICATE_KEY => {
-                return error("An environment with this name already exists", result);
+                return error("An environment with this name or handler already exists", result);
             }
             VALUE_TOO_LONG => {
                 return error("The provided value exceeds the maximum allowed length", result);
@@ -281,21 +327,6 @@ public isolated function updateEnvironmentProductionStatus(string environmentId,
     return ();
 }
 
-// Get environment ID by name
-public isolated function getEnvironmentIdByName(string environmentName) returns string|error {
-    stream<record {|string environment_id;|}, sql:Error?> envStream = dbClient->query(`
-        SELECT environment_id FROM environments WHERE name = ${environmentName}
-    `);
-
-    record {|string environment_id;|}[] envRecords = check from record {|string environment_id;|} env in envStream
-        select env;
-
-    if envRecords.length() == 0 {
-        return error(string `Environment ${environmentName} not found.`);
-    }
-    return envRecords[0].environment_id;
-}
-
 // Delete an environment by ID
 public isolated function deleteEnvironment(string environmentId) returns error? {
     sql:ParameterizedQuery deleteQuery = `DELETE FROM environments WHERE environment_id = ${environmentId}`;
@@ -313,6 +344,116 @@ public isolated function deleteEnvironment(string environmentId) returns error? 
     }
     log:printInfo(string `Successfully deleted environment ${environmentId}`);
     return ();
+}
+
+// Get environment by handler
+public isolated function getEnvironmentByHandler(string environmentHandler) returns types:Environment|error {
+    stream<types:Environment, sql:Error?> envStream =
+        dbClient->query(`SELECT environment_id, name, handler, description, region, cluster_id, choreo_env, 
+                        external_apim_env_name, internal_apim_env_name, sandbox_apim_env_name, critical, dns_prefix, 
+                        created_at, updated_at FROM environments WHERE handler = ${environmentHandler}`);
+
+    types:Environment[] envRecords = check from types:Environment env in envStream
+        select env;
+
+    if envRecords.length() == 0 {
+        return error(string `Environment with handler '${environmentHandler}' not found.`);
+    }
+
+    types:Environment env = envRecords[0];
+    return {
+        id: env.id,
+        name: env.name,
+        handler: env.handler,
+        description: env.description,
+        region: env?.region,
+        clusterId: env?.clusterId,
+        choreoEnv: env?.choreoEnv,
+        externalApimEnvName: env?.externalApimEnvName,
+        internalApimEnvName: env?.internalApimEnvName,
+        sandboxApimEnvName: env?.sandboxApimEnvName,
+        critical: env?.critical,
+        dnsPrefix: env?.dnsPrefix,
+        createdAt: env.createdAt,
+        updatedAt: env.updatedAt
+    };
+}
+
+// Get environment ID by handler
+public isolated function getEnvironmentIdByHandler(string environmentHandler) returns string|error {
+    stream<record {|string environment_id;|}, sql:Error?> envStream = dbClient->query(`
+        SELECT environment_id FROM environments WHERE handler = ${environmentHandler}
+    `);
+
+    record {|string environment_id;|}[] envRecords = check from record {|string environment_id;|} env in envStream
+        select env;
+
+    if envRecords.length() == 0 {
+        return error(string `Environment with handler '${environmentHandler}' not found.`);
+    }
+    return envRecords[0].environment_id;
+}
+
+// Check environment handler availability
+public isolated function checkEnvironmentHandlerAvailability(string environmentHandlerCandidate) returns types:EnvironmentHandlerAvailability|error {
+    log:printDebug(string `Checking environment handler availability for handler: ${environmentHandlerCandidate}`);
+
+    // Check if the handler already exists
+    sql:ParameterizedQuery query = `SELECT COUNT(*) as handlecount 
+                                   FROM environments 
+                                   WHERE handler = ${environmentHandlerCandidate}`;
+
+    int existingHandlerCount = 0;
+
+    stream<record {|int handlecount;|}, sql:Error?> handlerCountStream = dbClient->query(query);
+
+    check from record {|int handlecount;|} countRecord in handlerCountStream
+        do {
+            existingHandlerCount = countRecord.handlecount;
+        };
+
+    boolean isHandlerUnique = existingHandlerCount == 0;
+    string? alternateCandidate = ();
+
+    // If handler is not unique, generate an alternate candidate
+    if !isHandlerUnique {
+        // Generate alternate handler suggestions by appending numbers
+        int counter = 1;
+        string baseHandler = environmentHandlerCandidate;
+
+        while counter <= 10 { // Limit to 10 attempts to avoid infinite loop
+            string candidate = string `${baseHandler}${counter}`;
+
+            sql:ParameterizedQuery alternateQuery = `SELECT COUNT(*) as handlecount 
+                                                   FROM environments 
+                                                   WHERE handler = ${candidate}`;
+
+            int candidateCount = 0;
+            stream<record {|int handlecount;|}, sql:Error?> candidateStream = dbClient->query(alternateQuery);
+
+            check from record {|int handlecount;|} candidateRecord in candidateStream
+                do {
+                    candidateCount = candidateRecord.handlecount;
+                };
+
+            if candidateCount == 0 {
+                alternateCandidate = candidate;
+                break;
+            }
+
+            counter += 1;
+        }
+    }
+
+    log:printInfo(string `Environment handler availability check completed`,
+            environmentHandlerCandidate = environmentHandlerCandidate,
+            isHandlerUnique = isHandlerUnique,
+            alternateCandidate = alternateCandidate);
+
+    return {
+        handlerUnique: isHandlerUnique,
+        alternateHandlerCandidate: alternateCandidate
+    };
 }
 
 // Get all environment IDs where a component has runtimes

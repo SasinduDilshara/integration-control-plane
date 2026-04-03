@@ -223,15 +223,18 @@ kubectl exec deployment/icp-deployment -- curl -k https://localhost:9445
 ### Common Issues
 
 **502 Bad Gateway**: This usually means the Gateway cannot connect to the backend. Ensure:
+
 - The BackendTLSPolicy is properly configured
 - The backend CA certificate ConfigMap exists
 - The Service has `appProtocol: https` set
 
 **Connection refused**: Ensure:
+
 - The pod is running: `kubectl get pods -l app=icp`
 - The service endpoints exist: `kubectl get endpoints icp-service`
 
 **Certificate issues**: Verify cert-manager is working:
+
 ```bash
 kubectl get certificate -A
 kubectl describe certificate icp-cert
@@ -278,8 +281,8 @@ Service (icp-service:9445)
     v
 Pod (icp-deployment)
     - Port 9445: Web Console (HTTPS)
-    - Port 9446: GraphQL API (HTTPS)
-    - Port 9448: Observability API(HTTPS)
+    - Port 9445: GraphQL API (HTTPS)
+    - Port 9445: Observability API(HTTPS)
 ```
 
 ## Files Reference

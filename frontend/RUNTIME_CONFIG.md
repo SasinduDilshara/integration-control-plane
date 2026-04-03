@@ -19,9 +19,9 @@ This application supports runtime configuration, allowing you to modify backend 
 
 ```json
 {
-  "VITE_GRAPHQL_URL": "https://localhost:9446/graphql",
+  "VITE_GRAPHQL_URL": "https://localhost:9445/graphql",
   "VITE_AUTH_BASE_URL": "https://localhost:9445/auth",
-  "VITE_LOGS_URL": "https://localhost:9448/icp/observability/logs?live=true"
+  "VITE_LOGS_URL": "https://localhost:9445/icp/observability/logs?live=true"
 }
 ```
 
@@ -33,9 +33,9 @@ Edit `public/config.json` with your backend URLs, then restart the dev server:
 
 ```json
 {
-  "VITE_GRAPHQL_URL": "https://localhost:9446/graphql",
+  "VITE_GRAPHQL_URL": "https://localhost:9445/graphql",
   "VITE_AUTH_BASE_URL": "https://localhost:9445/auth",
-  "VITE_OBSERVABILITY_URL": "https://localhost:9448/icp/observability"
+  "VITE_OBSERVABILITY_URL": "https://localhost:9445/icp/observability"
 }
 ```
 
@@ -62,9 +62,9 @@ Create a `docker-entrypoint.sh`:
 # Generate config.json from environment variables
 cat > /usr/share/nginx/html/config.json <<EOF
 {
-  "VITE_GRAPHQL_URL": "${GRAPHQL_URL:-https://localhost:9446/graphql}",
+  "VITE_GRAPHQL_URL": "${GRAPHQL_URL:-https://localhost:9445/graphql}",
   "VITE_AUTH_BASE_URL": "${AUTH_BASE_URL:-https://localhost:9445/auth}",
-  "VITE_LOGS_URL": "${LOGS_URL:-https://localhost:9448/icp/observability/logs?live=true}"
+  "VITE_LOGS_URL": "${LOGS_URL:-https://localhost:9445/icp/observability/logs?live=true}"
 }
 EOF
 
@@ -143,10 +143,10 @@ If `config.json` fails to load:
 **Default values:**
 
 ```typescript
-graphqlUrl: 'https://localhost:9446/graphql';
+graphqlUrl: 'https://localhost:9445/graphql';
 authBaseUrl: 'https://localhost:9445/auth';
-logsUrl: 'https://localhost:9448/icp/observability/logs?live=true';
-metricsUrl: 'https://localhost:9448/icp/observability/metrics';
+logsUrl: 'https://localhost:9445/icp/observability/logs?live=true';
+metricsUrl: 'https://localhost:9445/icp/observability/metrics';
 ```
 
 ## Benefits

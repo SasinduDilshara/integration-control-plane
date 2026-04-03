@@ -39,7 +39,6 @@ services:
             dockerfile: ./icp_server/build.Dockerfile
         ports:
             - "9445:9445"
-            - "9446:9446"
         depends_on:
             mysql-db:
                 condition: service_healthy

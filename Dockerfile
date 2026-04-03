@@ -89,7 +89,7 @@ RUN unzip wso2-integration-control-plane-${ICP_VERSION}.zip && \
 WORKDIR /home/wso2/wso2-integration-control-plane-${ICP_VERSION}
 
 # Expose ports (HTTPS, GraphQL, Observability, OpenSearch Adaptor)
-EXPOSE 9445 9446 9448 9449
+EXPOSE 9445 9449
 
 # Ensure the script is executable
 RUN chmod +x bin/icp.sh

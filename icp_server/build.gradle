@@ -93,8 +93,8 @@ task dockerUp {
         ║                                        ║
         ║  Endpoints:                            ║
         ║  - HTTP/GraphQL: http://localhost:9445 ║
-        ║  - GraphQL: http://localhost:9446      ║
-        ║  - Auth Backend: http://localhost:9447 ║
+        ║  - GraphQL: http://localhost:9445      ║
+        ║  - Auth Backend: http://localhost:9445 ║
         ║  - MySQL: localhost:3307               ║
         ║                                        ║
         ║  Logs: docker-compose logs -f          ║

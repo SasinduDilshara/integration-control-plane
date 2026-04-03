@@ -13,6 +13,7 @@ The ICP Server consists of the following core services:
 ## Running the Server Locally
 
 ### Prerequisites
+
 - Docker and Docker Compose
 - Ballerina (for local development without Docker)
 
@@ -21,21 +22,21 @@ The ICP Server consists of the following core services:
 To run the server with all dependencies:
 
 **MySQL:**
+
 ```sh
 docker-compose -f docker-compose.local.yml up --build
 ```
 
 **MSSQL:**
+
 ```sh
 docker-compose -f docker-compose.mssql.yml up --build
 ```
 
 This will start:
+
 - Database (MySQL on port 3307 or MSSQL on port 1433)
-- ICP Server on ports:
-  - 9445 - Main HTTP/GraphQL API
-  - 9446 - GraphQL endpoint
-  - 9447 - Authentication backend service
+- ICP Server on port 9445
 
 ### Running Locally (Without Docker)
 
@@ -72,6 +73,7 @@ docker-compose -f docker-compose.test.yml up --build
 ```
 
 This will:
+
 - Start a test MySQL database
 - Run all Ballerina tests
 - Execute authentication, runtime, and GraphQL API tests

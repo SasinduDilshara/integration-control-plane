@@ -193,6 +193,7 @@ GO
 CREATE TABLE environments (
     environment_id CHAR(36) PRIMARY KEY,
     name NVARCHAR (200) NOT NULL UNIQUE, -- e.g., dev, stage, prod
+    handler NVARCHAR (200) NOT NULL UNIQUE,
     description NVARCHAR (MAX) NULL,
     region NVARCHAR (100) NULL,
     cluster_id NVARCHAR (200) NULL,
@@ -2106,6 +2107,7 @@ INSERT INTO
     environments (
         environment_id,
         name,
+        handler,
         description,
         region,
         cluster_id,
@@ -2120,6 +2122,7 @@ INSERT INTO
 VALUES (
         '750e8400-e29b-41d4-a716-446655440001',
         'dev',
+        'dev',
         'Development environment',
         'us-east-1',
         'cluster-abc123',
@@ -2133,6 +2136,7 @@ VALUES (
     ),
     (
         '750e8400-e29b-41d4-a716-446655440002',
+        'prod',
         'prod',
         'Production environment',
         'us-east-1',

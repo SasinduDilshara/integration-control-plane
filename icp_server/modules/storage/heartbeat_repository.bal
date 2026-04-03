@@ -252,7 +252,7 @@ isolated function validateHeartbeatResolution(types:Heartbeat heartbeat) returns
         return error("Project name cannot be empty");
     }
 
-    string|error envId = getEnvironmentIdByName(heartbeat.environment);
+    string|error envId = getEnvironmentIdByHandler(heartbeat.environment);
     if envId is error {
         return error(string `Invalid environment configuration detected: ${heartbeat.environment}`, envId);
     }

@@ -180,7 +180,7 @@ function AddRuntimeModal({ env, onClose }: { env: GqlEnvironment; onClose: () =>
     );
   };
 
-  const config = secret ? (tab === 0 ? biToml(env.name, secret) : miToml(env.name, secret)) : null;
+  const config = secret ? (tab === 0 ? biToml(env.handler, secret) : miToml(env.handler, secret)) : null;
 
   const handleCopy = async () => {
     if (!config) return;

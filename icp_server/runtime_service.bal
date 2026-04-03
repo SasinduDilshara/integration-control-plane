@@ -87,7 +87,7 @@ service /icp on httpListener {
             }
 
             // --- Resolve environment and verify it matches the key's environment ---
-            string environmentId = check storage:getEnvironmentIdByName(heartbeat.environment);
+            string environmentId = check storage:getEnvironmentIdByHandler(heartbeat.environment);
             if environmentId != orgSecret.environmentId {
                 log:printWarn(string `Heartbeat rejected — environment mismatch for kid=${kid}: heartbeat=${environmentId}, key=${orgSecret.environmentId}`);
                 return <http:Conflict>{body: string `Environment mismatch: key ID '${kid}' is bound to a different environment`};
@@ -158,7 +158,7 @@ service /icp on httpListener {
 
             // Reconcile desired state against observed state written during heartbeat processing
             types:ControlCommand[] reconcileCommands = sync:reconcileFromHeartbeat(
-                runtimeId, heartbeat.component, heartbeat.environment, heartbeat.runtimeType
+                    runtimeId, heartbeat.component, heartbeat.environment, heartbeat.runtimeType
             );
             log:printDebug(string `Reconciled ${reconcileCommands.length()} commands for runtime ${runtimeId}`);
             // Merge reconcile commands into the response

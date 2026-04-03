@@ -37,9 +37,5 @@ spec:
           ports:
             - containerPort: 9445
               name: https
-            - containerPort: 9446
-              name: graphql
-            - containerPort: 9448
-              name: observability
             - containerPort: 9449
               name: opensearch

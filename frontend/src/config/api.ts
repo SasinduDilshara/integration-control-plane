@@ -45,9 +45,9 @@ declare global {
 
 // Default configuration (used as fallback if config.json fails to load)
 const DEFAULT_CONFIG: ApiConfig = {
-  graphqlUrl: 'https://localhost:9446/graphql',
+  graphqlUrl: 'https://localhost:9445/graphql',
   authBaseUrl: 'https://localhost:9445/auth',
-  observabilityUrl: 'https://localhost:9448/icp/observability',
+  observabilityUrl: 'https://localhost:9445/icp/observability',
   ssoEnabled: false,
 };
 
