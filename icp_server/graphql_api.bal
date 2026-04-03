@@ -264,6 +264,7 @@ isolated function fetchMILoggersByEnvironmentAndComponent(string environmentId, 
                     loggerName: loggerInfo.loggerName,
                     componentName: loggerInfo.componentName,
                     logLevel: logLevelResult,
+                    logLevelInSync: true,
                     runtimeIds: [runtime.runtimeId]
                 };
             }
