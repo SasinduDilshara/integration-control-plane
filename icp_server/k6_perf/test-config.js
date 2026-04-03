@@ -8,7 +8,7 @@
 export const config = {
   // Base URLs (auth and GraphQL run on different ports)
   authBaseUrl: __ENV.AUTH_BASE_URL || 'https://localhost:9445',
-  graphqlBaseUrl: __ENV.GRAPHQL_BASE_URL || 'http://localhost:9446',
+  graphqlBaseUrl: __ENV.GRAPHQL_BASE_URL || 'http://localhost:9445',
   graphqlEndpoint: '/graphql',
   authEndpoint: '/auth/login',
   

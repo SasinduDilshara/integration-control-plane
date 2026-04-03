@@ -4,23 +4,25 @@ This directory contains k6 load tests for the Integration Control Plane (ICP) Gr
 
 ## Prerequisites
 
-1. **Install k6**: 
+1. **Install k6**:
+
    ```bash
    # macOS
    brew install k6
-   
+
    # Or download from https://k6.io/docs/getting-started/installation/
    ```
 
 2. **Running ICP Server**: Ensure the ICP server is running with:
    - Auth service on `https://localhost:9445`
-   - GraphQL service on `http://localhost:9446`
+   - GraphQL service on `http://localhost:9445/graphql`
 
 3. **Test Data**: The tests assume you have some existing data. See [Generate and Connect to the Test Database](#generate-and-connect-to-the-test-database) for setting up a comprehensive test dataset.
 
 ## Quick Start
 
 ### Run All Tests (Default)
+
 ```bash
 cd k6_perf
 k6 run load-test.js
@@ -29,21 +31,25 @@ k6 run load-test.js
 ### Run Specific Scenarios
 
 #### Smoke Test (Low Load - Quick Validation)
+
 ```bash
 k6 run --env SCENARIO=smoke load-test.js
 ```
 
 #### Load Test (Moderate Sustained Load)
+
 ```bash
 k6 run --env SCENARIO=load load-test.js
 ```
 
 #### Stress Test (High Load)
+
 ```bash
 k6 run --env SCENARIO=stress load-test.js
 ```
 
 #### Spike Test (Sudden Traffic Increase)
+
 ```bash
 k6 run --env SCENARIO=spike load-test.js
 ```
@@ -54,7 +60,7 @@ You can override configuration via environment variables:
 
 ```bash
 # Custom endpoints
-k6 run --env AUTH_BASE_URL=https://myserver:9445 --env GRAPHQL_BASE_URL=http://myserver:9446 load-test.js
+k6 run --env AUTH_BASE_URL=https://myserver:9445 --env GRAPHQL_BASE_URL=http://myserver:9445 load-test.js
 
 # Custom credentials
 k6 run --env USERNAME=myuser --env PASSWORD=mypass load-test.js
@@ -143,6 +149,7 @@ vus............................: 10      min=1       max=10
 ### Adjusting Load
 
 Edit `test-config.js` to modify:
+
 - Virtual users (concurrent users)
 - Test duration
 - Ramp-up/ramp-down periods
@@ -151,6 +158,7 @@ Edit `test-config.js` to modify:
 ## Load Test Database Setup
 
 A comprehensive test dataset is available in `k6-load-test-data-h2.sql` containing:
+
 - 1,000 users (for RBAC stress testing)
 - 30 groups with role assignments
 - 50 projects
@@ -161,6 +169,7 @@ A comprehensive test dataset is available in `k6-load-test-data-h2.sql` containi
 ### Generate and Connect to the Test Database
 
 1. **Run base schema initialization:**
+
    ```bash
    java -cp ~/.ballerina/repositories/central.ballerina.io/bala/ballerinax/h2.driver/1.2.0/java21/platform/java21/h2-*.jar \
      org.h2.tools.RunScript \
@@ -170,6 +179,7 @@ A comprehensive test dataset is available in `k6-load-test-data-h2.sql` containi
    ```
 
 2. **Populate with load test data:**
+
    ```bash
    java -cp ~/.ballerina/repositories/central.ballerina.io/bala/ballerinax/h2.driver/1.2.0/java21/platform/java21/h2-*.jar \
      org.h2.tools.RunScript \
@@ -201,4 +211,3 @@ k6 run --out json=test-results.json load-test.js
 ```bash
 k6 run --out influxdb=http://localhost:8086/k6 load-test.js
 ```
-

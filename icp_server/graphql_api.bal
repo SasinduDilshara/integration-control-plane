@@ -28,17 +28,7 @@ import ballerina/log;
 import ballerina/url;
 
 // GraphQL listener configuration
-listener graphql:Listener graphqlListener = new (graphqlPort,
-    configuration = {
-        host: serverHost,
-        secureSocket: {
-            key: {
-                path: keystorePath,
-                password: resolvedKeystorePassword
-            }
-        }
-    }
-);
+listener graphql:Listener graphqlListener = new (httpListener);
 
 // Reusable: pick a runtime from a list with optional runtimeId
 
@@ -551,7 +541,7 @@ isolated function validateRegistryResourceAccess(
 service /graphql on graphqlListener {
 
     function init() {
-        log:printInfo("GraphQL service started at " + serverHost + ":" + graphqlPort.toString());
+        log:printInfo("GraphQL service started at " + serverHost + ":" + serverPort.toString());
     }
 
     // ----------- Runtime Resources

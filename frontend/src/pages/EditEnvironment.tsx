@@ -78,14 +78,7 @@ function EditEnvironmentForm({ env, orgHandler }: { env: GqlEnvironment; orgHand
 
       <Stack gap={3} sx={{ maxWidth: 600, mb: 4 }}>
         <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
-        <TextField
-          label="Handler"
-          value={handler}
-          onChange={(e) => setHandler(e.target.value)}
-          fullWidth
-          error={handlerTaken}
-          helperText={handlerTaken ? 'This handler is already taken. Please choose a different one.' : undefined}
-        />
+        <TextField label="Handler" value={handler} onChange={(e) => setHandler(e.target.value)} fullWidth error={handlerTaken} helperText={handlerTaken ? 'This handler is already taken. Please choose a different one.' : undefined} />
         <TextField label="Description" value={description} onChange={(e) => setDescription(e.target.value)} fullWidth />
         <FormControlLabel control={<Checkbox checked={critical} onChange={(_, v) => setCritical(v)} />} label="Mark as Critical Environment" />
       </Stack>

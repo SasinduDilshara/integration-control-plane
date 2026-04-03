@@ -27,14 +27,6 @@ spec:
       targetPort: 9445
       name: https
       appProtocol: https
-    - port: 9446
-      targetPort: 9446
-      name: graphql
-      appProtocol: https
-    - port: 9448
-      targetPort: 9448
-      name: observability
-      appProtocol: https
     - port: 9449
       targetPort: 9449
       name: opensearch

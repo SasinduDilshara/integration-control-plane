@@ -138,13 +138,7 @@ export default function CreateEnvironment(scope: OrgScope): JSX.Element {
           fullWidth
           disabled={!handlerEdited}
           error={handlerMissing || handlerTaken}
-          helperText={
-            handlerMissing
-              ? 'Handler must include at least one letter or number.'
-              : handlerTaken
-                ? 'This handler is already taken. Please choose a different one.'
-                : undefined
-          }
+          helperText={handlerMissing ? 'Handler must include at least one letter or number.' : handlerTaken ? 'This handler is already taken. Please choose a different one.' : undefined}
           slotProps={{
             input: {
               endAdornment: (
