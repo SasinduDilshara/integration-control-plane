@@ -251,6 +251,57 @@ public isolated function deleteGroup(string groupId) returns error? {
     return ();
 }
 
+// Clean up groups that were exclusively scoped to a project being deleted.
+// Deletes project-scoped role mappings first, then removes any groups that
+// have zero remaining role mappings (i.e., fully orphaned).
+// group_user_mapping rows are cascade-deleted automatically via FK.
+public isolated function cleanupProjectScopedGroups(string projectId) returns error? {
+    log:printDebug(string `Cleaning up groups scoped to project: ${projectId}`);
+
+    // 1. Find all groups that have role mappings to this project
+    string[] affectedGroupIds = [];
+    stream<record {|string group_id;|}, sql:Error?> groupStream = dbClient->query(
+        `SELECT DISTINCT group_id FROM group_role_mapping WHERE project_uuid = ${projectId}`
+    );
+    check from var row in groupStream
+        do {
+            affectedGroupIds.push(row.group_id);
+        };
+
+    if affectedGroupIds.length() == 0 {
+        log:printDebug(string `No groups found scoped to project ${projectId}`);
+        return ();
+    }
+
+    // 2. Delete the project-scoped role mappings
+    sql:ExecutionResult|sql:Error deleteResult = dbClient->execute(
+        `DELETE FROM group_role_mapping WHERE project_uuid = ${projectId}`
+    );
+    if deleteResult is sql:Error {
+        log:printError(string `Failed to delete role mappings for project ${projectId}`, 'error = deleteResult);
+        return error("Failed to clean up project role mappings", deleteResult);
+    }
+
+    // 3. Delete groups that now have zero remaining role mappings
+    foreach string groupId in affectedGroupIds {
+        int|sql:Error count = dbClient->queryRow(
+            `SELECT COUNT(*) FROM group_role_mapping WHERE group_id = ${groupId}`
+        );
+        if count is sql:Error {
+            log:printError(string `Failed to check remaining mappings for group ${groupId}`, 'error = count);
+            return error("Failed to verify group role mappings during cleanup", count);
+        }
+        if count == 0 {
+            check deleteGroup(groupId);
+            log:printInfo(string `Deleted orphaned group ${groupId} after project ${projectId} deletion`);
+        }
+    }
+
+    log:printInfo(string `Completed group cleanup for project ${projectId}`,
+            groupsChecked = affectedGroupIds.length());
+    return ();
+}
+
 // ============================================================================
 // 3.3 Role V2 Management Functions
 // ============================================================================
