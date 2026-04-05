@@ -1148,7 +1148,24 @@ service /graphql on graphqlListener {
             return [];
         }
 
-        return check storage:getTemplatesByEnvironmentAndComponent(environmentId, componentId);
+        types:Template[] result = check storage:getTemplatesByEnvironmentAndComponent(environmentId, componentId);
+        if result.length() == 0 {
+            return result;
+        }
+        map<map<types:ArtifactStateField>> sm = check storage:queryArtifactState(componentId, environmentId);
+        foreach types:Template a in result {
+            types:ArtifactStateField? t = stateOf(sm, a.name, "template", "tracing");
+            if t is types:ArtifactStateField {
+                a.tracing = t.value;
+                a.tracingInSync = t.inSync;
+            }
+            types:ArtifactStateField? st = stateOf(sm, a.name, "template", "statistics");
+            if st is types:ArtifactStateField {
+                a.statistics = st.value;
+                a.statisticsInSync = st.inSync;
+            }
+        }
+        return result;
     }
 
     // Get Message Stores for a specific environment and component

@@ -478,6 +478,12 @@ isolated function writeObservedStateMI(string runtimeId, string componentId, str
     foreach types:MessageStore store in <types:MessageStore[]>artifacts.messageStores {
         entries.push([{artifactName: store.name, artifactType: "message-store"}, {"status": store.state}]);
     }
+    foreach types:Template template in <types:Template[]>artifacts.templates {
+        entries.push([
+            {artifactName: template.name, artifactType: "template"},
+            {"tracing": template.tracing, "statistics": template.statistics}
+        ]);
+    }
     check batchUpsertReconcileObservedState(runtimeId, componentId, envId, entries);
 }
 

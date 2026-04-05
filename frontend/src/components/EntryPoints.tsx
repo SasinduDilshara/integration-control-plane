@@ -106,11 +106,15 @@ function EntryPointDetail({ selected, onOpenDrawerTab }: { selected: SelectedArt
   const artifactName = artifactType === 'Automation' ? (artifact.packageName?.toString() ?? '') : (artifact.name?.toString() ?? '');
   const artifactKey = `${artifactType}-${artifactName}`;
   useEffect(() => {
-    setTracingEnabled(toEnabled(artifact.tracing));
-    setStatisticsEnabled(toEnabled(artifact.statistics));
+    if (artifact.tracingInSync !== false) {
+      setTracingEnabled(toEnabled(artifact.tracing));
+    }
+    if (artifact.statisticsInSync !== false) {
+      setStatisticsEnabled(toEnabled(artifact.statistics));
+    }
     setStatusEnabled(toEnabled(artifact.state));
     setListenerEnabled(toEnabled(artifact.state));
-  }, [artifactKey, artifact.tracing, artifact.statistics, artifact.state]);
+  }, [artifactKey, artifact.tracing, artifact.tracingInSync, artifact.statistics, artifact.statisticsInSync, artifact.state]);
 
   const handleToggleTracing = (checked: boolean) => {
     if (!showTracingToggle) return;

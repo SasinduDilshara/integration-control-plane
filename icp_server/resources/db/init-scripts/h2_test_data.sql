@@ -335,6 +335,57 @@ FETCH FIRST 1 ROWS ONLY;
 
 
 -- ============================================================================
+-- ISSUE-437 TEST DATA: MI Artifact Tracing (Template tracingInSync)
+-- ============================================================================
+
+-- MI Runtime 6: Project 1 / Component 1 / Dev / RUNNING (MI type for tracing tests)
+INSERT INTO runtimes (
+    runtime_id, name, project_id, component_id, environment_id,
+    runtime_type, status, version, platform_name, platform_version,
+    registration_time, last_heartbeat
+) VALUES (
+    '880e8400-e29b-41d4-a716-446655440006',
+    'mi-dev-runtime',
+    '650e8400-e29b-41d4-a716-446655440001',
+    '640e8400-e29b-41d4-a716-446655440001',
+    '750e8400-e29b-41d4-a716-446655440001',
+    'MI', 'RUNNING', '4.3.0', 'wso2-mi', '4.3.0',
+    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+);
+
+-- Template: hello-template — tracing toggle enabled but not yet confirmed by MI (tracingInSync=false)
+INSERT INTO mi_template_artifacts (runtime_id, template_name, template_type, tracing, statistics, carbon_app)
+VALUES ('880e8400-e29b-41d4-a716-446655440006', 'hello-template', 'sequence', 'disabled', 'disabled', NULL);
+
+-- Template: synced-template — tracing already confirmed by MI (tracingInSync=true)
+INSERT INTO mi_template_artifacts (runtime_id, template_name, template_type, tracing, statistics, carbon_app)
+VALUES ('880e8400-e29b-41d4-a716-446655440006', 'synced-template', 'sequence', 'enabled', 'disabled', NULL);
+
+-- MessageProcessor: hello-processor — for schema validation (no tracing field)
+INSERT INTO mi_message_processor_artifacts (runtime_id, processor_name, artifact_id, processor_type, state, carbon_app)
+VALUES ('880e8400-e29b-41d4-a716-446655440006', 'hello-processor', '990e8400-e29b-41d4-a716-446655440001', 'Scheduled-message-forwarding-processor', 'active', NULL);
+
+-- Reconcile desired state: tracing=enabled for hello-template (user toggled ON)
+INSERT INTO reconcile_desired_state (component_id, env_id, artifact_name, artifact_type, state_key, state_value)
+VALUES ('640e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440001',
+        'hello-template', 'template', 'tracing', 'enabled');
+
+-- Reconcile desired state: tracing=enabled for synced-template (already confirmed)
+INSERT INTO reconcile_desired_state (component_id, env_id, artifact_name, artifact_type, state_key, state_value)
+VALUES ('640e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440001',
+        'synced-template', 'template', 'tracing', 'enabled');
+
+-- Reconcile observed state: hello-template still disabled (stale heartbeat, not yet applied)
+INSERT INTO reconcile_observed_state (runtime_id, component_id, env_id, artifact_name, artifact_type, state_key, state_value, optimistic, heartbeat_gen)
+VALUES ('880e8400-e29b-41d4-a716-446655440006', '640e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440001',
+        'hello-template', 'template', 'tracing', 'disabled', FALSE, 1);
+
+-- Reconcile observed state: synced-template enabled (matches desired — in sync)
+INSERT INTO reconcile_observed_state (runtime_id, component_id, env_id, artifact_name, artifact_type, state_key, state_value, optimistic, heartbeat_gen)
+VALUES ('880e8400-e29b-41d4-a716-446655440006', '640e8400-e29b-41d4-a716-446655440001', '750e8400-e29b-41d4-a716-446655440001',
+        'synced-template', 'template', 'tracing', 'enabled', FALSE, 1);
+
+-- ============================================================================
 -- TEST DATA SUMMARY
 -- ============================================================================
 -- Users created:
@@ -357,8 +408,9 @@ FETCH FIRST 1 ROWS ONLY;
 --   - prod (750e8400-e29b-41d4-a716-446655440002)
 --
 -- Runtimes:
---   - Runtime 1: Project 1 / Component 1 / Dev / RUNNING
---   - Runtime 2: Project 1 / Component 1 / Prod / RUNNING
---   - Runtime 3: Project 1 / Component 2 / Dev / OFFLINE
---   - Runtime 4: Project 2 / Component 3 / Dev / RUNNING
---   - Runtime 5: Project 1 / Component 2 / Prod / FAILED
+--   - Runtime 1: Project 1 / Component 1 / Dev / RUNNING (BI)
+--   - Runtime 2: Project 1 / Component 1 / Prod / RUNNING (BI)
+--   - Runtime 3: Project 1 / Component 2 / Dev / OFFLINE (BI)
+--   - Runtime 4: Project 2 / Component 3 / Dev / RUNNING (BI)
+--   - Runtime 5: Project 1 / Component 2 / Prod / FAILED (BI)
+--   - Runtime 6: Project 1 / Component 1 / Dev / RUNNING (MI) — Issue 437 tracing tests

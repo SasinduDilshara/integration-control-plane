@@ -942,7 +942,9 @@ public type Template record {
     }
     string 'type;
     string tracing = "disabled"; // "enabled", "disabled"
+    boolean? tracingInSync = ();
     string statistics = "disabled"; // "enabled", "disabled"
+    boolean? statisticsInSync = ();
     @sql:Column {
         name: "carbon_app"
     }
