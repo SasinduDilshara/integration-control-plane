@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "create-tests": {
+      "source": "Tharsanan1/wso2-se-agent-skills",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "81993048b128669a413fe72a5f4b56c3a0129c81622b0533c6c1dbc4bec5c9b9"
+    },
+    "reproduce": {
+      "source": "Tharsanan1/wso2-se-agent-skills",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "c97f1d8a828f263079a4dde134cc932222b10fb6179ace068171a5096fdb1ff6"
+    },
+    "verify-fix": {
+      "source": "Tharsanan1/wso2-se-agent-skills",
+      "ref": "main",
+      "sourceType": "github",
+      "computedHash": "554691a8f43792e2043359f913998d94a0bdcd1af3db3354066d4d3390ad6255"
+    }
+  }
+}
