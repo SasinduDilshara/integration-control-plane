@@ -2506,6 +2506,11 @@ service /auth on httpListener {
         //     return utils:createBadRequestError("Invalid or unknown organization");
         // }
 
+        // Validate roleName is not empty or whitespace-only
+        if roleInput.roleName.trim().length() == 0 {
+            return utils:createBadRequestError("roleName must not be empty or whitespace-only");
+        }
+
         // Set org ID in the input (default to 1 for now)
         types:RoleV2Input inputWithOrg = {
             roleName: roleInput.roleName,
@@ -2640,7 +2645,7 @@ service /auth on httpListener {
             }
         ]
     }
-    isolated resource function put orgs/[string orgHandle]/roles/[string roleId](@http:Payload types:RoleV2Input roleInput, http:Request req) returns http:Ok|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
+    isolated resource function put orgs/[string orgHandle]/roles/[string roleId](@http:Payload types:RoleV2Input roleInput, http:Request req) returns http:Ok|http:BadRequest|http:NotFound|http:Unauthorized|http:Forbidden|http:InternalServerError|error {
         log:printInfo("Updating role", orgHandle = orgHandle, roleId = roleId);
 
         // Permission check: org-level role management
@@ -2660,6 +2665,11 @@ service /auth on httpListener {
                     message: "Insufficient permissions to update roles"
                 }
             };
+        }
+
+        // Validate roleName is not empty or whitespace-only
+        if roleInput.roleName.trim().length() == 0 {
+            return utils:createBadRequestError("roleName must not be empty or whitespace-only");
         }
 
         // Update the role (name, description)

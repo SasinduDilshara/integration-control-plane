@@ -426,6 +426,115 @@ function testUpdateRole() returns error? {
 }
 
 // =============================================================================
+// Test 3.4: Role Name Validation
+// =============================================================================
+
+@test:Config {
+    groups: ["auth-v2", "roles", "validation"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWithEmptyName() returns error? {
+    json roleRequest = {
+        roleName: "",
+        description: "role with empty name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for empty roleName");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles", "validation"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWithWhitespaceName() returns error? {
+    json roleRequest = {
+        roleName: "   ",
+        description: "role with whitespace-only name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for whitespace-only roleName");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles", "validation"],
+    dependsOn: [testSuperAdminLoginWithV2JWT]
+}
+function testCreateRoleWithTabNewlineName() returns error? {
+    json roleRequest = {
+        roleName: "\t\n",
+        description: "role with tab/newline only name"
+    };
+
+    http:Response response = check authV2Client->post(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles`,
+        roleRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for tab/newline-only roleName");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles", "validation"],
+    dependsOn: [testUpdateRole]
+}
+function testUpdateRoleWithEmptyName() returns error? {
+    json updateRequest = {
+        roleName: "",
+        description: "update with empty name"
+    };
+
+    http:Response response = check authV2Client->put(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles/${testRoleId}`,
+        updateRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for empty roleName on update");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+@test:Config {
+    groups: ["auth-v2", "roles", "validation"],
+    dependsOn: [testUpdateRole]
+}
+function testUpdateRoleWithWhitespaceName() returns error? {
+    json updateRequest = {
+        roleName: "   ",
+        description: "update with whitespace-only name"
+    };
+
+    http:Response response = check authV2Client->put(
+        string `/auth/orgs/${DEFAULT_ORG_HANDLE}/roles/${testRoleId}`,
+        updateRequest,
+        headers = {"Authorization": string `Bearer ${superAdminToken}`}
+    );
+
+    test:assertEquals(response.statusCode, 400, "Expected 400 for whitespace-only roleName on update");
+    json responseBody = check response.getJsonPayload();
+    test:assertTrue(responseBody.message is string, "Error message should be present");
+}
+
+// =============================================================================
 // Test 3.5: Group-Role Mapping Endpoints
 // =============================================================================
 
